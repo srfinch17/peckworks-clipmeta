@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Suppress MSTest v3 style-only suggestions; behavior is correct with the older API forms. -->
+    <NoWarn>$(NoWarn);MSTEST0037;MSTEST0044;MSTEST0052</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="4.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\clipmetaview\clipmetaview.csproj" />
+    <ProjectReference Include="..\clipmeta.core\clipmeta.core.csproj" />
+  </ItemGroup>
+
+</Project>

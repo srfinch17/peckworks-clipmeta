@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+
+# Rider / VS
+.idea/
+*.user
+*.suo
+.vs/
+
+# Test clips (local only — too large for git)
+testclips/pristine/
+testclips/scratch/*.mp4
+
+# Test results
+TestResults/
+
+# Temp files from write engine and tooling
+*.mp4.tmp
+*.mp4.bak
+*.tmp.*
+
+# Claude Code and superpowers tooling state
+.claude/
+.superpowers/brainstorm/
+
+# OS
+.DS_Store
+Thumbs.db

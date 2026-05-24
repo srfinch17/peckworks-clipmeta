@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="clipmeta.core/clipmeta.core.csproj" />
+  <Project Path="clipmetascribe/clipmetascribe.csproj" Id="3c6076cf-28e6-4e2e-b703-4a397250ea98" />
+  <Project Path="clipmetascribe.Tests/clipmetascribe.Tests.csproj" />
+  <Project Path="clipmetaview.Tests/clipmetaview.Tests.csproj" />
+  <Project Path="clipmetaview/clipmetaview.csproj" />
+</Solution>
