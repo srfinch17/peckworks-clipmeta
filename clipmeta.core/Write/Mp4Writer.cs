@@ -57,90 +57,133 @@ public sealed class Mp4Writer : IMediaWriter
         if (mutation.SetFields.Count > 0 || mutation.AppendFields.Count > 0)
             mutation.SetFields.TryAdd(ClipMetaSchema.AtomName(ClipMetaSchema.Schema), ClipMetaSchema.SchemaVersion);
 
-        string tempPath = filePath + ".tmp";
-        // Verify the file can be opened for reading (basic accessibility check).
-        // We do NOT acquire an exclusive lock because our write strategy always goes via a temp file,
-        // and File.Replace is atomic; the source is only opened for reading during the copy.
-        try
-        {
-            using (var accessCheck = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
-        }
-        catch (IOException ex)
-        {
-            throw new IOException(
-                $"'{Path.GetFileName(filePath)}' cannot be read. " +
-                $"Verify the file exists and is accessible.", ex);
-        }
+        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with —
+        // and FileMode.Create-overwrite — a file the user actually owns, or with a second write
+        // running against the same clip at the same time.
+        string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
 
         logger.Log($"WRITE {Path.GetFileName(filePath)} begin");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
-            var root = Mp4Parser.ParseFile(filePath);
-            DetectFragmented(root, filePath);
-
-            // SAFETY GATE: the parser is deliberately lenient (the tree viewer should open
-            // damaged files), but the WRITER must be strict. It rebuilds the output from the
-            // parse tree, so any byte the parser skipped would simply vanish from the new file.
-            // A corrupt 8-byte box sandwiched between moov and mdat would otherwise cause the
-            // entire mdat — all the video — to be dropped silently. Refuse instead.
-            VerifyParseAccountsForWholeFile(root, filePath);
-            logger.LogVerbose($"PARSE {CountBoxes(root)} boxes");
-
-            foreach (var (key, appendValue) in mutation.AppendFields.ToList())
+            // Open the source ONCE, for the entire parse-and-copy, with FileShare.Read:
+            // other processes may read alongside us but nobody may WRITE while we work.
+            // This closes a real race: chunk offsets are captured during the parse and the
+            // bytes are copied afterwards — if a recorder (e.g. Game Bar mid-recording) could
+            // append between those two steps, the output would index bytes that moved.
+            // Holding one deny-writers handle makes parse + copy see a single frozen snapshot;
+            // if a recorder already has the file open for writing, this open fails up front
+            // (sharing violation) and we refuse cleanly instead of producing a torn file.
+            FileStream src;
+            try
             {
-                var existingNode = FindEditableNode(root, key);
-                string current = existingNode?.DisplayValue is { } dv ? dv[1..^1] : string.Empty;
-                string combined = string.IsNullOrEmpty(current)
-                    ? appendValue
-                    : Normalizer.AppendToPipeList(current, appendValue);
-                mutation.SetFields[key] = combined;
+                src = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             }
-            mutation.AppendFields.Clear();
+            catch (IOException ex)
+            {
+                throw new IOException(
+                    $"'{Path.GetFileName(filePath)}' cannot be opened for tagging. Another " +
+                    $"program has it open for writing — if it is still being recorded or " +
+                    $"exported, wait for that to finish and try again.", ex);
+            }
 
-            var (scenario, ilstChildren, newFields) = DetermineScenario(root, mutation);
-            logger.LogVerbose($"WRITE scenario={scenario}");
+            using (src)
+            {
+                var root = Mp4Parser.Parse(src);
+                DetectFragmented(root, filePath);
 
-            // Predict, byte-exactly, how large the rebuilt moov will be. The difference vs the
-            // original moov ("delta") is how far every byte after moov will shift in the output.
-            // Chunk-offset tables (stco/co64) inside moov hold ABSOLUTE file offsets into mdat,
-            // so each of their entries must be corrected by exactly this delta — see
-            // WriteAdjustedStco/WriteAdjustedCo64. WriteMoov later asserts that the moov it
-            // actually produced matches this prediction; a mismatch aborts the write rather
-            // than risk patching the offsets by the wrong amount.
-            long originalMoovSize = GetMoovSize(root);
-            long newMoovSize = CalculateNewMoovSize(root, scenario, ilstChildren, newFields, mutation);
-            long delta = newMoovSize - originalMoovSize;
-            logger.LogVerbose($"WRITE delta={delta:+#;-#;0} bytes");
+                // SAFETY GATE: the parser is deliberately lenient (the tree viewer should open
+                // damaged files), but the WRITER must be strict. It rebuilds the output from the
+                // parse tree, so any byte the parser skipped would simply vanish from the new
+                // file. A corrupt 8-byte box sandwiched between moov and mdat would otherwise
+                // cause the entire mdat — all the video — to be dropped silently. Refuse instead.
+                VerifyParseAccountsForWholeFile(root, filePath);
+                logger.LogVerbose($"PARSE {CountBoxes(root)} boxes");
 
-            // Where the original moov ends. Chunk offsets BELOW this point reference data that
-            // sits before/inside moov (the mdat-before-moov layout Game Bar produces) — that
-            // data does not move, so those entries must be left alone.
-            long moovEndOffset = GetMoovEndOffset(root);
+                // Fold appends into sets: read the current value, merge, and treat the result
+                // as a plain set from here on.
+                foreach (var (key, appendValue) in mutation.AppendFields.ToList())
+                {
+                    var existingNode = FindEditableNode(root, key);
+                    string current;
+                    if (existingNode?.DisplayValue is not { } dv)
+                    {
+                        // Atom absent (or has no readable value): appending to nothing is a set.
+                        current = string.Empty;
+                    }
+                    else if (dv.Length >= 2 && dv[0] == '"' && dv[^1] == '"')
+                    {
+                        // Text values are presented quoted ("like this") by the parser; strip
+                        // the quotes to recover the raw stored string.
+                        current = dv[1..^1];
+                    }
+                    else
+                    {
+                        // The existing payload is not text (e.g. an image or integer-typed data
+                        // atom, displayed as "[JPEG image, …]" or a bare number). Splicing its
+                        // DISPLAY string into a pipe list would write that placeholder text into
+                        // the file as if it were the value. Refuse instead of corrupting it.
+                        throw new InvalidOperationException(
+                            $"Cannot append to '{key}': its existing value is not text " +
+                            $"({dv}). Use --set to replace it instead.");
+                    }
+                    string combined = string.IsNullOrEmpty(current)
+                        ? appendValue
+                        : Normalizer.AppendToPipeList(current, appendValue);
+                    mutation.SetFields[key] = combined;
+                }
+                mutation.AppendFields.Clear();
 
-            WriteToTemp(filePath, tempPath, root, mutation, scenario, ilstChildren, newFields,
-                        delta, moovEndOffset, newMoovSize, logger);
+                var (scenario, ilstChildren, newFields) = DetermineScenario(root, mutation);
+                logger.LogVerbose($"WRITE scenario={scenario}");
 
-            // VERIFICATION STEP 1 — cheap whole-file arithmetic. moov is the only box whose
-            // size changed, so the temp file must be exactly (original length + delta) bytes.
-            // This single check catches every "a box was silently dropped" failure mode.
-            long expectedTempLength = (long)root.Size + delta;
-            long actualTempLength = new FileInfo(tempPath).Length;
-            if (actualTempLength != expectedTempLength)
-                throw new InvalidDataException(
-                    $"Verification failed for '{Path.GetFileName(filePath)}': temp file is " +
-                    $"{actualTempLength} bytes but {expectedTempLength} were expected " +
-                    $"(original {root.Size} + delta {delta}). The original file is untouched.");
+                // Predict, byte-exactly, how large the rebuilt moov will be. The difference vs
+                // the original moov ("delta") is how far every byte after moov will shift in the
+                // output. Chunk-offset tables (stco/co64) inside moov hold ABSOLUTE file offsets
+                // into mdat, so each of their entries must be corrected by exactly this delta —
+                // see WriteAdjustedStco/WriteAdjustedCo64. WriteMoov later asserts that the moov
+                // it actually produced matches this prediction; a mismatch aborts the write
+                // rather than risk patching the offsets by the wrong amount.
+                long originalMoovSize = GetMoovSize(root);
+                long newMoovSize = CalculateNewMoovSize(root, scenario, ilstChildren, newFields, mutation);
+                long delta = newMoovSize - originalMoovSize;
+                logger.LogVerbose($"WRITE delta={delta:+#;-#;0} bytes");
 
-            // VERIFICATION STEP 2 — full re-parse of the temp file. It must parse cleanly from
-            // first byte to last, contain the same media boxes as the original, and every field
-            // this mutation set must read back. Only after this passes do we touch the original.
-            var verifyRoot = Mp4Parser.ParseFile(tempPath);
-            VerifyParseAccountsForWholeFile(verifyRoot, tempPath);
-            VerifyWrite(verifyRoot, root, mutation, filePath);
-            logger.LogVerbose($"VERIFY temp file re-parsed OK {CountBoxes(verifyRoot)} boxes intact");
+                // Where the original moov ends. Chunk offsets BELOW this point reference data
+                // that sits before/inside moov (the mdat-before-moov layout Game Bar produces) —
+                // that data does not move, so those entries must be left alone.
+                long moovEndOffset = GetMoovEndOffset(root);
 
+                WriteToTemp(src, tempPath, root, mutation, scenario, ilstChildren, newFields,
+                            delta, moovEndOffset, newMoovSize, logger);
+
+                // VERIFICATION STEP 1 — cheap whole-file arithmetic. moov is the only box whose
+                // size changed, so the temp file must be exactly (original length + delta) bytes.
+                // This single check catches every "a box was silently dropped" failure mode.
+                long expectedTempLength = (long)root.Size + delta;
+                long actualTempLength = new FileInfo(tempPath).Length;
+                if (actualTempLength != expectedTempLength)
+                    throw new InvalidDataException(
+                        $"Verification failed for '{Path.GetFileName(filePath)}': temp file is " +
+                        $"{actualTempLength} bytes but {expectedTempLength} were expected " +
+                        $"(original {root.Size} + delta {delta}). The original file is untouched.");
+
+                // VERIFICATION STEP 2 — full re-parse of the temp file. It must parse cleanly
+                // from first byte to last, contain the same media boxes as the original, and
+                // every field this mutation set must read back. Only after this passes do we
+                // touch the original.
+                var verifyRoot = Mp4Parser.ParseFile(tempPath);
+                VerifyParseAccountsForWholeFile(verifyRoot, tempPath);
+                VerifyWrite(verifyRoot, root, mutation, filePath);
+                logger.LogVerbose($"VERIFY temp file re-parsed OK {CountBoxes(verifyRoot)} boxes intact");
+            }
+            // The deny-writers handle must be released BEFORE File.Replace: ReplaceFile needs
+            // write/delete access to the destination, which our own open would block. This
+            // re-opens a microscopic window where another process could grab the file between
+            // the close and the swap — but by now the temp file is fully written and verified,
+            // so the worst case is the swap failing with an IOException (original untouched),
+            // never a torn output.
             File.Replace(tempPath, filePath, destinationBackupFileName: mutation.BackupPath);
             logger.LogVerbose($"SWAP {Path.GetFileName(filePath)} ← {Path.GetFileName(tempPath)}");
 
@@ -194,17 +237,21 @@ public sealed class Mp4Writer : IMediaWriter
     /// EXCEPT moov, which is rebuilt (that is where the metadata and the chunk-offset tables
     /// live). mdat in particular is never interpreted, only stream-copied in 64 KB chunks.
     /// </summary>
+    /// <param name="src">
+    /// The source stream the file was PARSED from, still open. Reusing the same deny-writers
+    /// handle (rather than re-opening the path) guarantees the bytes we copy are the bytes the
+    /// parse described — no other process can have modified the file in between.
+    /// </param>
     /// <param name="predictedMoovSize">
     /// The moov size computed by <see cref="CalculateNewMoovSize"/> — the value the stco/co64
     /// delta was derived from. <see cref="WriteMoov"/> hard-fails if the moov it builds does
     /// not match this exactly.
     /// </param>
     private static void WriteToTemp(
-        string sourcePath, string tempPath, BoxNode root, MetadataMutation mutation,
+        FileStream src, string tempPath, BoxNode root, MetadataMutation mutation,
         WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
         long delta, long moovEndOffset, long predictedMoovSize, IClipMetaLogger logger)
     {
-        using var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var dst = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var srcReader = new BinaryReader(src, Encoding.Latin1, leaveOpen: true);
         using var dstWriter = new BinaryWriter(dst, Encoding.Latin1, leaveOpen: true);

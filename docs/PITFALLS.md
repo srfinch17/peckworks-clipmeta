@@ -8,6 +8,31 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-10 — Parse and copy used separate file opens (fixed)
+- **Symptom (potential):** The writer parsed the source, closed it, then re-opened it to copy
+  bytes. A process writing to the file in between (Game Bar still recording the clip being
+  tagged) would make the copied bytes disagree with the parsed chunk offsets — torn output.
+- **Fix:** One `FileShare.Read` (deny-writers) handle held across parse + copy via the new
+  `Mp4Parser.Parse(FileStream)` overload. A live recorder now causes a clean up-front refusal
+  ("another program has it open for writing") instead. The handle must be released *before*
+  `File.Replace` — ReplaceFile needs write/delete access the held handle would block.
+- **Lesson:** Read-then-act on a file path is a TOCTOU race; hold one handle across both steps.
+
+### 2026-06-10 — CLI swallowed flags as values; some errors were stack traces (fixed)
+- **Symptoms:** `--set notes --backup` stored the literal text "--backup" as notes (while also
+  enabling backup mode — flag detection scans the arg list independently). `--set tags` at the
+  end of the line was silently ignored. `--set rating "five stars"` crashed with a raw .NET
+  stack trace (`ArgumentException` from Normalizer was uncaught in Program). `--SET` (wrong
+  case) was silently ignored while other flags matched case-insensitively. The fixed-name
+  `clip.mp4.tmp` temp file would overwrite a real user file of that name. Appending to a
+  non-text atom spliced its display placeholder ("[JPEG image, …]") into the file as data.
+- **Fixes:** `BuildMutation` validates positional args (missing → error; an exact known-flag
+  match where a value belongs → error; merely dashy values still accepted). `ArgumentException`
+  / `InvalidOperationException` are caught → friendly message, exit 1. Temp files are
+  `<name>.<guid>.tmp`. Appends verify the existing value is quoted text before merging.
+- **Lesson:** Every "take the next arg" parse needs a missing/looks-like-a-flag check, and
+  every exception type a CLI's core can throw needs a catch that turns it into an error line.
+
 ### 2026-06-10 — Lenient parser + trusting writer = silent mdat deletion (CRITICAL, fixed)
 - **Symptom:** Writing metadata into a moov-first file that had one unparseable box between
   moov and mdat produced a file with **no mdat at all** — the entire video silently deleted,
