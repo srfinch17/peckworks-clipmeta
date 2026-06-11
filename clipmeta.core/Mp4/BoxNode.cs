@@ -24,6 +24,14 @@ public class BoxNode
     /// <summary>False for nodes whose <see cref="FileOffset"/> and <see cref="Size"/> are approximate (e.g. Xtra child items); the write engine must not use these for in-place overwrites.</summary>
     public bool HasReliableOffsets { get; init; } = true;
 
+    /// <summary>
+    /// True when the box's on-disk size field claimed more bytes than its container (or the file)
+    /// actually holds, and the parser clamped <see cref="Size"/> to the available range.
+    /// Typical cause: a truncated download. The viewer tolerates this; the write engine refuses
+    /// to rewrite such files because the box header on disk is lying about its own length.
+    /// </summary>
+    public bool WasClamped { get; init; }
+
     /// <summary>True when this box carries a version byte and 24-bit flags field after the standard box header.</summary>
     public bool IsFullBox { get; init; }
 

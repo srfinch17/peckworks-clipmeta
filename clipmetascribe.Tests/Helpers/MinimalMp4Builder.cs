@@ -154,6 +154,82 @@ internal static class MinimalMp4Builder
     }
 
     /// <summary>
+    /// Builds a moov-FIRST MP4 whose stco entries are REAL absolute offsets pointing at
+    /// recognizable patterned chunks inside mdat. This is the fixture that actually exercises
+    /// the dangerous code path: because moov precedes mdat, any change to moov's size shifts
+    /// mdat, and the writer must patch every stco entry by exactly that shift.
+    /// </summary>
+    /// <remarks>
+    /// Contrast with <see cref="BuildMp4WithStco"/>, whose single offset (e.g. 9999) points at
+    /// nothing — fine for structural tests, useless for proving offsets were patched correctly.
+    /// Layout produced:
+    /// <code>
+    ///   moov
+    ///     mvhd
+    ///     trak ─ mdia ─ minf ─ stbl ─ stco   (chunksPerTrak entries, track 0)
+    ///     trak ─ mdia ─ minf ─ stbl ─ stco   (chunksPerTrak entries, track 1)
+    ///     [udta ─ meta ─ hdlr + ilst]        (only when a seed field is supplied)
+    ///   mdat   (traks × chunksPerTrak chunks of chunkSize bytes, each filled with a
+    ///           distinct marker byte so misdirected offsets are unmistakable)
+    /// </code>
+    /// Two tracks are deliberate: PITFALLS hazard #2 is "only one stco adjusted, others
+    /// missed" — a single-track fixture cannot catch that bug.
+    /// Building is two-pass: stco entry width is fixed, so a moov built with dummy offsets has
+    /// the same length as the final one; measure it, compute the real offsets, rebuild.
+    /// </remarks>
+    /// <param name="seedDomain">When non-null, an ilst with one seed atom is included (so a test
+    /// can start from the Update/Append scenario, or delete the atom to shrink moov).</param>
+    public static MemoryStream BuildMoovFirstWithPatternedMdat(
+        string? seedDomain = null, string? seedField = null, string? seedValue = null,
+        int traks = 2, int chunksPerTrak = 3, int chunkSize = 64)
+    {
+        byte[]? udta = seedDomain != null
+            ? UdtaBox(MetaBox(IlstBox(FreeformAtom(seedDomain, seedField!, seedValue!))))
+            : null;
+
+        // mdat payload: chunk (t, c) is chunkSize bytes of the marker value 0xA0 + t*16 + c,
+        // e.g. track 0 → A0 A1 A2..., track 1 → B0 B1 B2... Distinct everywhere, so if a chunk
+        // offset lands even one byte off, the integrity comparison sees different markers.
+        byte[] mdatPayload = new byte[traks * chunksPerTrak * chunkSize];
+        for (int t = 0; t < traks; t++)
+            for (int c = 0; c < chunksPerTrak; c++)
+                Array.Fill(mdatPayload, (byte)(0xA0 + t * 16 + c),
+                           (t * chunksPerTrak + c) * chunkSize, chunkSize);
+        byte[] mdat = Box("mdat", mdatPayload);
+
+        // Pass 1: dummy offsets, just to learn the moov length.
+        byte[] moovDummy = BuildMultiTrackMoov(udta, traks, chunksPerTrak, new uint[traks * chunksPerTrak]);
+
+        // mdat's payload starts right after moov plus mdat's own 8-byte header.
+        long mdatPayloadStart = moovDummy.Length + 8;
+        uint[] offsets = new uint[traks * chunksPerTrak];
+        for (int i = 0; i < offsets.Length; i++)
+            offsets[i] = (uint)(mdatPayloadStart + i * chunkSize);
+
+        // Pass 2: same structure, real offsets. Lengths must match or the offsets are garbage.
+        byte[] moov = BuildMultiTrackMoov(udta, traks, chunksPerTrak, offsets);
+        if (moov.Length != moovDummy.Length)
+            throw new InvalidOperationException("two-pass moov build produced different lengths");
+
+        var ms = new MemoryStream();
+        ms.Write(moov);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>Builds a moov containing one stco-bearing trak per track, slicing the flat
+    /// offset array into per-track runs of <paramref name="chunksPerTrak"/> entries.</summary>
+    private static byte[] BuildMultiTrackMoov(byte[]? udta, int traks, int chunksPerTrak, uint[] allOffsets)
+    {
+        byte[][] trakBoxes = Enumerable.Range(0, traks)
+            .Select(t => TrakBox(StcoBox(
+                allOffsets.Skip(t * chunksPerTrak).Take(chunksPerTrak).ToArray())))
+            .ToArray();
+        return MoovBox(udta, trakBoxes);
+    }
+
+    /// <summary>
     /// Saves a byte stream to a temp file, returns the file path.
     /// Caller is responsible for deleting the file.
     /// </summary>

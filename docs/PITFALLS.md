@@ -8,6 +8,52 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-10 — Lenient parser + trusting writer = silent mdat deletion (CRITICAL, fixed)
+- **Symptom:** Writing metadata into a moov-first file that had one unparseable box between
+  moov and mdat produced a file with **no mdat at all** — the entire video silently deleted,
+  exit code 0, verification passed.
+- **Cause:** `Mp4Parser.ParseBoxes` deliberately `break`s (not throws) at a box it can't read,
+  so everything after the damage was missing from the tree. `Mp4Writer` emits only the boxes
+  in the tree, and the old `VerifyWrite` only checked "moov exists + set fields read back" —
+  all true even with the video gone.
+- **Fix:** The parser stays lenient (a damaged file should still be *viewable*), but the writer
+  is now strict: `VerifyParseAccountsForWholeFile` refuses any write where the parsed top-level
+  boxes don't tile the file byte-for-byte, or where any box was size-clamped (truncated file).
+  Post-write checks now also assert temp length == original + delta and mdat count unchanged.
+- **Lesson:** A writer that rebuilds a file from a parse tree inherits every silent omission of
+  the parser. Read-lenient / write-strict must be an explicit, tested boundary.
+
+### 2026-06-10 — Delta-based offset patching had no cross-check (fixed preemptively)
+- **Symptom (potential):** stco/co64 entries are shifted by a *predicted* moov-size delta
+  computed independently of the bytes actually written. Any divergence (e.g. an exotic box
+  layout the size calculation mis-accounts) would corrupt every chunk offset silently.
+- **Fix:** `WriteMoov` now hard-fails if the rebuilt moov's actual size differs from the
+  prediction, before anything reaches the original file.
+- **Lesson:** When value A (offset delta) is derived from a prediction of value B (moov size),
+  assert prediction == reality at the moment B becomes known. One `if` turns silent corruption
+  into a safe abort.
+
+### 2026-06-10 — `--clear-all` re-added the schema atom it had just removed (fixed)
+- **Symptom:** After `--clear-all`, `--list` still showed `schema 1`.
+- **Cause:** `WriteMetadata` stamped `schema=1` into `SetFields` unconditionally — including on
+  clear-all and delete-only mutations.
+- **Fix:** Stamp only when the mutation actually sets or appends values.
+- **Lesson:** "Do X on every write" rules need a definition of *write*; removal-only operations
+  usually shouldn't create data.
+
+### 2026-06-10 — Tests verified metadata, never media (fixed)
+- **Symptom:** All 286 tests passed while the mdat-deletion bug above existed. The test named
+  for "stco/co64 adjustment" only asserted the file was still *parseable* — true even with
+  every chunk offset corrupted. No test ever hashed mdat or checked a single offset value.
+  (This file previously claimed a both-tracks stco integration test existed; it did not.)
+- **Fix:** `Mp4WriteIntegrityTests` + `MediaIntegrityScanner` (an independent scanner sharing
+  no code with clipmeta.core): SHA-256 of every mdat payload, plus a byte-compare at every
+  stco/co64 entry (old offset in old file vs new offset in new file), on synthetic moov-first
+  fixtures with two tracks and patterned chunks AND on every real pristine clip.
+- **Lesson:** For a file *rewriter*, round-trip tests must assert the payload bytes, not just
+  the structure. Also: all our real clips are mdat-first (Game Bar layout), so without a
+  moov-first fixture the offset-adjustment code path was never exercised at all.
+
 ### 2026-06-09 — Build fails NU1100 on a machine with no NuGet source
 - **Symptom:** `dotnet build`/`restore` fails: `NU1100: Unable to resolve 'MSTest'`.
 - **Cause:** Not the project. `dotnet nuget list source` returned "No sources found" — the machine had no nuget.org source registered.
@@ -23,7 +69,7 @@ These are the things that **corrupt files silently** if missed. Each should have
 | # | Risk | Mitigation |
 |---|------|------------|
 | 1 | Fragmented MP4 (`moof` boxes — common with Xbox Game Bar) | Detect on parse; refuse write with a clear `UnsupportedFormatException`. |
-| 2 | Only one `stco`/`co64` adjusted, others missed | Walk **ALL** `trak → stbl → stco/co64`. A stereo clip has video + audio tables; missing one desyncs that track. Integration test checks both. |
+| 2 | Only one `stco`/`co64` adjusted, others missed | Walk **ALL** `trak → stbl → stco/co64`. A stereo clip has video + audio tables; missing one desyncs that track. `Mp4WriteIntegrityTests` proves both tables on a two-track moov-first fixture byte-for-byte. |
 | 3 | `mean`/`name` FullBox 4-byte version+flags prefix omitted | Both are FullBoxes. Omitting the prefix shifts all following bytes → atom reads back as garbage. Unit test verifies byte structure. |
 | 4 | `hdlr` missing when creating `meta` from scratch | QuickTime/Final Cut **reject** a `meta` box with no `hdlr` (handler_type `mdir`). Scenario-3 test uses a file with no existing udta/meta/ilst. |
 | 5 | Foreign `ilst` atoms corrupted on rewrite | Copy all non-`com.peckworkslab.clipmeta` atoms (iTunes `©nam` etc., third-party `----`) byte-for-byte, in order, before appending ours. Test verifies `©nam` unchanged. |

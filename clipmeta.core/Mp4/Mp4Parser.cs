@@ -116,10 +116,17 @@ public class Mp4Parser : IMediaParser
                 break;
             }
 
+            // Corrupt box: size smaller than its own header. The parser deliberately STOPS here
+            // instead of throwing — a damaged file should still be viewable up to the damage.
+            // NOTE FOR THE WRITE PATH: stopping means everything after this point is missing
+            // from the tree. Mp4Writer.VerifyParseAccountsForWholeFile detects exactly this
+            // (parsed boxes won't cover the whole file) and refuses to rewrite, because writing
+            // from an incomplete tree would silently drop the unparsed bytes.
             if (header.Size < (ulong)header.HeaderSize)
-                break; // Corrupt box: size smaller than its own header.
+                break;
 
             // Guard against extended-size values with the high bit set that would overflow long.
+            // Same lenient-stop semantics as above; the write path refuses such files.
             if (header.Size > (ulong)long.MaxValue) break;
 
             long boxEnd = boxStart + (long)header.Size;
@@ -167,6 +174,10 @@ public class Mp4Parser : IMediaParser
                 IsFullBox = isFullBox,
                 Version = version,
                 Flags = flags,
+                // Record that the on-disk size field overran its container so the write engine
+                // can refuse the file (the viewer happily shows clamped boxes; rewriting them
+                // would reproduce a header that lies about its own length).
+                WasClamped = wasClamped,
             };
 
             if (inIlst)
