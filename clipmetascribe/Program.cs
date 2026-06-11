@@ -31,7 +31,16 @@ internal static class Program
         bool dryRun = args.Contains("--dry-run");
         bool yes = args.Contains("--yes");
         bool backup = args.Contains("--backup");
+
         string? logPath = GetFlag(args, "--log");
+        // --log present but its "value" is missing or is the next flag — without this check the
+        // logger would happily create a file literally named "--set" (and the swallowed flag
+        // would still be parsed as a flag elsewhere, compounding the confusion).
+        if (ContainsFlag(args, "--log") && (logPath == null || KnownFlags.Contains(logPath)))
+        {
+            Console.Error.WriteLine("Error: --log is missing a file path. Usage: --log <path>");
+            return 1;
+        }
 
         IClipMetaLogger logger = logPath != null
             ? new FileLogger(logPath, verbose ? LogLevel.Verbose : LogLevel.Simple)
@@ -251,6 +260,21 @@ internal static class Program
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
         }
+        // Bad user input detected past arg parsing: invalid --set rating/timecode values
+        // (Normalizer throws ArgumentException) or malformed write operations (BuildMutation).
+        // Without this catch these surfaced as a raw .NET stack trace instead of an error line.
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return 1;
+        }
+        // Operations the write engine refuses by design, e.g. appending to a non-text atom or
+        // updating a non-freeform (©nam-style) atom. User-fixable, so exit 1, not a crash.
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return 1;
+        }
         catch (InvalidDataException ex)
         {
             Console.Error.WriteLine($"Verification failed: {ex.Message}");
@@ -263,7 +287,62 @@ internal static class Program
         }
     }
 
-    private static MetadataMutation BuildMutation(string[] args, string filePath, bool dryRun, bool backup)
+    /// <summary>
+    /// Every flag this tool understands. Used to catch the "swallowed flag" class of mistake:
+    /// in <c>--set notes --backup</c> the user forgot the value, and without this check
+    /// "--backup" would be silently stored as the notes text (while ALSO still activating the
+    /// backup flag, since flag detection scans the whole arg list independently).
+    /// </summary>
+    private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--set", "--append", "--clear", "--clear-all", "--list", "--stats",
+        "--find", "--vocab", "--index", "--index-search", "--export",
+        "--format", "--output", "--dry-run", "--backup", "--verbose",
+        "--log", "--yes", "--version",
+    };
+
+    /// <summary>
+    /// Validates that a positional argument following a flag is usable, throwing a precise
+    /// <see cref="ArgumentException"/> (which Main reports as exit code 1) when it is missing
+    /// or is actually the NEXT flag. Values that merely look dashy (e.g. notes of
+    /// "--great clip--") are accepted — only exact matches of known flags are rejected,
+    /// so expressiveness is not lost.
+    /// </summary>
+    /// <param name="args">The full argument array.</param>
+    /// <param name="flagIndex">Index of the flag whose argument is being read.</param>
+    /// <param name="argOffset">1 for the first argument after the flag, 2 for the second.</param>
+    /// <param name="description">What the argument is, for the error message ("a field name").</param>
+    private static string RequireArg(string[] args, int flagIndex, int argOffset, string description)
+    {
+        string flag = args[flagIndex];
+        int index = flagIndex + argOffset;
+        if (index >= args.Length)
+            throw new ArgumentException($"{flag} is missing {description}. Usage: {FlagUsage(flag)}");
+        string value = args[index];
+        if (KnownFlags.Contains(value))
+            throw new ArgumentException(
+                $"{flag} expected {description} but found the flag '{value}'. " +
+                $"Usage: {FlagUsage(flag)}");
+        return value;
+    }
+
+    /// <summary>Usage string per write flag, shown in argument errors.</summary>
+    private static string FlagUsage(string flag) => flag.ToLowerInvariant() switch
+    {
+        "--set" => "--set <field> <value>",
+        "--append" => "--append <field> <value>",
+        "--clear" => "--clear <field>",
+        "--log" => "--log <path>",
+        _ => $"{flag} <value>",
+    };
+
+    /// <summary>
+    /// Collects all --set/--append/--clear operations from the argument list into a single
+    /// <see cref="MetadataMutation"/>. Internal (not private) so argument-validation tests can
+    /// drive it directly without spawning the executable.
+    /// </summary>
+    /// <exception cref="ArgumentException">When an operation is missing its field or value.</exception>
+    internal static MetadataMutation BuildMutation(string[] args, string filePath, bool dryRun, bool backup)
     {
         var mutation = new MetadataMutation
         {
@@ -273,22 +352,25 @@ internal static class Program
 
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--set" && i + 2 < args.Length)
+            // Flag names match case-insensitively, consistent with ContainsFlag/GetFlag.
+            if (args[i].Equals("--set", StringComparison.OrdinalIgnoreCase))
             {
-                string field = ClipMetaSchema.AtomName(args[i + 1]);
-                mutation.SetFields[field] = args[i + 2];
+                string field = RequireArg(args, i, 1, "a field name");
+                string value = RequireArg(args, i, 2, "a value");
+                mutation.SetFields[ClipMetaSchema.AtomName(field)] = value;
                 i += 2;
             }
-            else if (args[i] == "--append" && i + 2 < args.Length)
+            else if (args[i].Equals("--append", StringComparison.OrdinalIgnoreCase))
             {
-                string field = ClipMetaSchema.AtomName(args[i + 1]);
-                mutation.AppendFields[field] = args[i + 2];
+                string field = RequireArg(args, i, 1, "a field name");
+                string value = RequireArg(args, i, 2, "a value");
+                mutation.AppendFields[ClipMetaSchema.AtomName(field)] = value;
                 i += 2;
             }
-            else if (args[i] == "--clear" && i + 1 < args.Length)
+            else if (args[i].Equals("--clear", StringComparison.OrdinalIgnoreCase))
             {
-                string field = ClipMetaSchema.AtomName(args[i + 1]);
-                mutation.DeleteFields.Add(field);
+                string field = RequireArg(args, i, 1, "a field name");
+                mutation.DeleteFields.Add(ClipMetaSchema.AtomName(field));
                 i += 1;
             }
         }

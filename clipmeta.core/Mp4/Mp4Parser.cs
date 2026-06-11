@@ -59,7 +59,25 @@ public class Mp4Parser : IMediaParser
     public static BoxNode ParseFile(string path)
     {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var reader = new BinaryReader(fs, Encoding.Latin1, leaveOpen: false);
+        return Parse(fs);
+    }
+
+    /// <summary>
+    /// Parses the MP4 box hierarchy from an already-open stream, without taking ownership of it.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the write engine can open the source file ONCE — with a share mode that denies
+    /// other writers — and keep that same handle for both the parse and the subsequent
+    /// byte-copy. If the parse and the copy used separate opens (as <see cref="ParseFile"/>
+    /// followed by a second open would), another process could modify the file in between,
+    /// and the chunk offsets baked into the output would describe bytes that no longer exist —
+    /// e.g. tagging a clip that Game Bar is still actively recording.
+    /// The stream is left open; its position on return is unspecified.
+    /// </remarks>
+    /// <param name="fs">A readable, seekable stream positioned anywhere; read from offset 0.</param>
+    public static BoxNode Parse(FileStream fs)
+    {
+        using var reader = new BinaryReader(fs, Encoding.Latin1, leaveOpen: true);
 
         long fileSize = fs.Length;
 

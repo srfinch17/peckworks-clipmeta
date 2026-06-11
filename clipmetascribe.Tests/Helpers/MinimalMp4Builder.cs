@@ -42,16 +42,30 @@ internal static class MinimalMp4Builder
     // ── Atom builders ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds a ---- freeform atom with mean (domain), name (field), and data (UTF-8 value).
+    /// Builds a ---- freeform atom with mean (domain), name (field), and data children.
     /// Both mean and name are FullBoxes — version+flags are 4 bytes each.
     /// </summary>
-    public static byte[] FreeformAtom(string domain, string fieldName, string value)
+    /// <param name="dataTypeIndicator">
+    /// The data box's 24-bit type indicator: 1 = UTF-8 text (the default, and what clipmeta
+    /// itself always writes). Pass another value (13 = JPEG, 21 = signed int, …) to fabricate
+    /// a NON-text atom — used to prove the writer refuses to append to one rather than
+    /// splicing its display placeholder into the file.
+    /// </param>
+    public static byte[] FreeformAtom(string domain, string fieldName, string value,
+                                      int dataTypeIndicator = 1)
     {
         byte[] mean = FullBox("mean", 0, 0, Encoding.UTF8.GetBytes(domain));
         byte[] name = FullBox("name", 0, 0, Encoding.UTF8.GetBytes(fieldName));
 
-        // data: version=0, type=1 (UTF-8), locale=0000 (4 bytes), then value bytes
-        byte[] dataPayload = new byte[] { 0, 0, 0, 1, 0, 0, 0, 0 }
+        // data: version=0, 3-byte type indicator, locale=0000 (4 bytes), then value bytes
+        byte[] dataPayload = new byte[]
+            {
+                0,
+                (byte)(dataTypeIndicator >> 16),
+                (byte)(dataTypeIndicator >> 8),
+                (byte)dataTypeIndicator,
+                0, 0, 0, 0,
+            }
             .Concat(Encoding.UTF8.GetBytes(value))
             .ToArray();
         byte[] data = Box("data", dataPayload);
@@ -179,12 +193,14 @@ internal static class MinimalMp4Builder
     /// </remarks>
     /// <param name="seedDomain">When non-null, an ilst with one seed atom is included (so a test
     /// can start from the Update/Append scenario, or delete the atom to shrink moov).</param>
+    /// <param name="seedDataType">Type indicator for the seed atom's data box; see
+    /// <see cref="FreeformAtom"/>. Default 1 (UTF-8 text).</param>
     public static MemoryStream BuildMoovFirstWithPatternedMdat(
         string? seedDomain = null, string? seedField = null, string? seedValue = null,
-        int traks = 2, int chunksPerTrak = 3, int chunkSize = 64)
+        int traks = 2, int chunksPerTrak = 3, int chunkSize = 64, int seedDataType = 1)
     {
         byte[]? udta = seedDomain != null
-            ? UdtaBox(MetaBox(IlstBox(FreeformAtom(seedDomain, seedField!, seedValue!))))
+            ? UdtaBox(MetaBox(IlstBox(FreeformAtom(seedDomain, seedField!, seedValue!, seedDataType))))
             : null;
 
         // mdat payload: chunk (t, c) is chunkSize bytes of the marker value 0xA0 + t*16 + c,
