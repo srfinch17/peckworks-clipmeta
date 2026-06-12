@@ -37,6 +37,14 @@ public sealed class JsonRpcMessage
     /// <summary>Raw params node; null when absent.</summary>
     public JsonNode? Params { get; private init; }
 
+    /// <summary>
+    /// True when the message carried an explicit <c>"id": null</c>. MCP forbids null ids
+    /// ("Unlike base JSON-RPC, the ID MUST NOT be null"), but a JSON-null id parses to the same
+    /// .NET null as an absent id — without this flag such a request would be misclassified as a
+    /// notification and silently never answered.
+    /// </summary>
+    public bool HasExplicitNullId { get; private init; }
+
     /// <summary>True when no id was present — notifications never get a response.</summary>
     public bool IsNotification => Id is null;
 
@@ -59,7 +67,7 @@ public sealed class JsonRpcMessage
             method = methodString;
         }
 
-        obj.TryGetPropertyValue("id", out JsonNode? idNode);
+        bool hasIdProperty = obj.TryGetPropertyValue("id", out JsonNode? idNode);
         obj.TryGetPropertyValue("params", out JsonNode? paramsNode);
 
         // DeepClone detaches the nodes from the parsed message so they can be re-parented
@@ -69,6 +77,7 @@ public sealed class JsonRpcMessage
             Id = idNode?.DeepClone(),
             Method = method,
             Params = paramsNode?.DeepClone(),
+            HasExplicitNullId = hasIdProperty && idNode is null,
         };
     }
 }

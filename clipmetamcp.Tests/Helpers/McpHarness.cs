@@ -11,9 +11,22 @@ namespace ClipMetaMcp.Tests.Helpers;
 /// </summary>
 internal static class McpHarness
 {
-    /// <summary>A standard initialize request (latest protocol version).</summary>
-    public const string InitializeRequest =
-        """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tests","version":"1.0"}}}""";
+    /// <summary>
+    /// A standard initialize request. Derives the version from the session's own constant so a
+    /// protocol bump cannot leave the tests silently pinned to a stale version.
+    /// </summary>
+    public static readonly string InitializeRequest = new JsonObject
+    {
+        ["jsonrpc"] = "2.0",
+        ["id"] = 1,
+        ["method"] = "initialize",
+        ["params"] = new JsonObject
+        {
+            ["protocolVersion"] = McpSession.LatestProtocolVersion,
+            ["capabilities"] = new JsonObject(),
+            ["clientInfo"] = new JsonObject { ["name"] = "tests", ["version"] = "1.0" },
+        },
+    }.ToJsonString();
 
     /// <summary>
     /// Feeds <paramref name="requestLines"/> through a fresh session whose tools are sandboxed

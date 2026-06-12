@@ -74,8 +74,10 @@ internal static class Program
     }
 
     /// <summary>
-    /// Rotating file logger under <c>%LOCALAPPDATA%\clipmeta\mcp.log</c>. Falls back to no
-    /// logging rather than failing startup — a broken log path must not take the server down.
+    /// Rotating file logger under <c>%LOCALAPPDATA%\clipmeta\mcp.log</c>, wrapped in
+    /// <see cref="SafeLogger"/> so per-line failures (cross-process log contention, AV locks)
+    /// can never escape into the session. Falls back to no logging rather than failing
+    /// startup — a broken log path must not take the server down.
     /// </summary>
     private static IClipMetaLogger CreateLogger()
     {
@@ -84,7 +86,7 @@ internal static class Program
             string path = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "clipmeta", "mcp.log");
-            return new FileLogger(path);
+            return new SafeLogger(new FileLogger(path));
         }
         catch (Exception)
         {

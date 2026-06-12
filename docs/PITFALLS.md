@@ -8,6 +8,42 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-11 — Lexical path containment is not real containment on Windows (fixed)
+- **Symptom:** The MCP library sandbox checked `resolvedPath.StartsWith(root)` after
+  `Path.GetFullPath` — and an adversarial probe **escaped it**: a directory junction inside the
+  library pointing outside it passes the lexical check while `FileStream` happily follows the
+  reparse point to the outside target. `mklink /J` needs no admin rights.
+- **Fix:** Containment is now checked on the OS-canonical path — every junction/symlink
+  component resolved via `FileSystemInfo.ResolveLinkTarget(returnFinalTarget: true)`, walking
+  root-to-leaf — and the configured root is canonicalized the same way (a junction *root* is
+  legitimate). Cloud-placeholder files (Dropbox/OneDrive) are reparse points but **not** links:
+  `ResolveLinkTarget` returns null for them, so they pass through — a blanket reparse-point ban
+  would have broken online-only clips.
+- **Related fixes from the same review:** NTFS alternate-data-stream syntax
+  (`real.mp4:payload.mp4` — the *stream* name satisfies a `.mp4` suffix check) is now refused;
+  and `Path.TrimEndingDirectorySeparator` keeps the separator on a drive root, so naive
+  `root + '\'` built `"C:\\\\"` and refused **every** file on a whole-drive library — use
+  `Path.EndsInDirectorySeparator` before appending.
+- **Lesson:** `GetFullPath` resolves `..` but not reparse points; the filesystem resolves both.
+  Any check done on the lexical path can disagree with what the OS actually opens.
+
+### 2026-06-11 — `Compress-Archive` zip entry separators are PowerShell-version-dependent
+- **Symptom (potential):** Under Windows PowerShell 5.1, `Compress-Archive` writes zip entry
+  names with backslashes (`server\clipmetamcp.exe`), violating the ZIP spec; spec-strict
+  extractors then can't find the `.mcpb` bundle's `server/clipmetamcp.exe` entry point —
+  installed-but-never-spawns. pwsh 7 on this machine happened to emit forward slashes.
+- **Fix:** `pack-mcpb.ps1` uses `[System.IO.Compression.ZipFile]::CreateFromDirectory`, which
+  always writes forward slashes regardless of which PowerShell runs the script.
+- **Lesson:** Artifacts that must be byte-deterministic shouldn't depend on which shell built
+  them; go to the BCL API directly.
+
+### 2026-06-11 — Garbage bytes in an .mp4 parse "successfully" to an empty tree
+- **Symptom:** An MCP test assumed `Mp4Parser.ParseFile` throws on a garbage file; it doesn't —
+  the parser's deliberate leniency (clamp oversized boxes, stop at damage; see the mdat entry
+  below) means tiny garbage files parse to a tree with no metadata, no exception.
+- **Lesson:** "Corrupt file" tests against the read path must assert *empty result + session
+  survives*, not an exception. Only the **write** path treats unaccounted bytes as fatal.
+
 ### 2026-06-10 — Parse and copy used separate file opens (fixed)
 - **Symptom (potential):** The writer parsed the source, closed it, then re-opened it to copy
   bytes. A process writing to the file in between (Game Bar still recording the clip being
