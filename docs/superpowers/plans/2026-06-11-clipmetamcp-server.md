@@ -1,0 +1,186 @@
+# clipmetamcp Implementation Plan
+
+> **Spec:** `docs/superpowers/specs/2026-06-11-clipmetamcp-server-design.md` — read it first; this
+> plan sequences that design, it does not restate it.
+
+**Goal:** Deliver the `clipmetamcp` MCP server in five phases, front-loading the riskiest unknown
+(does Claude Desktop cleanly spawn a bundled win-x64 binary and keep the stdio channel intact?)
+into a walking-skeleton spike before the full tool surface is built.
+
+**Tech stack:** C# / .NET 10, MSTest, **zero external NuGet packages** (System.Text.Json is BCL).
+Self-contained single-file publish; `.mcpb` packaging via PowerShell only.
+
+---
+
+## Decisions pinned at implementation time
+
+These resolve the spec's "check the live spec when implementing" items (risks R3/R4):
+
+- **`protocolVersion`: `2025-11-25`** — verified current at modelcontextprotocol.io on 2026-06-11.
+  Negotiation rule (per spec): if the client's requested version is one we support, echo it back;
+  otherwise respond with our latest. Supported set is a constant in `McpSession`:
+  `["2025-11-25", "2025-06-18", "2025-03-26"]` — our surface (lifecycle + tools) is unchanged
+  across these revisions.
+- **`tools/call` results** carry both a `content: [{type:"text", text:<json>}]` block (universal
+  compatibility) and `structuredContent` (so the model gets real JSON, per spec §3). We do **not**
+  declare `outputSchema` in v1 — declaring it makes `structuredContent` mandatory and adds schema
+  maintenance for no negotiation benefit.
+- **Serialization:** reflection-based `System.Text.Json` writing to/from explicit DTO records.
+  `PublishTrimmed` stays **off** (risk R4); the csproj carries a comment forbidding it until
+  source-generated `JsonSerializerContext` is adopted.
+- **Request `id`** is `number | string` in JSON-RPC 2.0 — stored as a cloned `JsonElement` and
+  echoed back verbatim, never re-typed.
+
+## Phase ordering and why
+
+| Phase | Delivers | Retires risk |
+|-------|----------|--------------|
+| 1 | Walking skeleton: protocol layer, **one** read tool, `--selftest`, publish + `.mcpb` pack scripts, tests | R1 (stdout purity), R2 (Windows spawn), R7 (manifest schema) — the E2E spike gate |
+| 2 | Remaining 5 read tools | — (low risk; same pattern ×5) |
+| 3 | 4 write tools + single-flight lock + integrity verification | R6, R8 |
+| 4 | `--install` / `--uninstall`, full `--selftest` table | — |
+| 5 | README install section, PITFALLS entries, full manual E2E gate | Definition of Done items 5–6 |
+
+**Phase 1 ends with a manual go/no-go gate:** install the freshly packed `clipmeta.mcpb` in real
+Claude Desktop on this machine and ask Claude for a clip's metadata. Nothing in phases 2–5 starts
+until that works — if the binary-bundle bet fails, the fallback (cmd-wrapper, `--install` flow)
+gets designed *before* ten tools exist, not after.
+
+---
+
+## Codebase context (verified 2026-06-11)
+
+Core already provides everything the tools delegate to — no Core changes expected in phases 1–2:
+
+- `Mp4Parser.ParseFile(path)` → `BoxNode`; throws `IOException` / `UnauthorizedAccessException` /
+  `InvalidDataException` on bad input
+- `ClipMetaReader.GetFields(root)` → `IReadOnlyList<(string Field, string Value)>`
+- `ClipMetaFinder.Find(dir, field, value, recursive)`, `ClipMetaVocab.Enumerate(dir, field, recursive)`,
+  `ClipMetaExporter.GetRecords(paths)`, `ClipMetaIndex.Build/WriteToFile/ReadFromFile`,
+  `ClipMetaSearch.Find(index, field, value)`
+- `Mp4Writer.WriteMetadata(path, MetadataMutation, IClipMetaLogger)` — `MetadataMutation` already
+  carries `SetFields`/`AppendFields`/`DeleteFields`/`ClearAll`/`DryRun`/`BackupPath`, so the MCP
+  write tools are parameter mapping, not new write logic
+- `ClipMetaSchema` — field constants, `AtomName(field)`, internal `Schema` field to exclude from output
+- `FileLogger(path, level)` — rotating file logger, creates its directory
+- Test pattern: `TestClipsLocator` walks up from `AppContext.BaseDirectory` to find
+  `testclips/pristine`; tests copy a pristine clip into a `_tempDir` per test
+
+---
+
+## File map (phase 1)
+
+| Action | Path | Responsibility |
+|--------|------|----------------|
+| Create | `clipmetamcp/clipmetamcp.csproj` | net10.0 exe, refs clipmeta.core only, trimming-forbidden comment |
+| Create | `clipmetamcp/Program.cs` | arg dispatch (`--selftest` vs serve); stdout lockdown; logger setup |
+| Create | `clipmetamcp/Protocol/JsonRpc.cs` | message parse + response/error DTOs and writer |
+| Create | `clipmetamcp/Protocol/McpSession.cs` | dispatch loop over `TextReader`/`TextWriter`; initialize/tools/list/tools/call/ping |
+| Create | `clipmetamcp/Tools/ToolRegistry.cs` | name → (description, input schema, handler); `ToolException` for friendly refusals |
+| Create | `clipmetamcp/Tools/LibrarySandbox.cs` | `CLIPMETA_LIBRARY_ROOT` containment checks |
+| Create | `clipmetamcp/Tools/ReadTools.cs` | `clip_get_metadata` (phase 1); rest in phase 2 |
+| Create | `clipmetamcp/SelfTest.cs` | spawn own exe, real-pipe handshake, pass/fail report |
+| Create | `clipmetamcp.Tests/*` | protocol, tool, sandbox, stdout-purity tests |
+| Create | `tools/pack-mcpb.ps1` | publish + stage + `Compress-Archive` → `dist/clipmeta.mcpb` |
+| Create | `tools/mcpb-manifest.json` | manifest_version 0.3, binary entry point, `library_root` user_config |
+| Modify | `peckworks-clipmeta.slnx` | add both projects |
+
+---
+
+## Phase 1 — walking skeleton + spike gate
+
+- [ ] **Task 1: projects + slnx wiring** — `clipmetamcp` (console, refs Core) and
+  `clipmetamcp.Tests` (MSTest, refs clipmetamcp). Build green before any code.
+- [ ] **Task 2: protocol layer.** `JsonRpc.cs`: parse one line into
+  `(JsonElement? id, string? method, JsonElement? params)`; writers for result / error / nothing
+  (notifications). `McpSession.cs`: constructor takes `TextReader in, TextWriter out, ToolRegistry,
+  IClipMetaLogger`; `Run()` loops until EOF. Behavior table is spec §2 verbatim. Malformed JSON →
+  `-32700`, session survives. Unknown method with id → `-32601`; unknown notification → ignored.
+- [ ] **Task 3: tool registry + sandbox + first tool.** `ToolRegistry` maps name →
+  (description-for-the-model, JSON Schema as a `JsonElement`, `Func<JsonElement, JsonNode>` handler).
+  Handlers throw `ToolException(message)` for refusals; `McpSession` converts any handler exception
+  into `isError: true` text — never a protocol error, never a stack trace.
+  `LibrarySandbox.ResolveReadPath(path)`: `Path.GetFullPath`, must be under root when root is set,
+  must exist, must be `.mp4`. `clip_get_metadata` → ParseFile + GetFields, schema field excluded,
+  returns `{ path, fields: { name: value, ... } }`.
+- [ ] **Task 4: Program.cs + stdout lockdown.** Serve mode: capture
+  `Console.OpenStandardOutput()` into the one protocol `StreamWriter` (UTF-8 **without BOM** — a
+  BOM is a protocol-corrupting stray byte — `AutoFlush = true`), then `Console.SetOut(TextWriter.Null)`
+  so any stray `Console.WriteLine` anywhere vanishes instead of corrupting the channel.
+  `FileLogger` → `%LOCALAPPDATA%\clipmeta\mcp.log`. Fatal startup errors → stderr + log, exit 1.
+- [ ] **Task 5: minimal `--selftest`.** Spawn `Environment.ProcessPath` with no args; drive
+  initialize → initialized → tools/list → ping over real pipes; print a pass/fail table to the
+  console (selftest mode owns stdout — it is the human-facing mode). Non-zero exit on failure.
+- [ ] **Task 6: tests.** In-process via `StringReader`/`StringWriter`:
+  initialize shape + version negotiation (exact echo for supported, latest for unknown);
+  tools/list contains `clip_get_metadata` with schema; `-32601`; `-32700` then session survives;
+  **stdout purity** — invoke every registered tool with `Console.Out` captured, assert zero bytes;
+  tool happy path against a scratch-copied pristine clip; missing file / non-mp4 / outside-root →
+  `isError: true` with helpful message, schema field never present in results.
+- [ ] **Task 7: packaging.** `tools/pack-mcpb.ps1`: `dotnet publish -c Release -r win-x64
+  --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`,
+  stage `manifest.json` + `server/clipmetamcp.exe`, `Compress-Archive`, rename to
+  `dist/clipmeta.mcpb`. Manifest exactly as spec §4 (no icon in v1 — optional in the 0.3 schema).
+- [ ] **Task 8: local verification.** Full build 0/0, full test suite green, pack script runs
+  from clean checkout, `--selftest` green **on the published single-file exe** (not just the
+  framework-dependent build — single-file extraction is its own failure surface).
+- [ ] **Task 9 (manual, user): E2E spike gate.** Install `dist/clipmeta.mcpb` in Claude Desktop,
+  pick the clips folder, ask for a clip's metadata. Record outcome (and any workaround needed)
+  in `docs/PITFALLS.md` before phase 2.
+
+## Phase 2 — read tools
+
+- [ ] `clip_get_stats` — Core primitives directly (`GetFields` + `FileInfo`), structured JSON
+  (`sizeBytes`, `fieldsSet`, `knownUnset`, `customFields`); known-field list from `ClipMetaSchema`.
+- [ ] `library_find` (`field`, `value`) → `ClipMetaFinder.Find` over the library root.
+- [ ] `library_vocab` (`field`) → `ClipMetaVocab.Enumerate`.
+- [ ] `library_export` (`format`: json|csv) → `ClipMetaExporter.GetRecords`; json returns the
+  records as structured content, csv returns the CSV text.
+- [ ] `library_search_index` (`rebuild?`, `field?`, `value?`) → `ClipMetaIndex` / `ClipMetaSearch`.
+- [ ] All directory-scoped tools operate on the sandbox root and **require** it to be configured
+  (refusal with the `CLIPMETA_LIBRARY_ROOT` explanation otherwise).
+- [ ] Tests per tool: happy path, empty library, unset root refusal.
+
+## Phase 3 — write tools
+
+- [ ] `WriteTools.cs`: `clip_set_fields`, `clip_append_field`, `clip_clear_fields`,
+  `clip_clear_all` — each builds a `MetadataMutation` (field names through
+  `ClipMetaSchema.AtomName`) and calls `Mp4Writer.WriteMetadata`.
+- [ ] Safety semantics (spec §3): `backup` defaults **true** (timestamped sibling
+  `<name>.mp4.bak-yyyyMMdd-HHmmss`); `dry_run` honored; `clip_clear_all` refuses without literal
+  `confirm: true`; sandbox check uses a **write**-grade message.
+- [ ] Single-flight: one process-wide `SemaphoreSlim(1,1)` around write-tool dispatch (R8).
+- [ ] Result payload echoes: what changed, backup path (or null), dry-run flag — truthful
+  reporting for the model.
+- [ ] Tests: each write verified by re-read; backup appears by default and respects
+  `backup: false`; dry-run leaves bytes identical; `confirm` refusal; outside-root refusal;
+  **media-integrity check with the existing scanner** after MCP-driven writes.
+
+## Phase 4 — install fallback + full selftest
+
+- [ ] `Install/ClaudeConfigInstaller.cs`: locate `%APPDATA%\Claude\claude_desktop_config.json`,
+  timestamped backup, insert/update `mcpServers.clipmeta` (absolute exe path,
+  `--library-root` → env var), refuse on unparseable JSON with backup intact; `--uninstall` reverses.
+- [ ] `--selftest` grows: spawn + handshake + one read tool round-trip + stdout-purity probe;
+  table output per spec §4.
+- [ ] Installer tests against fixture configs in a temp dir: fresh, existing-other-servers
+  (preserved verbatim), corrupt (refusal + backup), uninstall round-trip.
+
+## Phase 5 — polish + Definition of Done
+
+- [ ] README install section (bundle drag-drop, SmartScreen note per R5, `--install` fallback,
+  `--selftest` for support).
+- [ ] PITFALLS entries for anything learned in phases 1–4.
+- [ ] Full manual E2E gate: tag a real clip conversationally; verify with `clipmetascribe --list`
+  and the integrity scanner; spec §7 checklist all green.
+
+---
+
+## Self-review checkpoints
+
+- Every tool delegates to Core; if logic wants to live in `clipmetamcp`, it moves to Core first
+  (thin-shell rule).
+- Zero NuGet in `clipmetamcp`; MSTest only in the test project.
+- No `Console.WriteLine` anywhere in serve-mode code paths — enforced by the purity test, not by
+  vigilance.
+- `BoxNode`/parser internals never leak into protocol DTOs.
