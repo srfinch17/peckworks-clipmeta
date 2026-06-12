@@ -32,7 +32,7 @@ public class ClipGetMetadataToolTests
     /// <summary>Copies a pristine clip into the temp library and writes one metadata field to it.</summary>
     private string PrepareClip(string fileName, string field, string value)
     {
-        string source = TestClipsLocator.AllPristine().First();
+        string source = TestClipsLocator.SmallestPristine();
         string dest   = Path.Combine(_tempDir, fileName);
         File.Copy(source, dest);
         var mutation = new MetadataMutation();

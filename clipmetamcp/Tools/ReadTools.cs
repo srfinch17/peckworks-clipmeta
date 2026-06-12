@@ -51,19 +51,34 @@ public static class ReadTools
         BoxNode root = ParseClip(fullPath);
 
         // The internal schema-version field is write-engine bookkeeping, not user metadata —
-        // exclude it here exactly as every CLI read path does.
+        // exclude it here as the CLI read paths do. GetFields can legitimately return the same
+        // field name more than once (a file holding duplicate clipmeta atoms, e.g. written by
+        // another tagger): keep the FIRST occurrence and report the conflict, rather than
+        // silently last-wins — the model must not present one value as authoritative when the
+        // file disagrees with itself.
         var fields = new JsonObject();
+        var duplicated = new JsonArray();
         foreach ((string field, string value) in ClipMetaReader.GetFields(root))
         {
-            if (!field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal))
-                fields[field] = value;
+            if (field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal))
+                continue;
+            if (fields.ContainsKey(field))
+            {
+                if (!duplicated.Any(d => d!.GetValue<string>() == field))
+                    duplicated.Add(field);
+                continue;
+            }
+            fields[field] = value;
         }
 
-        return new JsonObject
+        var result = new JsonObject
         {
             ["path"] = fullPath,
             ["fields"] = fields,
         };
+        if (duplicated.Count > 0)
+            result["duplicatedFields"] = duplicated; // names that appeared more than once; first value kept
+        return result;
     }
 
     /// <summary>Parses an MP4, converting Core's exceptions into model-readable refusals.</summary>

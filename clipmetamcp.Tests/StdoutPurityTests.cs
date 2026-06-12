@@ -45,7 +45,7 @@ public class StdoutPurityTests
     public void EveryRegisteredTool_WritesNothingToConsoleOut()
     {
         // Arrange: a real clip with metadata, and the full registry.
-        string source = TestClipsLocator.AllPristine().First();
+        string source = TestClipsLocator.SmallestPristine();
         string clip = Path.Combine(_tempDir, "clip.mp4");
         File.Copy(source, clip);
         var mutation = new MetadataMutation();

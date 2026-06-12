@@ -23,8 +23,10 @@ public sealed class McpSession
     /// these. Negotiation rule: if the client requests one of these we echo it back; anything
     /// else gets <see cref="LatestProtocolVersion"/> and the client decides whether to proceed.
     /// </summary>
+    // 2025-03-26 is deliberately NOT claimed: that revision requires servers to accept
+    // JSON-RPC batch arrays, which this parser rejects (batching was removed in 2025-06-18).
     public static readonly IReadOnlyList<string> SupportedProtocolVersions =
-        ["2025-11-25", "2025-06-18", "2025-03-26"];
+        ["2025-11-25", "2025-06-18"];
 
     /// <summary>Server name advertised in the initialize result.</summary>
     public const string ServerName = "clipmeta";
@@ -89,6 +91,15 @@ public sealed class McpSession
 
     private void Dispatch(JsonRpcMessage message)
     {
+        // MCP forbids null request ids outright; answer with Invalid Request (null response id,
+        // as for unreadable ids) instead of misclassifying the message as a notification.
+        if (message.HasExplicitNullId)
+        {
+            JsonRpcWriter.WriteError(_output, null, JsonRpcErrorCodes.InvalidRequest,
+                "Invalid request: 'id' must not be null.");
+            return;
+        }
+
         switch (message.Method)
         {
             case "initialize":

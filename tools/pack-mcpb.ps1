@@ -44,11 +44,15 @@ New-Item -ItemType Directory -Force (Join-Path $stageDir 'server') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'mcpb-manifest.json') (Join-Path $stageDir 'manifest.json')
 Copy-Item $exePath (Join-Path $stageDir 'server\clipmetamcp.exe')
 
-# ── 3. Zip and rename: a .mcpb is just a zip with a manifest at its root ────────────
-$zipPath = Join-Path $distDir 'clipmeta.zip'
-Remove-Item $zipPath, $mcpbPath -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath
-Move-Item $zipPath $mcpbPath
+# ── 3. Zip: a .mcpb is just a zip with a manifest at its root ───────────────────────
+# System.IO.Compression.ZipFile (not Compress-Archive) for one reason: it always writes
+# forward-slash entry names per the ZIP spec. Compress-Archive under Windows PowerShell 5.1
+# emits backslash entries ('server\clipmetamcp.exe'), which spec-strict extractors reject —
+# producing an installed-but-never-spawns bundle. ZipFile makes the output identical no matter
+# which PowerShell runs this script.
+Remove-Item $mcpbPath -Force -ErrorAction SilentlyContinue
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory($stageDir, $mcpbPath)
 Remove-Item $stageDir -Recurse -Force
 
 $sizeMb = (Get-Item $mcpbPath).Length / 1MB

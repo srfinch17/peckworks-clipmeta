@@ -180,6 +180,30 @@ public class McpSessionTests
     }
 
     [TestMethod]
+    public void ExplicitNullId_ReturnsInvalidRequest()
+    {
+        // MCP forbids null ids; without explicit handling this parses identically to an absent
+        // id and the request would be silently dropped as a notification.
+        var responses = McpHarness.Run(null,
+            """{"jsonrpc":"2.0","id":null,"method":"ping"}""");
+
+        Assert.AreEqual(1, responses.Count);
+        Assert.AreEqual(JsonRpcErrorCodes.InvalidRequest, responses[0]["error"]?["code"]?.GetValue<int>());
+        Assert.IsNull(responses[0]["id"]);
+    }
+
+    [TestMethod]
+    public void Initialize_BatchOnlyVersion20250326_IsNotClaimed()
+    {
+        // 2025-03-26 mandates batch-receive support this parser does not have; claiming it
+        // would be a lie. A client requesting it gets our latest instead.
+        var responses = McpHarness.Run(null, InitializeWithVersion("2025-03-26"));
+
+        Assert.AreEqual(McpSession.LatestProtocolVersion,
+            responses[0]["result"]?["protocolVersion"]?.GetValue<string>());
+    }
+
+    [TestMethod]
     public void StringRequestId_IsEchoedAsString()
     {
         var responses = McpHarness.Run(null,

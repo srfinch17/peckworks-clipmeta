@@ -8,7 +8,7 @@ A suite of C# command-line tools for reading and writing metadata **inside** MP4
 
 ## Architecture (as of 2026-06)
 
-Solution: `peckworks-clipmeta.slnx`, **.NET 10**, six projects:
+Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 
 | Project | Namespace | Purpose |
 |---------|-----------|---------|
@@ -18,7 +18,7 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, six projects:
 | `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
 | `clipmetaview.Tests` | — | MSTest, 80 tests. |
 | `clipmetascribe.Tests` | — | MSTest, 239 tests (incl. real-clip integration and byte-level media-integrity tests). |
-| `clipmetamcp.Tests` | — | MSTest, 27 tests (protocol shape, tool behavior, stdout purity). |
+| `clipmetamcp.Tests` | — | MSTest, 41 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
 
 `clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Schema/`, `Logging/`, `Exceptions/`.
 
@@ -64,7 +64,7 @@ dotnet build  --nologo -v q          # must be 0 warnings, 0 errors
 dotnet test   --nologo --no-build -v q
 ```
 
-- 346 tests total. `clipmetascribe.Tests` takes ~3–4 min (real-clip integration + media-integrity hashing) — not a hang; use a long timeout.
+- 360 tests total. `clipmetascribe.Tests` takes ~3–4 min (real-clip integration + media-integrity hashing) — not a hang; use a long timeout.
 - Integration tests need local clips: `testclips/pristine/` (read-only ground truth) and `testclips/scratch/` (regenerated copies). Both are git-ignored.
 - **New machine?** If restore fails with `NU1100`, the machine likely has no NuGet source. Run:
   `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`
@@ -78,6 +78,6 @@ Custom fields use the reverse-domain namespace `com.peckworkslab.clipmeta`, stor
 ## Definition of Done (every change)
 
 1. `dotnet build` — 0 warnings, 0 errors, all projects.
-2. `dotnet test` — all 346 pass, including real-clip integration and media-integrity tests.
+2. `dotnet test` — all 360 pass, including real-clip integration and media-integrity tests.
 3. Zero NuGet packages added to production projects.
 4. Public types documented; new gotchas recorded in `docs/PITFALLS.md`.

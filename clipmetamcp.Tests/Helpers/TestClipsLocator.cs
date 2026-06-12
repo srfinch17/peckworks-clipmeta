@@ -21,4 +21,12 @@ internal static class TestClipsLocator
 
     public static IEnumerable<string> AllPristine()
         => Directory.EnumerateFiles(FindPristinePath(), "*.mp4");
+
+    /// <summary>
+    /// The smallest pristine clip — deterministic, and orders of magnitude less I/O than
+    /// whatever the filesystem happens to enumerate first (pristine clips range ~70–400 MB and
+    /// every PrepareClip is a full copy + write-engine rewrite of the chosen file).
+    /// </summary>
+    public static string SmallestPristine()
+        => AllPristine().OrderBy(path => new FileInfo(path).Length).First();
 }

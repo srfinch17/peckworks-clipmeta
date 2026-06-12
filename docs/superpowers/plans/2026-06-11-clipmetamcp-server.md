@@ -176,6 +176,39 @@ Core already provides everything the tools delegate to — no Core changes expec
 
 ---
 
+## Post-merge review addendum (2026-06-12)
+
+Phase 1 went through a multi-agent review after merge (PR #5): an MCP-spec compliance audit
+against the live 2025-11-25 spec, an adversarial sandbox probe with empirical Windows
+filesystem tests, and a 7-angle code review. **Fixed immediately** (hardening PR): junction
+escape via canonical-path containment, ADS suffix bypass, drive-root containment breakage,
+crash-proof SafeLogger around the shared log file, 2025-03-26 claim dropped (no batch-receive),
+`id: null` → -32600, duplicate-field surfacing in clip_get_metadata, selftest stderr
+drain + timeout poisoning + dotnet-host spawn, ZipFile packaging.
+
+**Deferred — fold into phase 2 as pre-work:**
+
+- [ ] **Core `ClipMetaReader.GetUserFields`** (or `ClipMetaSchema.IsInternal`): the schema-field
+  exclusion filter now exists in four places (Exporter, Index, StatsCommand, ReadTools); Core
+  should own it once before phase 2 multiplies the copies. Note ListCommand does NOT filter it —
+  decide deliberately whether that's a feature.
+- [ ] **Hoist stats categorization to Core** (`ClipMetaStats`) before building `clip_get_stats`,
+  instead of re-implementing StatsCommand's fieldsSet/knownUnset/customFields in a second shell.
+- [ ] **`ToolDefinition` example-arguments member** so the stdout-purity test stops hand-mapping
+  per-tool args — it must scale to the 9 tools of phases 2–3, especially write tools.
+- [ ] Build tool descriptions' multi-value-field sentence from `ClipMetaSchema.PipeFields`
+  instead of prose listing the fields.
+- [ ] Derive `McpSession.ServerVersion` from the assembly informational version and make
+  pack-mcpb.ps1 verify the manifest version matches.
+- [ ] Consider restructuring `Dispatch` so notification-vs-request is decided once (removes the
+  repeated guards and `Id!` operators before more methods are added).
+
+**Robustness backlog (not gating):** bounded stdin line length (a no-newline multi-GB line
+OOMs `ReadLine`; host-controlled input, so low risk), explicit `MaxDepth` on `JsonNode.Parse`
+(framework default ~64 already returns a clean -32700), JSON-RPC -32600-vs--32700/-32601
+nuances for malformed-but-valid-JSON requests (documented MINOR deviations, only misbehaving
+clients ever see them).
+
 ## Self-review checkpoints
 
 - Every tool delegates to Core; if logic wants to live in `clipmetamcp`, it moves to Core first
