@@ -124,9 +124,15 @@ Core already provides everything the tools delegate to — no Core changes expec
 - [ ] **Task 8: local verification.** Full build 0/0, full test suite green, pack script runs
   from clean checkout, `--selftest` green **on the published single-file exe** (not just the
   framework-dependent build — single-file extraction is its own failure surface).
-- [ ] **Task 9 (manual, user): E2E spike gate.** Install `dist/clipmeta.mcpb` in Claude Desktop,
+- [x] **Task 9 (manual, user): E2E spike gate.** Install `dist/clipmeta.mcpb` in Claude Desktop,
   pick the clips folder, ask for a clip's metadata. Record outcome (and any workaround needed)
   in `docs/PITFALLS.md` before phase 2.
+  **PASSED 2026-06-12 (R2 retired), with one workaround:** the Microsoft Store build of Claude
+  Desktop silently fails to install packed `.mcpb` files (upstream bug — routed to the unpacked
+  installer); installing the extracted `dist/clipmeta-unpacked/` folder via **Install Unpacked
+  Extension** worked first try. Binary spawn, handshake (2025-11-25), folder-picker sandbox,
+  and a real tagged-clip `clip_get_metadata` round-trip all verified in the live app. Details
+  in PITFALLS 2026-06-12.
 
 ## Phase 2 — read tools
 

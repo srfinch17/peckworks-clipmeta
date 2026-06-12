@@ -8,6 +8,26 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-12 — Packed .mcpb install silently fails on the Microsoft Store build (workaround: unpacked)
+- **Symptom:** Settings → Extensions → Advanced settings → **Install Extension…** → pick
+  `clipmeta.mcpb` → the file dialog closes and *nothing* happens. No toast, no error, no card.
+- **Cause (from `main.log` in the app's package container):** the packed file is routed into
+  `installDxtUnpacked`, which expects a *folder* containing `manifest.json` and fails with
+  `No manifest.json found in extension folder` — logged but never surfaced in the UI. App bug
+  in Claude Desktop **Microsoft Store/MSIX build** (observed on `Claude_1.12603.1.0`); the
+  bundle itself was verified well-formed (manifest at zip root, forward-slash entries).
+- **Workaround that passed the E2E gate:** extract the bundle and use **Install Unpacked
+  Extension** on the folder. `pack-mcpb.ps1` now keeps that folder as `dist/clipmeta-unpacked/`.
+  Once installed: binary spawn, stdio handshake (2025-11-25 echoed), `tools/list`, and a real
+  `clip_get_metadata` round-trip all worked first try — **R2 retired** 2026-06-12.
+- **Where the Store build hides its logs/config:** NOT `%APPDATA%\Claude` — everything lives in
+  `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\` (`logs\main.log`,
+  `logs\mcp-server-<Name>.log`, `claude_desktop_config.json`). Check `main.log` first for any
+  silent extension failure.
+- **Lesson:** a silent UI no-op almost always has a logged error somewhere — find the app's log
+  directory before re-trying gestures. And ship the unpacked layout alongside the bundle: it is
+  the universal fallback when a host's packed-install path is broken.
+
 ### 2026-06-12 — There is no drag-and-drop install for .mcpb bundles (fixed in docs)
 - **Symptom:** The design spec, README, and pack-script output all said to install the bundle by
   "dragging onto Claude Desktop → Settings → Extensions." The user tried it on the real app:
