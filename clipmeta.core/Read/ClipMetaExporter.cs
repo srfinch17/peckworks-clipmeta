@@ -1,5 +1,4 @@
 using ClipMetaCore.Mp4;
-using ClipMetaCore.Schema;
 
 namespace ClipMetaCore.Read;
 
@@ -31,10 +30,7 @@ public static class ClipMetaExporter
             catch (UnauthorizedAccessException) { continue; }
             catch (InvalidDataException) { continue; }
 
-            var fields = ClipMetaReader.GetFields(root)
-                .Where(f => !f.Field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal))
-                .ToList();
-            records.Add(new ExportRecord(path, fields));
+            records.Add(new ExportRecord(path, ClipMetaReader.GetUserFields(root)));
         }
         return records;
     }

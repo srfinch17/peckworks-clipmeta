@@ -38,6 +38,21 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
 $exePath = Join-Path $publishDir 'clipmetamcp.exe'
 if (-not (Test-Path $exePath)) { throw "expected publish output not found: $exePath" }
 
+# ── 1b. Version gate: manifest and exe must agree ────────────────────────────────────
+# The server advertises its assembly InformationalVersion (set in clipmetamcp.csproj) in the
+# MCP initialize result; the manifest version is what Claude Desktop displays for the bundle.
+# Shipping a bundle where they disagree means the UI and the protocol report different
+# versions — fail the pack instead. (ProductVersion may carry a '+<commit>' suffix; the
+# user-facing version is the part before it, matching McpSession.ReadAssemblyVersion.)
+$manifest   = Get-Content (Join-Path $PSScriptRoot 'mcpb-manifest.json') -Raw | ConvertFrom-Json
+$exeVersion = ((Get-Item $exePath).VersionInfo.ProductVersion -split '\+')[0]
+if (-not $exeVersion) { throw "could not read ProductVersion from $exePath" }
+if ($exeVersion -ne $manifest.version) {
+    throw ("version mismatch: tools/mcpb-manifest.json says '{0}' but clipmetamcp.exe says '{1}'. " +
+           "Update <InformationalVersion> in clipmetamcp/clipmetamcp.csproj and the manifest together." `
+           -f $manifest.version, $exeVersion)
+}
+
 # ── 2. Stage the bundle layout: manifest.json + server/clipmetamcp.exe ──────────────
 if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $stageDir 'server') | Out-Null

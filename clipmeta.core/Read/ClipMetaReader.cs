@@ -24,6 +24,17 @@ public static class ClipMetaReader
         return result;
     }
 
+    /// <summary>
+    /// Like <see cref="GetFields"/>, but excludes internal bookkeeping fields
+    /// (see <see cref="ClipMetaSchema.IsInternal"/>). This is the read entry point for every
+    /// user-facing surface — stats, export, index, MCP tools; only the raw tree/list views
+    /// show internal fields.
+    /// </summary>
+    /// <param name="root">The root node returned by <see cref="Mp4Parser.ParseFile"/>.</param>
+    /// <returns>(Field, Value) pairs in document order, internal fields removed.</returns>
+    public static IReadOnlyList<(string Field, string Value)> GetUserFields(BoxNode root) =>
+        GetFields(root).Where(f => !ClipMetaSchema.IsInternal(f.Field)).ToList();
+
     private static void CollectFromNode(BoxNode node, List<(string, string)> result)
     {
         if (node.Type == "ilst")

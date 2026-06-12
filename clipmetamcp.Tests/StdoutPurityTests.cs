@@ -31,16 +31,6 @@ public class StdoutPurityTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    /// <summary>Plausible arguments for each tool, so handlers execute their full happy path.</summary>
-    private static JsonObject ArgumentsFor(string toolName, string clipPath) => toolName switch
-    {
-        // Every current tool takes a clip path; extend this switch as phases 2–3 add tools
-        // with different shapes (the default arm makes a forgotten mapping fail loudly).
-        "clip_get_metadata" => new JsonObject { ["path"] = clipPath },
-        _ => throw new AssertFailedException(
-            $"No purity-test arguments mapped for tool '{toolName}' — add a case for it."),
-    };
-
     [TestMethod]
     public void EveryRegisteredTool_WritesNothingToConsoleOut()
     {
@@ -55,10 +45,12 @@ public class StdoutPurityTests
         var registry = new ToolRegistry();
         ReadTools.RegisterAll(registry, new LibrarySandbox(_tempDir));
 
+        // Each tool supplies its own runnable example arguments (a ToolDefinition member), so
+        // this test covers every registered tool with no per-tool mapping to maintain here.
         var requests = new List<string> { McpHarness.InitializeRequest };
         int id = 2;
         foreach (ToolDefinition tool in registry.All)
-            requests.Add(McpHarness.ToolCall(id++, tool.Name, ArgumentsFor(tool.Name, clip)));
+            requests.Add(McpHarness.ToolCall(id++, tool.Name, tool.ExampleArguments(clip)));
 
         // Act: run the session with Console.Out captured. The harness writes protocol output to
         // its own StringWriter, so anything landing on Console.Out is a stray by definition.
