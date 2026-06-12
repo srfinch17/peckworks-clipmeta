@@ -34,6 +34,18 @@ public static class ClipMetaSchema
     public static readonly IReadOnlySet<string> PipeFields =
         new HashSet<string> { Players, Tags, Timecode };
 
+    /// <summary>All well-known user-facing fields, in canonical display order.</summary>
+    public static readonly IReadOnlyList<string> KnownFields =
+        [Game, Players, Tags, Timecode, Rating, Notes];
+
+    /// <summary>
+    /// True for write-engine bookkeeping fields that live in the file but are not user metadata
+    /// (currently only <see cref="Schema"/>). User-facing read paths (stats, export, index, MCP
+    /// tools) exclude these; the raw <c>--list</c> view deliberately does not.
+    /// </summary>
+    public static bool IsInternal(string field) =>
+        Schema.Equals(field, StringComparison.Ordinal);
+
     /// <summary>Returns the full atom name for a field: "com.peckworkslab.clipmeta:fieldname".</summary>
     public static string AtomName(string field) => $"{Domain}:{field}";
 }

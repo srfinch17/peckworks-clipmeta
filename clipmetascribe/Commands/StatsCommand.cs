@@ -1,18 +1,11 @@
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
-using ClipMetaCore.Schema;
 
 namespace ClipMetaScribe.Commands;
 
 /// <summary>Displays file size and a summary of which clipmeta fields are set/unset.</summary>
 internal static class StatsCommand
 {
-    private static readonly string[] KnownFields =
-    [
-        ClipMetaSchema.Game, ClipMetaSchema.Players, ClipMetaSchema.Tags,
-        ClipMetaSchema.Timecode, ClipMetaSchema.Rating, ClipMetaSchema.Notes,
-    ];
-
     /// <summary>
     /// Parses <paramref name="filePath"/>, computes field stats, and writes
     /// formatted output to <paramref name="output"/> (defaults to <see cref="Console.Out"/>).
@@ -22,14 +15,11 @@ internal static class StatsCommand
     {
         output ??= Console.Out;
 
-        var root   = Mp4Parser.ParseFile(filePath);
-        var fields = ClipMetaReader.GetFields(root);
+        var root       = Mp4Parser.ParseFile(filePath);
+        var userFields = ClipMetaReader.GetUserFields(root);
 
         long bytes = new FileInfo(filePath).Length;
         output.WriteLine($"{Path.GetFileName(filePath)}  ({FormatBytes(bytes)})");
-
-        // Exclude the internal schema version field from user-visible stats
-        var userFields = fields.Where(f => !f.Field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal)).ToList();
 
         if (userFields.Count == 0)
         {
@@ -37,15 +27,13 @@ internal static class StatsCommand
             return 0;
         }
 
-        var setFieldNames = userFields.Select(f => f.Field).ToList();
-        var knownUnset    = KnownFields.Where(k => !setFieldNames.Contains(k, StringComparer.Ordinal)).ToList();
-        var customFields  = setFieldNames.Where(n => !KnownFields.Contains(n, StringComparer.Ordinal)).ToList();
+        var stats = ClipMetaStats.Categorize(userFields);
 
-        output.WriteLine($"  Fields set:    {string.Join(", ", setFieldNames)}");
-        if (knownUnset.Count > 0)
-            output.WriteLine($"  Fields unset:  {string.Join(", ", knownUnset)}");
-        if (customFields.Count > 0)
-            output.WriteLine($"  Custom fields: {string.Join(", ", customFields)}");
+        output.WriteLine($"  Fields set:    {string.Join(", ", stats.SetFields)}");
+        if (stats.KnownUnset.Count > 0)
+            output.WriteLine($"  Fields unset:  {string.Join(", ", stats.KnownUnset)}");
+        if (stats.CustomFields.Count > 0)
+            output.WriteLine($"  Custom fields: {string.Join(", ", stats.CustomFields)}");
 
         return 0;
     }

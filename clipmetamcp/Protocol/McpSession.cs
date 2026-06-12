@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClipMetaCore.Abstractions;
@@ -31,8 +32,26 @@ public sealed class McpSession
     /// <summary>Server name advertised in the initialize result.</summary>
     public const string ServerName = "clipmeta";
 
-    /// <summary>Server version advertised in the initialize result.</summary>
-    public const string ServerVersion = "1.0.0";
+    /// <summary>
+    /// Server version advertised in the initialize result. Single-sourced from the assembly's
+    /// InformationalVersion (set once in clipmetamcp.csproj) so the exe metadata, the initialize
+    /// result, and the bundle manifest can never disagree — pack-mcpb.ps1 fails the build if the
+    /// manifest version doesn't match the published exe.
+    /// </summary>
+    public static readonly string ServerVersion = ReadAssemblyVersion();
+
+    private static string ReadAssemblyVersion()
+    {
+        string? version = typeof(McpSession).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (string.IsNullOrEmpty(version))
+            return "0.0.0"; // unreachable in practice: the csproj always sets InformationalVersion
+
+        // SDK builds may append "+<commit>" source-revision metadata; that suffix is not part of
+        // the user-facing version and would never match the manifest.
+        int metadataStart = version.IndexOf('+');
+        return metadataStart >= 0 ? version[..metadataStart] : version;
+    }
 
     private readonly TextReader _input;
     private readonly TextWriter _output;
@@ -100,46 +119,48 @@ public sealed class McpSession
             return;
         }
 
+        // Notification-vs-request is decided exactly once, here. Notifications never get a
+        // response: the only one in our surface (notifications/initialized — the client
+        // acknowledging our initialize result) needs no action, and unknown notifications are
+        // ignored silently per spec. Everything below this point is a request with a real id.
+        if (message.IsNotification)
+        {
+            if (message.Method != "notifications/initialized")
+                _logger.LogVerbose($"ignoring notification '{message.Method ?? "(no method)"}'");
+            return;
+        }
+
+        JsonNode id = message.Id!; // non-null: notifications returned above, null ids rejected above
+
         switch (message.Method)
         {
             case "initialize":
-                HandleInitialize(message);
-                break;
-
-            case "notifications/initialized":
-                // Lifecycle notification: the client acknowledged our initialize result.
-                // Nothing to do, and notifications never get a response.
+                HandleInitialize(id, message.Params);
                 break;
 
             case "tools/list":
-                HandleToolsList(message);
+                HandleToolsList(id);
                 break;
 
             case "tools/call":
-                HandleToolsCall(message);
+                HandleToolsCall(id, message.Params);
                 break;
 
             case "ping":
-                if (!message.IsNotification)
-                    JsonRpcWriter.WriteResult(_output, message.Id!, new JsonObject());
+                JsonRpcWriter.WriteResult(_output, id, new JsonObject());
                 break;
 
             default:
-                // Unknown notifications are ignored silently per spec; unknown requests get -32601.
-                if (!message.IsNotification)
-                    JsonRpcWriter.WriteError(_output, message.Id, JsonRpcErrorCodes.MethodNotFound,
-                        $"Method not found: {message.Method ?? "(no method)"}");
+                JsonRpcWriter.WriteError(_output, id, JsonRpcErrorCodes.MethodNotFound,
+                    $"Method not found: {message.Method ?? "(no method)"}");
                 break;
         }
     }
 
-    private void HandleInitialize(JsonRpcMessage message)
+    private void HandleInitialize(JsonNode id, JsonNode? requestParams)
     {
-        if (message.IsNotification)
-            return; // initialize must be a request; a malformed notification form is ignored
-
         string? requested = null;
-        if (message.Params is JsonObject parameters &&
+        if (requestParams is JsonObject parameters &&
             parameters["protocolVersion"] is JsonValue versionValue &&
             versionValue.TryGetValue(out string? versionString))
         {
@@ -156,15 +177,12 @@ public sealed class McpSession
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
             ["serverInfo"] = new JsonObject { ["name"] = ServerName, ["version"] = ServerVersion },
         };
-        JsonRpcWriter.WriteResult(_output, message.Id!, result);
+        JsonRpcWriter.WriteResult(_output, id, result);
         _logger.LogVerbose($"initialize: client requested '{requested ?? "(none)"}', negotiated '{negotiated}'");
     }
 
-    private void HandleToolsList(JsonRpcMessage message)
+    private void HandleToolsList(JsonNode id)
     {
-        if (message.IsNotification)
-            return;
-
         var tools = new JsonArray();
         foreach (ToolDefinition tool in _registry.All)
         {
@@ -177,17 +195,14 @@ public sealed class McpSession
                 ["inputSchema"] = tool.InputSchema.DeepClone(),
             });
         }
-        JsonRpcWriter.WriteResult(_output, message.Id!, new JsonObject { ["tools"] = tools });
+        JsonRpcWriter.WriteResult(_output, id, new JsonObject { ["tools"] = tools });
     }
 
-    private void HandleToolsCall(JsonRpcMessage message)
+    private void HandleToolsCall(JsonNode id, JsonNode? requestParams)
     {
-        if (message.IsNotification)
-            return;
-
         string? name = null;
         JsonObject? arguments = null;
-        if (message.Params is JsonObject parameters)
+        if (requestParams is JsonObject parameters)
         {
             if (parameters["name"] is JsonValue nameValue && nameValue.TryGetValue(out string? nameString))
                 name = nameString;
@@ -196,7 +211,7 @@ public sealed class McpSession
 
         if (name is null)
         {
-            JsonRpcWriter.WriteError(_output, message.Id, JsonRpcErrorCodes.InvalidParams,
+            JsonRpcWriter.WriteError(_output, id, JsonRpcErrorCodes.InvalidParams,
                 "tools/call requires a string 'name' parameter.");
             return;
         }
@@ -205,7 +220,7 @@ public sealed class McpSession
         {
             // Per the MCP spec, an unknown tool name is a protocol error (the client offered a
             // tool list; calling outside it is a client bug), unlike tool *execution* failures.
-            JsonRpcWriter.WriteError(_output, message.Id, JsonRpcErrorCodes.InvalidParams,
+            JsonRpcWriter.WriteError(_output, id, JsonRpcErrorCodes.InvalidParams,
                 $"Unknown tool: {name}");
             return;
         }
@@ -241,7 +256,7 @@ public sealed class McpSession
             _logger.Log($"tool {name}: failed — {ex}");
         }
 
-        JsonRpcWriter.WriteResult(_output, message.Id!, callResult);
+        JsonRpcWriter.WriteResult(_output, id, callResult);
     }
 
     private static JsonObject ToolErrorResult(string message) => new()

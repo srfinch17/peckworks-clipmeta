@@ -20,11 +20,19 @@ public sealed class ToolException : Exception
 /// <param name="Description">Description written for the model; states preconditions explicitly.</param>
 /// <param name="InputSchema">JSON Schema for the arguments object.</param>
 /// <param name="Handler">Maps the arguments object (null when the client sent none) to a structured result.</param>
+/// <param name="ExampleArguments">
+/// Builds a plausible, runnable argument object for a given clip path inside the library.
+/// The stdout-purity test calls this for every registered tool to drive its full happy path —
+/// a tool that cannot produce working example arguments cannot be registered, so the purity
+/// suite scales to new tools automatically. It also doubles as executable documentation of the
+/// tool's argument shape. Tools whose arguments don't involve a clip path may ignore the input.
+/// </param>
 public sealed record ToolDefinition(
     string Name,
     string Description,
     JsonObject InputSchema,
-    Func<JsonObject?, JsonObject> Handler);
+    Func<JsonObject?, JsonObject> Handler,
+    Func<string, JsonObject> ExampleArguments);
 
 /// <summary>Name → tool map backing tools/list and tools/call.</summary>
 public sealed class ToolRegistry

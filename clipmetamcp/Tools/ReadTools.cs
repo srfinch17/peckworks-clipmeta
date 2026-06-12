@@ -23,11 +23,21 @@ public static class ReadTools
             "clip_get_metadata",
             "Reads all clipmeta metadata fields stored inside one MP4 game clip. " +
             "'path' must be an existing .mp4 file inside the configured clips library; " +
-            "relative paths resolve against the library root. " +
-            "Multi-value fields (players, tags, timecode) are returned as pipe-delimited strings.",
+            "relative paths resolve against the library root. " + PipeFieldsSentence,
             SinglePathSchema(),
-            args => GetMetadata(args, sandbox)));
+            args => GetMetadata(args, sandbox),
+            clipPath => new JsonObject { ["path"] = clipPath }));
     }
+
+    /// <summary>
+    /// The multi-value-field sentence shared by tool descriptions, derived from
+    /// <see cref="ClipMetaSchema.PipeFields"/> so it can never drift from the schema.
+    /// (Enumerated via KnownFields to keep the listing order deterministic.)
+    /// </summary>
+    private static string PipeFieldsSentence =>
+        "Multi-value fields (" +
+        string.Join(", ", ClipMetaSchema.KnownFields.Where(ClipMetaSchema.PipeFields.Contains)) +
+        ") are returned as pipe-delimited strings.";
 
     /// <summary>JSON Schema for tools whose only argument is a clip path.</summary>
     private static JsonObject SinglePathSchema() => new()
@@ -50,18 +60,15 @@ public static class ReadTools
         string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
         BoxNode root = ParseClip(fullPath);
 
-        // The internal schema-version field is write-engine bookkeeping, not user metadata —
-        // exclude it here as the CLI read paths do. GetFields can legitimately return the same
-        // field name more than once (a file holding duplicate clipmeta atoms, e.g. written by
-        // another tagger): keep the FIRST occurrence and report the conflict, rather than
-        // silently last-wins — the model must not present one value as authoritative when the
-        // file disagrees with itself.
+        // GetUserFields already excludes internal bookkeeping fields. It can legitimately return
+        // the same field name more than once (a file holding duplicate clipmeta atoms, e.g.
+        // written by another tagger): keep the FIRST occurrence and report the conflict, rather
+        // than silently last-wins — the model must not present one value as authoritative when
+        // the file disagrees with itself.
         var fields = new JsonObject();
         var duplicated = new JsonArray();
-        foreach ((string field, string value) in ClipMetaReader.GetFields(root))
+        foreach ((string field, string value) in ClipMetaReader.GetUserFields(root))
         {
-            if (field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal))
-                continue;
             if (fields.ContainsKey(field))
             {
                 if (!duplicated.Any(d => d!.GetValue<string>() == field))

@@ -1,5 +1,4 @@
 using ClipMetaCore.Mp4;
-using ClipMetaCore.Schema;
 
 namespace ClipMetaCore.Read;
 
@@ -79,9 +78,7 @@ public static class ClipMetaIndex
             catch (UnauthorizedAccessException) { continue; }
             catch (InvalidDataException) { continue; }
 
-            var fields = ClipMetaReader.GetFields(root)
-                .Where(f => !f.Field.Equals(ClipMetaSchema.Schema, StringComparison.Ordinal))
-                .ToList();
+            var fields = ClipMetaReader.GetUserFields(root);
 
             var info = new FileInfo(path);
             entries.Add(new IndexEntry(

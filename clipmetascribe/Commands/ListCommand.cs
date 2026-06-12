@@ -15,6 +15,9 @@ internal static class ListCommand
     {
         output ??= Console.Out;
 
+        // Deliberately GetFields, not GetUserFields: --list is the raw inspection view and shows
+        // everything stored in the file, including the internal schema-version field. Every other
+        // user-facing surface (stats, export, index, MCP tools) filters internals out.
         var root   = Mp4Parser.ParseFile(filePath);
         var fields = ClipMetaReader.GetFields(root);
 
