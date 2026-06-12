@@ -236,7 +236,9 @@ check; it is not part of the build.)
 ### User install story (the whole point)
 
 1. Download `clipmeta.mcpb`.
-2. Drag it onto Claude Desktop → Settings → Extensions (or double-click).
+2. Claude Desktop → Settings → Extensions → **Advanced settings** → Extension Developer →
+   **Install Extension…** → pick the file. (Corrected 2026-06-12: this spec originally said
+   "drag onto Settings → Extensions" — there is no such drop target; see PITFALLS.)
 3. Pick the clips folder when prompted. Done — no terminal, no JSON, no runtimes.
 
 ### Fallback: `--install`
