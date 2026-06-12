@@ -8,7 +8,20 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
-### 2026-06-11 — Lexical path containment is not real containment on Windows (fixed)
+### 2026-06-12 — There is no drag-and-drop install for .mcpb bundles (fixed in docs)
+- **Symptom:** The design spec, README, and pack-script output all said to install the bundle by
+  "dragging onto Claude Desktop → Settings → Extensions." The user tried it on the real app:
+  nothing happens — there is no drop target on the Extensions page.
+- **Reality (per Anthropic's help center, verified 2026-06-12):** local bundles install via
+  Settings → Extensions → **Advanced settings** → Extension Developer → **Install Extension…**
+  → file picker. The folder-picker for `user_config` (our clips-library sandbox) appears during
+  the install prompts.
+- **Fix:** README, spec §"User install story", plan phase 5, and `pack-mcpb.ps1` messages all
+  corrected to the button flow.
+- **Lesson:** UI install-flow claims are field claims, not spec claims — they must be verified
+  on the actual app version before they reach user-facing docs. We verified the *manifest
+  schema* against live docs but never the *install gesture*. (Phase-4 `--install` exists
+  precisely because the bundle flow could change under us; same reasoning applies to docs.)
 - **Symptom:** The MCP library sandbox checked `resolvedPath.StartsWith(root)` after
   `Path.GetFullPath` — and an adversarial probe **escaped it**: a directory junction inside the
   library pointing outside it passes the lexical check while `FileStream` happily follows the

@@ -168,7 +168,8 @@ Core already provides everything the tools delegate to — no Core changes expec
 
 ## Phase 5 — polish + Definition of Done
 
-- [ ] README install section (bundle drag-drop, SmartScreen note per R5, `--install` fallback,
+- [ ] README install section (bundle install via Settings → Extensions → Advanced settings →
+  Install Extension…, SmartScreen note per R5, `--install` fallback,
   `--selftest` for support).
 - [ ] PITFALLS entries for anything learned in phases 1–4.
 - [ ] Full manual E2E gate: tag a real clip conversationally; verify with `clipmetascribe --list`

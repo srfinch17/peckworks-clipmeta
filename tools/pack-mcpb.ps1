@@ -7,8 +7,9 @@
     needed on the target machine), stages it with the bundle manifest, and zips the result.
     A .mcpb is a plain zip archive — no Node, no npm, no mcpb CLI required (spec §4).
 
-    Output: dist/clipmeta.mcpb at the repo root. Install by dragging onto
-    Claude Desktop → Settings → Extensions.
+    Output: dist/clipmeta.mcpb at the repo root. Install in Claude Desktop via
+    Settings -> Extensions -> Advanced settings -> Extension Developer -> Install Extension…
+    (there is NO drag-and-drop target — see PITFALLS 2026-06-12).
 
 .NOTES
     PublishTrimmed must remain OFF (spec risk R4) — it is pinned in clipmetamcp.csproj;
@@ -72,4 +73,4 @@ Remove-Item $stageDir -Recurse -Force
 
 $sizeMb = (Get-Item $mcpbPath).Length / 1MB
 Write-Host ("Packed {0}  ({1:N1} MB)" -f $mcpbPath, $sizeMb)
-Write-Host 'Install: drag onto Claude Desktop -> Settings -> Extensions, then pick your clips folder.'
+Write-Host 'Install: Claude Desktop -> Settings -> Extensions -> Advanced settings -> Install Extension... -> pick this file, then choose your clips folder.'
