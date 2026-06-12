@@ -1,0 +1,51 @@
+using System.Text.Json.Nodes;
+using ClipMetaCore.Logging;
+using ClipMetaMcp.Protocol;
+using ClipMetaMcp.Tools;
+
+namespace ClipMetaMcp.Tests.Helpers;
+
+/// <summary>
+/// Drives a complete <see cref="McpSession"/> in-process over string streams — no child process,
+/// no Claude — and returns the parsed response lines in order.
+/// </summary>
+internal static class McpHarness
+{
+    /// <summary>A standard initialize request (latest protocol version).</summary>
+    public const string InitializeRequest =
+        """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tests","version":"1.0"}}}""";
+
+    /// <summary>
+    /// Feeds <paramref name="requestLines"/> through a fresh session whose tools are sandboxed
+    /// to <paramref name="libraryRoot"/> (null = unconfigured) and returns one parsed JsonObject
+    /// per response line.
+    /// </summary>
+    public static IReadOnlyList<JsonObject> Run(string? libraryRoot, params string[] requestLines)
+    {
+        var registry = new ToolRegistry();
+        ReadTools.RegisterAll(registry, new LibrarySandbox(libraryRoot));
+
+        using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
+        using var output = new StringWriter();
+        new McpSession(input, output, registry, NullLogger.Instance).Run();
+
+        return output.ToString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => (JsonObject)JsonNode.Parse(line)!)
+            .ToList();
+    }
+
+    /// <summary>Builds a tools/call request line for <paramref name="tool"/>.</summary>
+    public static string ToolCall(int id, string tool, JsonObject arguments) =>
+        new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = id,
+            ["method"] = "tools/call",
+            ["params"] = new JsonObject { ["name"] = tool, ["arguments"] = arguments },
+        }.ToJsonString();
+
+    /// <summary>Builds a parameterless request line (tools/list, ping).</summary>
+    public static string Request(int id, string method) =>
+        new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method }.ToJsonString();
+}

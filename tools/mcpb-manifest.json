@@ -1,0 +1,32 @@
+{
+  "manifest_version": "0.3",
+  "name": "clipmeta",
+  "display_name": "ClipMeta",
+  "version": "1.0.0",
+  "description": "Read, search, and write game-clip metadata stored inside MP4 files.",
+  "author": {
+    "name": "Peckworks Lab"
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/clipmetamcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/clipmetamcp.exe",
+      "args": [],
+      "env": {
+        "CLIPMETA_LIBRARY_ROOT": "${user_config.library_root}"
+      }
+    }
+  },
+  "user_config": {
+    "library_root": {
+      "type": "directory",
+      "title": "Clips folder",
+      "description": "Only files inside this folder can be read or tagged.",
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["win32"]
+  }
+}
