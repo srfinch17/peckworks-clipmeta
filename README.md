@@ -33,7 +33,7 @@ clipmetascribe "C:\clips\" --index-search tags "competitive"
 Run with no arguments for full usage, including `--dry-run`, `--backup`, and `--log`.
 
 ### clipmetamcp
-An MCP (Model Context Protocol) server exposing the clipmeta tools to MCP hosts such as Claude Desktop, so you can read and tag clips conversationally. Ships as a self-contained `.mcpb` bundle (built by `tools/pack-mcpb.ps1`); no .NET install needed on the target machine. Install in Claude Desktop via Settings → Extensions → **Advanced settings** → Extension Developer → **Install Extension…**, pick the `.mcpb` file, then choose your clips folder when prompted. All file access is sandboxed to the chosen folder.
+An MCP (Model Context Protocol) server exposing the clipmeta tools to MCP hosts such as Claude Desktop, so you can read and tag clips conversationally. Ships as a self-contained `.mcpb` bundle (built by `tools/pack-mcpb.ps1`); no .NET install needed on the target machine. Install in Claude Desktop via Settings → Extensions → **Advanced settings** → Extension Developer → **Install Extension…**, pick the `.mcpb` file, then choose your clips folder when prompted. On the **Microsoft Store build** of Claude Desktop the packed install silently fails (upstream bug, see `docs/PITFALLS.md`) — use **Install Unpacked Extension** on the `dist/clipmeta-unpacked/` folder instead. All file access is sandboxed to the chosen folder.
 
 **Status: in development.** Phase 1 (protocol layer + `clip_get_metadata`) is built; the remaining read/write tools are planned — see `docs/superpowers/plans/2026-06-11-clipmetamcp-server.md`.
 

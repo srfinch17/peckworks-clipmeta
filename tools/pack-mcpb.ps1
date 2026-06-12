@@ -60,6 +60,14 @@ New-Item -ItemType Directory -Force (Join-Path $stageDir 'server') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'mcpb-manifest.json') (Join-Path $stageDir 'manifest.json')
 Copy-Item $exePath (Join-Path $stageDir 'server\clipmetamcp.exe')
 
+# ── 2b. Keep the unpacked layout as a first-class artifact ──────────────────────────
+# The Microsoft Store build of Claude Desktop fails to install packed .mcpb files (silent
+# no-op; see PITFALLS 2026-06-12). The working install path there is "Install Unpacked
+# Extension" pointed at exactly this folder, so it ships next to the bundle.
+$unpackedDir = Join-Path $distDir 'clipmeta-unpacked'
+if (Test-Path $unpackedDir) { Remove-Item $unpackedDir -Recurse -Force }
+Copy-Item $stageDir $unpackedDir -Recurse
+
 # ── 3. Zip: a .mcpb is just a zip with a manifest at its root ───────────────────────
 # System.IO.Compression.ZipFile (not Compress-Archive) for one reason: it always writes
 # forward-slash entry names per the ZIP spec. Compress-Archive under Windows PowerShell 5.1
@@ -74,3 +82,4 @@ Remove-Item $stageDir -Recurse -Force
 $sizeMb = (Get-Item $mcpbPath).Length / 1MB
 Write-Host ("Packed {0}  ({1:N1} MB)" -f $mcpbPath, $sizeMb)
 Write-Host 'Install: Claude Desktop -> Settings -> Extensions -> Advanced settings -> Install Extension... -> pick this file, then choose your clips folder.'
+Write-Host 'Microsoft Store build of Claude Desktop? Packed install silently fails (PITFALLS 2026-06-12) - use Install Unpacked Extension on dist/clipmeta-unpacked instead.'
