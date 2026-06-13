@@ -347,12 +347,13 @@ public class Mp4WriteIntegrityTests
     // ── Real clips: every pristine clip survives a write byte-for-byte ──────────
 
     public static IEnumerable<object[]> PristineClips()
-        => TestClipsLocator.AllPristine().Select(p => new object[] { p });
+        => TestClipsLocator.PristineClipRows();
 
     [DataTestMethod]
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void RealClip_MultiFieldWrite_MediaByteIdentical(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratch = ScratchClips.Prepare(pristinePath);
         _tempFiles.Add(scratch);
 

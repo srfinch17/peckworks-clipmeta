@@ -140,8 +140,7 @@ public class ClipMetaReaderTests
 
     // ── Integration tests (real MP4 files written by Mp4Writer) ──────────────
 
-    public static IEnumerable<object[]> PristineClips()
-        => TestClipsLocator.AllPristine().Select(p => new object[] { p });
+    public static IEnumerable<object[]> PristineClips() => TestClipsLocator.PristineClipRows();
 
     private static readonly System.Collections.Concurrent.ConcurrentBag<string> _scratchFiles = new();
 
@@ -159,6 +158,7 @@ public class ClipMetaReaderTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void GetFields_PristineClip_DoesNotThrow(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         var root   = Mp4Parser.ParseFile(pristinePath);
         var fields = ClipMetaReader.GetFields(root);
         Assert.IsNotNull(fields);
@@ -168,6 +168,7 @@ public class ClipMetaReaderTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void GetFields_AfterWriteAllFields_ReturnsAllFields(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratch = ScratchClips.Prepare(pristinePath);
         _scratchFiles.Add(scratch);
 

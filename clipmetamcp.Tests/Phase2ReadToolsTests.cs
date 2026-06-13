@@ -33,6 +33,12 @@ public class Phase2ReadToolsTests
     [ClassInitialize]
     public static void BuildLibrary(TestContext _)
     {
+        // Clip-less machine (CI)? Skip building the shared library; [TestInitialize] then skips
+        // each test. Throwing Inconclusive from ClassInitialize would FAIL the class, not skip
+        // it, so the guard must short-circuit here rather than via the locator's skip path.
+        if (!TestClipsLocator.PristineClipsPresent())
+            return;
+
         _lib = Path.Combine(Path.GetTempPath(), "clipmeta-p2-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(_lib, "sub"));
 
@@ -58,8 +64,17 @@ public class Phase2ReadToolsTests
     [ClassCleanup]
     public static void DeleteLibrary()
     {
-        if (Directory.Exists(_lib))
+        if (_lib != null && Directory.Exists(_lib))
             Directory.Delete(_lib, recursive: true);
+    }
+
+    // Skips every test in this class when no clips are present (CI). Unlike ClassInitialize,
+    // an Inconclusive thrown here cleanly skips the individual test rather than failing it.
+    [TestInitialize]
+    public void RequireClips()
+    {
+        if (!TestClipsLocator.PristineClipsPresent())
+            Assert.Inconclusive("No test clips in testclips/pristine — skipped (e.g. CI).");
     }
 
     /// <summary>Runs one tool call against the shared library and returns the call result.</summary>
