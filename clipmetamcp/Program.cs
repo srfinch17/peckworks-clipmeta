@@ -22,9 +22,50 @@ internal static class Program
         if (args.Length == 1 && args[0].Equals("--selftest", StringComparison.OrdinalIgnoreCase))
             return SelfTest.Run();
 
-        Console.Error.WriteLine("Usage: clipmetamcp            serve MCP over stdio (spawned by an MCP host)");
-        Console.Error.WriteLine("       clipmetamcp --selftest spawn self and verify the MCP handshake");
+        if (args[0].Equals("--install", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TryGetFlagValue(args, "--library-root", out string? libraryRoot) ||
+                !TryGetFlagValue(args, "--config", out string? installConfig))
+            {
+                return 2;
+            }
+            return Install.ClaudeConfigInstaller.RunInstall(libraryRoot, installConfig);
+        }
+
+        if (args[0].Equals("--uninstall", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TryGetFlagValue(args, "--config", out string? uninstallConfig))
+                return 2;
+            return Install.ClaudeConfigInstaller.RunUninstall(uninstallConfig);
+        }
+
+        Console.Error.WriteLine("Usage: clipmetamcp                                     serve MCP over stdio (spawned by an MCP host)");
+        Console.Error.WriteLine("       clipmetamcp --selftest                          spawn self and verify the MCP handshake");
+        Console.Error.WriteLine("       clipmetamcp --install [--library-root <folder>] add this server to claude_desktop_config.json");
+        Console.Error.WriteLine("                             [--config <path>]         (manual fallback when bundle install isn't available)");
+        Console.Error.WriteLine("       clipmetamcp --uninstall [--config <path>]       remove this server from the config again");
         return 2;
+    }
+
+    /// <summary>
+    /// Reads an optional flag's value. Absent flag → true with null value. Flag present but
+    /// followed by nothing or by another flag → error message + false, never a silently
+    /// swallowed value (the CLI's swallowed-flag lesson; PITFALLS 2026-06-10).
+    /// </summary>
+    private static bool TryGetFlagValue(string[] args, string flag, out string? value)
+    {
+        value = null;
+        int index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            return true;
+
+        if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"Error: {flag} is missing a value. Usage: {flag} <value>");
+            return false;
+        }
+        value = args[index + 1];
+        return true;
     }
 
     private static int Serve()

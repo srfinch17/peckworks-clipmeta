@@ -46,6 +46,16 @@ internal static class SelfTest
     private const string PingRequest =
         """{"jsonrpc":"2.0","id":3,"method":"ping"}""";
 
+    private const string LibraryListRequest =
+        """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"library_list","arguments":{}}}""";
+
+    /// <summary>
+    /// Non-JSON stdout lines seen this run. The per-check failure already names the line; this
+    /// feeds the dedicated purity verdict at the end — the single most important property of
+    /// the whole server (one stray byte = "Failed to connect").
+    /// </summary>
+    private static int _nonJsonLines;
+
     internal static int Run()
     {
         var (exePath, exeArgs) = ResolveServerCommand();
@@ -59,6 +69,7 @@ internal static class SelfTest
         Console.WriteLine($"  exe: {exePath}{(exeArgs.Length > 0 ? " " + string.Join(' ', exeArgs) : "")}");
         Console.WriteLine();
 
+        _nonJsonLines = 0;
         var checks = new List<(string Name, bool Pass, string Detail)>();
         // The child's stderr is its one out-of-band diagnostic channel; drain it continuously
         // (a full, undrained pipe would block the child) and show it on failure.
@@ -68,10 +79,15 @@ internal static class SelfTest
         // remaining read-dependent check fails fast with an honest "skipped" detail.
         bool channelDead = false;
 
+        // An empty disposable library lets the tools/call round-trip exercise the full sandbox
+        // + registry + Core path without touching any real clips.
+        string tempLibrary = Path.Combine(Path.GetTempPath(), "clipmetamcp-selftest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempLibrary);
+
         Process? server = null;
         try
         {
-            server = Spawn(exePath, exeArgs, stderr);
+            server = Spawn(exePath, exeArgs, stderr, tempLibrary);
             if (server is null)
             {
                 checks.Add(("spawn server process", false, "Process.Start returned null"));
@@ -118,11 +134,27 @@ internal static class SelfTest
             JsonObject? pong = ReadResponse(server, ref channelDead, out string? pingDetail);
             checks.Add(("ping answered", pong is not null && pong["error"] is null, pingDetail ?? string.Empty));
 
+            // tools/call round-trip ──────────────────────────────────────────────────
+            // library_list against the empty temp library: proves the dispatch → sandbox →
+            // Core path end to end, not just the protocol scaffolding around it.
+            Send(server, LibraryListRequest);
+            JsonObject? listResult = ReadResponse(server, ref channelDead, out string? listDetail);
+            JsonNode? totalMatches = listResult?["result"]?["structuredContent"]?["totalMatches"];
+            bool listOk = listResult?["result"]?["isError"] is null &&
+                          totalMatches is JsonValue total && total.TryGetValue(out int count) && count == 0;
+            checks.Add(("tools/call round-trip (library_list)", listOk,
+                listOk ? "empty library listed" : listDetail ?? "unexpected response shape"));
+
             // clean shutdown ─────────────────────────────────────────────────────────
             server.StandardInput.Close();
             bool exited = server.WaitForExit((int)ExitTimeout.TotalMilliseconds);
             checks.Add(("clean exit when stdin closes", exited && server.ExitCode == 0,
                 exited ? $"exit code {server.ExitCode}" : "still running after stdin closed"));
+
+            // stdout purity verdict ──────────────────────────────────────────────────
+            // Every line the child wrote was parsed above; any non-JSON line was counted.
+            checks.Add(("stdout purity (JSON-RPC only)", _nonJsonLines == 0,
+                _nonJsonLines == 0 ? "no stray output" : $"{_nonJsonLines} non-JSON line(s) on stdout"));
         }
         catch (Exception ex)
         {
@@ -133,6 +165,7 @@ internal static class SelfTest
             if (server is not null && !server.HasExited)
                 server.Kill(entireProcessTree: true);
             server?.Dispose();
+            try { Directory.Delete(tempLibrary, recursive: true); } catch (IOException) { }
         }
 
         return Report(checks, stderr);
@@ -165,7 +198,7 @@ internal static class SelfTest
         return (exePath, []);
     }
 
-    private static Process? Spawn(string exePath, string[] args, StringBuilder stderr)
+    private static Process? Spawn(string exePath, string[] args, StringBuilder stderr, string libraryRoot)
     {
         var startInfo = new ProcessStartInfo(exePath)
         {
@@ -176,6 +209,9 @@ internal static class SelfTest
             StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
+        // The child gets the disposable sandbox, not whatever CLIPMETA_LIBRARY_ROOT this
+        // process inherited — the round-trip check needs a known-empty library.
+        startInfo.Environment[Tools.LibrarySandbox.EnvVarName] = libraryRoot;
         foreach (string arg in args)
             startInfo.ArgumentList.Add(arg);
 
@@ -240,6 +276,7 @@ internal static class SelfTest
         }
         catch (System.Text.Json.JsonException)
         {
+            _nonJsonLines++; // feeds the dedicated purity verdict at the end of the run
             detail = $"non-JSON output: \"{(raw.Length <= 60 ? raw : raw[..60] + "…")}\"";
             return null;
         }
