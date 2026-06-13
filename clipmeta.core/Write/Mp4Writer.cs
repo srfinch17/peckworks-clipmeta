@@ -35,6 +35,41 @@ namespace ClipMetaCore.Write;
 /// </remarks>
 public sealed class Mp4Writer : IMediaWriter
 {
+    /// <summary>How many times the final atomic swap is attempted before giving up.</summary>
+    private const int MaxReplaceAttempts = 5;
+
+    /// <summary>Base backoff between swap attempts; the wait scales by attempt number.</summary>
+    private const int ReplaceBackoffMs = 100;
+
+    /// <summary>
+    /// Runs <paramref name="action"/>, retrying on a transient file-lock failure
+    /// (<see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> — what a sharing
+    /// violation surfaces as) up to <paramref name="maxAttempts"/> times, sleeping
+    /// <paramref name="baseDelayMs"/> × attempt between tries. The final failure is rethrown.
+    /// Used only for the post-verification atomic swap, where a retry is safe (see call site).
+    /// <paramref name="onRetry"/> is invoked before each wait (for logging). Internal so it can
+    /// be unit-tested directly with a controllable delegate and zero delay.
+    /// </summary>
+    internal static void RetryOnTransientLock(
+        Action action, int maxAttempts, int baseDelayMs, Action<int, Exception>? onRetry = null)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                action();
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < maxAttempts)
+            {
+                onRetry?.Invoke(attempt, ex);
+                if (baseDelayMs > 0)
+                    System.Threading.Thread.Sleep(baseDelayMs * attempt);
+            }
+        }
+    }
+
     /// <inheritdoc/>
     public bool CanWrite(string filePath) =>
         Path.GetExtension(filePath).Equals(".mp4", StringComparison.OrdinalIgnoreCase);
@@ -199,7 +234,20 @@ public sealed class Mp4Writer : IMediaWriter
             // the close and the swap — but by now the temp file is fully written and verified,
             // so the worst case is the swap failing with an IOException (original untouched),
             // never a torn output.
-            File.Replace(tempPath, filePath, destinationBackupFileName: mutation.BackupPath);
+            //
+            // Retry the swap briefly on a transient sharing violation. By this point the temp is
+            // fully written and verified, so retrying the atomic swap weakens no guarantee — it
+            // only rides out a momentary lock, which on Windows is common: antivirus or the
+            // Search indexer grabs a just-written file (the temp, or the destination right after
+            // a recorder finished it) for a second or two. Without this, tagging a freshly
+            // created clip intermittently failed with "being used by another process" even though
+            // nothing was wrong. If every attempt still fails, the last exception propagates and
+            // the original file is untouched — fail safe, exactly as before.
+            RetryOnTransientLock(
+                () => File.Replace(tempPath, filePath, destinationBackupFileName: mutation.BackupPath),
+                MaxReplaceAttempts, ReplaceBackoffMs,
+                (attempt, ex) => logger.LogVerbose(
+                    $"File.Replace attempt {attempt} hit a transient lock ({ex.GetType().Name}: {ex.Message}); retrying"));
             logger.LogVerbose($"SWAP {Path.GetFileName(filePath)} ← {Path.GetFileName(tempPath)}");
 
             sw.Stop();

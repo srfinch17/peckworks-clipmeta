@@ -5,4 +5,10 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The test project drives a few internal helpers directly (e.g. Mp4Writer's
+         transient-lock retry) where a deterministic unit test beats a timing-dependent
+         black-box one. Production assemblies still see only the public surface. -->
+    <InternalsVisibleTo Include="clipmetascribe.Tests" />
+  </ItemGroup>
 </Project>
