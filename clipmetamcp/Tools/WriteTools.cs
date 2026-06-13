@@ -42,8 +42,10 @@ public static class WriteTools
             "with it). 'fields' maps field names to string values — well-known fields: " +
             KnownFieldsSentence + "; any other name becomes a custom field. Setting a field " +
             "to an empty string DELETES it. Multi-value fields use pipe-delimited strings " +
-            "(e.g. tags: \"win|comeback\"). A timestamped backup copy is kept next to the " +
-            "file unless backup:false; dry_run:true previews without writing.",
+            "(e.g. tags: \"win|comeback\"). 'rating' must be 1-5. 'timecode' is normalized to " +
+            "HH:MM:SS: a bare number is seconds and a two-part value is MM:SS, so \"90\" and " +
+            "\"1:30\" both become 00:01:30. A timestamped backup copy is kept next to the file " +
+            "unless backup:false; dry_run:true previews without writing.",
             SetFieldsSchema(),
             args => SetFields(args, sandbox),
             clipPath => new JsonObject

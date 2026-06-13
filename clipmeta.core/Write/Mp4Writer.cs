@@ -70,7 +70,7 @@ public sealed class Mp4Writer : IMediaWriter
             // Open the source ONCE, for the entire parse-and-copy, with FileShare.Read:
             // other processes may read alongside us but nobody may WRITE while we work.
             // This closes a real race: chunk offsets are captured during the parse and the
-            // bytes are copied afterwards — if a recorder (e.g. Game Bar mid-recording) could
+            // bytes are copied afterwards — if a capture tool still recording the file could
             // append between those two steps, the output would index bytes that moved.
             // Holding one deny-writers handle makes parse + copy see a single frozen snapshot;
             // if a recorder already has the file open for writing, this open fails up front
@@ -135,8 +135,21 @@ public sealed class Mp4Writer : IMediaWriter
                 }
                 mutation.AppendFields.Clear();
 
+                // A schema stamp with nothing to version is pure file bloat: if this mutation
+                // removes the last user field, the stamp goes with it (field-discovered
+                // 2026-06-12: delete-only clears left files +~80 bytes vs pristine forever).
+                RemoveOrphanedSchemaStamp(root, mutation);
+
                 var (scenario, ilstChildren, newFields) = DetermineScenario(root, mutation);
                 logger.LogVerbose($"WRITE scenario={scenario}");
+
+                // When the mutation empties the ilst, the now-useless container chain
+                // (ilst → meta+hdlr → udta) is dropped too, so a write→clear round-trip
+                // returns the file to byte-identical pristine instead of leaving husks.
+                var drop = DetermineEmptyChainRemoval(root, mutation, newFields);
+                if (drop.Ilst)
+                    logger.LogVerbose($"WRITE dropping empty container chain " +
+                        $"(ilst{(drop.Meta ? "+meta" : "")}{(drop.Udta ? "+udta" : "")})");
 
                 // Predict, byte-exactly, how large the rebuilt moov will be. The difference vs
                 // the original moov ("delta") is how far every byte after moov will shift in the
@@ -146,17 +159,19 @@ public sealed class Mp4Writer : IMediaWriter
                 // it actually produced matches this prediction; a mismatch aborts the write
                 // rather than risk patching the offsets by the wrong amount.
                 long originalMoovSize = GetMoovSize(root);
-                long newMoovSize = CalculateNewMoovSize(root, scenario, ilstChildren, newFields, mutation);
+                long newMoovSize = CalculateNewMoovSize(root, scenario, ilstChildren, newFields, mutation, drop);
                 long delta = newMoovSize - originalMoovSize;
                 logger.LogVerbose($"WRITE delta={delta:+#;-#;0} bytes");
 
                 // Where the original moov ends. Chunk offsets BELOW this point reference data
-                // that sits before/inside moov (the mdat-before-moov layout Game Bar produces) —
-                // that data does not move, so those entries must be left alone.
+                // that sits before/inside moov (the mdat-before-moov layout — common output of
+                // many screen recorders) — that data does not move, so those entries are left
+                // alone. Layout is detected here from the actual box offsets, never assumed from
+                // the file's source; moov-first and mdat-first files are both handled on merit.
                 long moovEndOffset = GetMoovEndOffset(root);
 
                 WriteToTemp(src, tempPath, root, mutation, scenario, ilstChildren, newFields,
-                            delta, moovEndOffset, newMoovSize, logger);
+                            delta, moovEndOffset, newMoovSize, drop, logger);
 
                 // VERIFICATION STEP 1 — cheap whole-file arithmetic. moov is the only box whose
                 // size changed, so the temp file must be exactly (original length + delta) bytes.
@@ -198,6 +213,102 @@ public sealed class Mp4Writer : IMediaWriter
             }
             throw;
         }
+    }
+
+    // ── Orphaned schema stamp + empty-chain removal ────────────────────────────
+
+    /// <summary>Which now-empty containers this write should drop (innermost first).</summary>
+    /// <param name="Ilst">The post-mutation ilst would hold zero atoms — omit it.</param>
+    /// <param name="Meta">With ilst gone, meta would hold only its hdlr — omit it too.</param>
+    /// <param name="Udta">With meta gone, udta would be empty — omit the whole chain.</param>
+    private readonly record struct EmptyChainRemoval(bool Ilst, bool Meta, bool Udta);
+
+    /// <summary>
+    /// If this mutation removes the LAST user clipmeta field, schedules the schema-version
+    /// stamp for deletion as well. The stamp exists to version real metadata; once no user
+    /// field remains it is pure residue — without this, every write→clear cycle left ~80
+    /// bytes behind and "has clipmeta ever touched this file" stopped being answerable.
+    /// Runs after appends are folded into <see cref="MetadataMutation.SetFields"/>.
+    /// </summary>
+    private static void RemoveOrphanedSchemaStamp(BoxNode root, MetadataMutation mutation)
+    {
+        string schemaKey = ClipMetaSchema.AtomName(ClipMetaSchema.Schema);
+        string domainPrefix = ClipMetaSchema.Domain + ":";
+
+        // Is this write storing any user field? Then the stamp is earning its keep.
+        // (The stamp itself may sit in SetFields — added by the conditional stamp above —
+        // so it must not count as a "user" field here.)
+        bool storesUserField = mutation.SetFields.Any(kv =>
+            !string.IsNullOrEmpty(kv.Value) &&
+            kv.Key.StartsWith(domainPrefix, StringComparison.Ordinal) &&
+            !kv.Key.Equals(schemaKey, StringComparison.Ordinal));
+        if (storesUserField)
+            return;
+
+        var ilst = FindIlst(root);
+        if (ilst is null)
+            return; // nothing stored, nothing to orphan
+
+        // Does any existing user clipmeta atom survive this mutation?
+        bool anySurvives = ilst.Children.Any(c =>
+            c.EditableKey is { } key &&
+            key.StartsWith(domainPrefix, StringComparison.Ordinal) &&
+            !key.Equals(schemaKey, StringComparison.Ordinal) &&
+            !mutation.DeleteFields.Contains(key) &&
+            !mutation.ClearAll);
+        if (anySurvives)
+            return;
+
+        // No user fields after this write: the stamp is orphaned. ClearAll already sweeps it;
+        // delete-only mutations need it added explicitly. (Harmless if the atom is absent —
+        // deleting a nonexistent field is a no-op.)
+        mutation.DeleteFields.Add(schemaKey);
+    }
+
+    /// <summary>
+    /// Decides whether the mutation leaves the ilst empty, and if so how far up the container
+    /// chain can be removed without touching anything foreign. Conservative by construction:
+    /// meta goes only when ilst was its sole content besides the hdlr; udta goes only when
+    /// meta was its sole child. A container holding ANY box we don't recognize as part of the
+    /// chain stays, foreign content untouched (spec hazard #5).
+    /// </summary>
+    private static EmptyChainRemoval DetermineEmptyChainRemoval(
+        BoxNode root, MetadataMutation mutation, Dictionary<string, string> newFields)
+    {
+        // Writing new values? The ilst cannot be empty.
+        if (newFields.Count > 0)
+            return default;
+
+        var ilst = FindIlst(root);
+        if (ilst is null)
+            return default;
+
+        // Would any atom survive in the ilst? (free children are padding the rewriter drops
+        // anyway, so they don't keep a container alive.)
+        bool anySurvives = ilst.Children.Any(c =>
+            c.Type != "free" &&
+            !(c.EditableKey is { } key &&
+              (mutation.DeleteFields.Contains(key) ||
+               (mutation.ClearAll &&
+                key.StartsWith(ClipMetaSchema.Domain + ":", StringComparison.Ordinal)))));
+        if (anySurvives)
+            return default;
+
+        bool dropIlst = true;
+
+        var moov = root.Children.FirstOrDefault(c => c.Type == "moov");
+        var udta = moov?.Children.FirstOrDefault(c => c.Type == "udta");
+        var meta = udta?.Children.FirstOrDefault(c => c.Type == "meta");
+
+        // meta is removable when, after the ilst goes, only its handler declaration is left.
+        bool dropMeta = meta is not null &&
+            meta.Children.All(c => c.Type is "hdlr" or "ilst" or "free");
+
+        // udta is removable when the doomed meta was its only child.
+        bool dropUdta = dropMeta && udta is not null &&
+            udta.Children.All(c => c.Type is "meta");
+
+        return new EmptyChainRemoval(dropIlst, dropMeta, dropUdta);
     }
 
     // ── Scenario determination ─────────────────────────────────────────────────
@@ -250,7 +361,8 @@ public sealed class Mp4Writer : IMediaWriter
     private static void WriteToTemp(
         FileStream src, string tempPath, BoxNode root, MetadataMutation mutation,
         WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
-        long delta, long moovEndOffset, long predictedMoovSize, IClipMetaLogger logger)
+        long delta, long moovEndOffset, long predictedMoovSize, EmptyChainRemoval drop,
+        IClipMetaLogger logger)
     {
         using var dst = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var srcReader = new BinaryReader(src, Encoding.Latin1, leaveOpen: true);
@@ -261,7 +373,7 @@ public sealed class Mp4Writer : IMediaWriter
             if (topBox.Type == "moov")
                 WriteMoov(srcReader, dstWriter, topBox, mutation, scenario,
                           existingIlstChildren, newFields, delta, moovEndOffset,
-                          predictedMoovSize, logger);
+                          predictedMoovSize, drop, logger);
             else
                 CopyBoxVerbatim(srcReader, dstWriter, topBox);
         }
@@ -277,13 +389,17 @@ public sealed class Mp4Writer : IMediaWriter
     private static void WriteMoov(
         BinaryReader src, BinaryWriter dst, BoxNode moov, MetadataMutation mutation,
         WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
-        long delta, long moovEndOffset, long predictedMoovSize, IClipMetaLogger logger)
+        long delta, long moovEndOffset, long predictedMoovSize, EmptyChainRemoval drop,
+        IClipMetaLogger logger)
     {
         using var moovBuf = new MemoryStream();
         using var moovWriter = new BinaryWriter(moovBuf, Encoding.Latin1, leaveOpen: true);
 
         foreach (var child in moov.Children)
         {
+            if (child.Type == "udta" && drop.Udta)
+                // The whole chain emptied out — the udta is not rebuilt at all.
+                continue;
             if (child.Type == "trak")
                 // trak is rebuilt (not copied) because its stbl subtree holds the
                 // chunk-offset tables that may need patching.
@@ -291,7 +407,7 @@ public sealed class Mp4Writer : IMediaWriter
             else if (child.Type == "udta")
                 // udta is rebuilt because its meta/ilst subtree holds the metadata atoms.
                 WriteUdta(src, moovWriter, child, mutation, scenario,
-                          existingIlstChildren, newFields);
+                          existingIlstChildren, newFields, drop);
             else
                 CopyBoxVerbatim(src, moovWriter, child);
         }
@@ -477,7 +593,8 @@ public sealed class Mp4Writer : IMediaWriter
 
     private static void WriteUdta(
         BinaryReader src, BinaryWriter dst, BoxNode udta, MetadataMutation mutation,
-        WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields)
+        WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
+        EmptyChainRemoval drop)
     {
         using var udtaBuf = new MemoryStream();
         using var udtaWriter = new BinaryWriter(udtaBuf, Encoding.Latin1, leaveOpen: true);
@@ -485,8 +602,11 @@ public sealed class Mp4Writer : IMediaWriter
         bool hasMeta = udta.Children.Any(c => c.Type == "meta");
         foreach (var child in udta.Children)
         {
+            if (child.Type == "meta" && drop.Meta)
+                // meta held only its hdlr + the now-empty ilst — drop it entirely.
+                continue;
             if (child.Type == "meta")
-                WriteMeta(src, udtaWriter, child, mutation, scenario, existingIlstChildren, newFields);
+                WriteMeta(src, udtaWriter, child, mutation, scenario, existingIlstChildren, newFields, drop);
             else
                 CopyBoxVerbatim(src, udtaWriter, child);
         }
@@ -545,7 +665,8 @@ public sealed class Mp4Writer : IMediaWriter
 
     private static void WriteMeta(
         BinaryReader src, BinaryWriter dst, BoxNode meta, MetadataMutation mutation,
-        WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields)
+        WriteScenario scenario, List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
+        EmptyChainRemoval drop)
     {
         using var metaBuf = new MemoryStream();
         using var metaWriter = new BinaryWriter(metaBuf, Encoding.Latin1, leaveOpen: true);
@@ -561,6 +682,10 @@ public sealed class Mp4Writer : IMediaWriter
         bool wroteIlst = false;
         foreach (var child in meta.Children)
         {
+            if (child.Type == "ilst" && drop.Ilst)
+                // The ilst would be empty — omit it, keeping the meta's hdlr (so a future
+                // tag still has a valid mdir-handler meta to write into).
+                continue;
             if (child.Type == "ilst")
             {
                 wroteIlst = true;
@@ -715,11 +840,23 @@ public sealed class Mp4Writer : IMediaWriter
     private static long CalculateNewMoovSize(
         BoxNode root, WriteScenario scenario,
         List<BoxNode> existingIlstChildren, Dictionary<string, string> newFields,
-        MetadataMutation mutation)
+        MetadataMutation mutation, EmptyChainRemoval drop)
     {
+        long oldMoovSize = GetMoovSize(root);
+
+        // The new moov always uses a standard 8-byte header. If the original used extended-size
+        // encoding (16-byte header), account for the 8-byte reduction in the on-disk footprint.
+        var moovForHeader = root.Children.FirstOrDefault(c => c.Type == "moov");
+        long headerSizeDelta = 8 - (moovForHeader?.HeaderSize ?? 8); // 0 normally, -8 for extended-size moov
+
+        // Empty-chain removal: the output omits the outermost container we can safely drop, so
+        // moov shrinks by exactly that whole box's on-disk size. Predicting it precisely matters
+        // because WriteMoov hard-asserts actual == predicted before any offsets are committed.
+        if (drop.Ilst)
+            return oldMoovSize - RemovedChainSize(root, drop) + headerSizeDelta;
+
         long oldIlstSize = FindIlst(root)?.Size is ulong s ? (long)s : 0;
         long newIlstSize = CalculateNewIlstSize(existingIlstChildren, newFields, mutation);
-        long oldMoovSize = GetMoovSize(root);
         long delta = newIlstSize - oldIlstSize;
 
         if (scenario == WriteScenario.Create && FindIlst(root) == null)
@@ -737,13 +874,24 @@ public sealed class Mp4Writer : IMediaWriter
             // else: udta+meta exist, no ilst — WriteMeta synthesizes a new ilst via WriteNewIlst; delta = newIlstSize covers it.
         }
 
-        // The new moov always uses a standard 8-byte header. If the original used extended-size
-        // encoding (16-byte header), account for the 8-byte reduction in the on-disk footprint.
-        var moovNode = root.Children.FirstOrDefault(c => c.Type == "moov");
-        int originalMoovHeaderSize = moovNode?.HeaderSize ?? 8;
-        long headerSizeDelta = 8 - originalMoovHeaderSize; // 0 normally, -8 for extended-size moov
-
         return oldMoovSize + delta + headerSizeDelta;
+    }
+
+    /// <summary>
+    /// On-disk size of the outermost container the empty-chain removal drops — the exact number
+    /// of bytes moov loses. udta &gt; meta &gt; ilst, matching how far up
+    /// <see cref="DetermineEmptyChainRemoval"/> found it safe to remove.
+    /// </summary>
+    private static long RemovedChainSize(BoxNode root, EmptyChainRemoval drop)
+    {
+        var moov = root.Children.FirstOrDefault(c => c.Type == "moov");
+        var udta = moov?.Children.FirstOrDefault(c => c.Type == "udta");
+        var meta = udta?.Children.FirstOrDefault(c => c.Type == "meta");
+        var ilst = meta?.Children.FirstOrDefault(c => c.Type == "ilst");
+
+        if (drop.Udta) return (long)(udta?.Size ?? 0);
+        if (drop.Meta) return (long)(meta?.Size ?? 0);
+        return (long)(ilst?.Size ?? 0);
     }
 
     private static long CalculateNewIlstSize(

@@ -71,7 +71,7 @@ public class Mp4Parser : IMediaParser
     /// byte-copy. If the parse and the copy used separate opens (as <see cref="ParseFile"/>
     /// followed by a second open would), another process could modify the file in between,
     /// and the chunk offsets baked into the output would describe bytes that no longer exist —
-    /// e.g. tagging a clip that Game Bar is still actively recording.
+    /// e.g. tagging a clip a capture tool is still actively recording.
     /// The stream is left open; its position on return is unspecified.
     /// </remarks>
     /// <param name="fs">A readable, seekable stream positioned anywhere; read from offset 0.</param>

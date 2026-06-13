@@ -10,8 +10,8 @@ namespace ClipMetaScribe.Tests;
 /// audit follow-up):
 /// <list type="bullet">
 ///   <item>The source file is held with a deny-writers share for the whole parse+copy, so a
-///       file that is still being written (e.g. Game Bar mid-recording) is refused up front
-///       instead of producing a torn output whose chunk offsets describe bytes that moved.</item>
+///       file that is still being written (e.g. a capture tool mid-recording) is refused up
+///       front instead of producing a torn output whose chunk offsets describe bytes that moved.</item>
 ///   <item>The temp file uses a unique per-write name, so it can never overwrite a real file
 ///       the user happens to call <c>clip.mp4.tmp</c>.</item>
 ///   <item>Appending to an atom whose payload is not text is refused, instead of splicing the

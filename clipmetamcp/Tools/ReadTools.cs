@@ -82,7 +82,9 @@ public static class ReadTools
             "library_export",
             "Exports the metadata of every clip in the library (or one subfolder) as " +
             "structured records ('json', the default) or CSV text ('csv' — same columns as " +
-            "the clipmetascribe --export command). Requires a configured clips library.",
+            "the clipmetascribe --export command; custom fields become extra columns after the " +
+            "known ones). Ordered alphabetically by path (note: library_list orders newest " +
+            "first). Requires a configured clips library.",
             ExportSchema(),
             args => ExportLibrary(args, sandbox),
             _ => new JsonObject()));
