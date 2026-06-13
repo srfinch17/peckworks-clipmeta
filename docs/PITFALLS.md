@@ -8,6 +8,23 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-12 — Media-integrity scanner's fixed window overran the final chunk (fixed test)
+- **Symptom:** Adding a new real clip (`ZC112.mp4`, mdat-first, 290 MB) made
+  `RealClip_MultiFieldWrite_MediaByteIdentical` fail: "chunk table[1] entry 8931 points at
+  different data after rewrite ... the track would play garbage" — even though the mdat SHA-256
+  check (which runs first) PASSED, i.e. the media was provably byte-identical.
+- **Cause:** the WRITER was correct. `MediaIntegrityScanner` compares a fixed 64-byte window at
+  each chunk offset; ZC112's last chunk sits 38 bytes before mdat-end, so the window spilled 26
+  bytes into the following `moov` box — which legitimately changed when the test wrote metadata.
+  The mismatch at "index 40" was 2 bytes past the mdat boundary, i.e. non-media.
+- **Fix (test helper only):** `ClampToMdatEnd` bounds each comparison window to the end of the
+  mdat containing the offset, so only real sample bytes are compared. No production code
+  changed; ZC112 and the moov-first `Stargaze.mp4` both pass.
+- **Lesson:** chunk *sample* data is bounded by its mdat; a verifier reading a fixed span past a
+  boundary-hugging final chunk measures the next box, not the media. Diverse real clips (here a
+  chunk flush against mdat-end) surface harness assumptions that synthetic fixtures and
+  same-source clips never hit — exactly why the pristine set should span multiple creators.
+
 ### 2026-06-12 — Clearing metadata left an ~80-byte schema/container husk (fixed)
 - **Symptom:** An agent hammering the MCP write tools noticed a clip that was tagged then fully
   cleared came back ~80 bytes LARGER than pristine, twice (Stargaze 3,746,496 → 3,746,576;
