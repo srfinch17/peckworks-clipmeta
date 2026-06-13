@@ -44,8 +44,7 @@ public class ProgramIntegrationTests
 
     // ── Real clip data provider ──────────────────────────────────────────────
 
-    public static IEnumerable<object[]> TestClipPaths()
-        => TestClips.All().Select(p => new object[] { p });
+    public static IEnumerable<object[]> TestClipPaths() => TestClips.ClipRows();
 
     // ── Parser integration tests ─────────────────────────────────────────────
 
@@ -53,6 +52,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public void ParseFile_RealClip_DoesNotThrow(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         var root = Mp4Parser.ParseFile(clipPath);
 
         Assert.IsNotNull(root);
@@ -63,6 +63,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public void ParseFile_RealClip_ContainsMoovBox(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         var root = Mp4Parser.ParseFile(clipPath);
 
         bool hasMoov = root.Children.Any(c => c.Type == "moov");
@@ -73,6 +74,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public void ParseFile_RealClip_IlstBoxHasEditableChildren(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         var root = Mp4Parser.ParseFile(clipPath);
 
         var ilstNode = FindBoxByType(root, "ilst");
@@ -87,6 +89,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public async Task RunAsync_RealClip_ExitsWithCode0(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         // Pass a StringWriter to avoid Console.Out races in parallel test execution.
         var sw = new StringWriter();
         int result = await AppRunner.RunAsync([clipPath], sw);
@@ -98,6 +101,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public void ParseFile_RealClip_XtraBoxDoesNotCrash(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         // ParseFile must not throw even if the Xtra box is absent or malformed.
         var root = Mp4Parser.ParseFile(clipPath);
         Assert.IsNotNull(root);
@@ -107,6 +111,7 @@ public class ProgramIntegrationTests
     [DynamicData(nameof(TestClipPaths))]
     public async Task RunAsync_RealClip_SummaryAppearsInOutput(string clipPath)
     {
+        TestClips.SkipIfMissing(clipPath);
         var sw = new StringWriter();
         int result = await AppRunner.RunAsync([clipPath], sw);
         Assert.AreEqual(AppRunner.ExitSuccess, result);
