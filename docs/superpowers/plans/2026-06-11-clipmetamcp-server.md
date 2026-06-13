@@ -207,13 +207,24 @@ real use. Triage, folded into the phase-3 PR:
 
 ## Phase 4 — install fallback + full selftest
 
-- [ ] `Install/ClaudeConfigInstaller.cs`: locate `%APPDATA%\Claude\claude_desktop_config.json`,
-  timestamped backup, insert/update `mcpServers.clipmeta` (absolute exe path,
-  `--library-root` → env var), refuse on unparseable JSON with backup intact; `--uninstall` reverses.
-- [ ] `--selftest` grows: spawn + handshake + one read tool round-trip + stdout-purity probe;
-  table output per spec §4.
-- [ ] Installer tests against fixture configs in a temp dir: fresh, existing-other-servers
-  (preserved verbatim), corrupt (refusal + backup), uninstall round-trip.
+**Completed 2026-06-12.**
+
+- [x] `Install/ClaudeConfigInstaller.cs`: timestamped backup, insert/update
+  `mcpServers.clipmeta` (absolute exe path, `--library-root` → env var; omitted env = writes
+  disabled, said so in the report), refuse on unparseable JSON with the original untouched;
+  `--uninstall` reverses, graceful no-op when absent. **Discovery updated from the spec:** the
+  Microsoft Store build virtualizes `%APPDATA%\Claude` into its package container (E2E gate
+  finding) — `DiscoverConfigPath` prefers `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\
+  Claude\` when present, else classic `%APPDATA%\Claude`; `--config <path>` overrides.
+  Idempotent: re-running --install replaces the entry, never duplicates it.
+- [x] `--selftest` grows: tools/call round-trip (`library_list` against a disposable empty
+  sandbox passed via the child's env — exercises dispatch → sandbox → Core, not just protocol
+  scaffolding) and a dedicated **stdout purity verdict** (any non-JSON stdout line fails the
+  run). 11 checks total.
+- [x] Installer tests (11) against fixture configs in a temp dir: fresh-create,
+  existing-other-servers preserved value-for-value, backup is byte-exact original, idempotent
+  re-install, no-root warns writes disabled, corrupt refusal (install AND uninstall) with the
+  file untouched, uninstall round-trip + graceful no-ops.
 
 ## Phase 5 — polish + Definition of Done
 
