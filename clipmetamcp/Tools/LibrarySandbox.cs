@@ -108,6 +108,62 @@ public sealed class LibrarySandbox
     }
 
     /// <summary>
+    /// Returns the configured library root, or refuses when none is set. Directory-scoped tools
+    /// (list/find/vocab/export/index) have no meaningful "anywhere" mode — scanning an undefined
+    /// directory tree on an LLM's behalf is exactly the surprise this sandbox exists to prevent —
+    /// so unlike single-clip reads they hard-require configuration (plan, phase 2).
+    /// </summary>
+    public string RequireRoot()
+    {
+        if (Root is null)
+            throw new ToolException(
+                "No clips library is configured. Library-wide tools need the " +
+                $"{EnvVarName} environment variable (set automatically when the extension is " +
+                "installed with a clips folder; pick one in the extension's settings).");
+        return Root;
+    }
+
+    /// <summary>
+    /// Validates an optional subfolder argument for a directory-scoped tool and returns the
+    /// absolute directory to operate on: the library root when <paramref name="subfolder"/> is
+    /// null/blank, otherwise the subfolder resolved against the root. The same canonical
+    /// (junction/symlink-resolved) containment check as clip paths applies — a subfolder is
+    /// attacker-reachable input exactly like a file path. The directory must exist.
+    /// </summary>
+    public string ResolveLibraryDirectory(string? subfolder)
+    {
+        string root = RequireRoot();
+        if (string.IsNullOrWhiteSpace(subfolder))
+            return root;
+
+        string full;
+        try
+        {
+            full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(subfolder, root));
+        }
+        catch (ArgumentException)
+        {
+            throw new ToolException($"'{subfolder}' is not a valid folder path.");
+        }
+
+        // Root itself is legal ("." or the root's own absolute path); anything else must be
+        // strictly inside it on the canonical path, same rule as ResolveClipPath.
+        string canonical = ResolveRealPath(full);
+        if (!canonical.Equals(_canonicalRoot, StringComparison.OrdinalIgnoreCase) &&
+            !IsContained(canonical, _canonicalRoot!))
+        {
+            throw new ToolException(
+                $"'{subfolder}' is outside the configured clips library '{root}'. " +
+                "Only folders inside the library can be listed or searched.");
+        }
+
+        if (!Directory.Exists(full))
+            throw new ToolException($"No folder exists at '{full}'. Check the subfolder name.");
+
+        return full;
+    }
+
+    /// <summary>
     /// True when <paramref name="fullPath"/> is strictly inside <paramref name="root"/>.
     /// Ordinal-ignore-case matches Windows filesystem semantics; the separator-terminated
     /// prefix stops sibling-prefix escapes (root "C:\clips" must not match "C:\clips-evil\x").

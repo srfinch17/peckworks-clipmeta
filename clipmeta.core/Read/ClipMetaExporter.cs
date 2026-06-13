@@ -1,4 +1,5 @@
 using ClipMetaCore.Mp4;
+using ClipMetaCore.Schema;
 
 namespace ClipMetaCore.Read;
 
@@ -33,5 +34,41 @@ public static class ClipMetaExporter
             records.Add(new ExportRecord(path, ClipMetaReader.GetUserFields(root)));
         }
         return records;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="records"/> as CSV: a "file" column, the well-known fields in
+    /// <see cref="ClipMetaSchema.KnownFields"/> order, then any custom fields alphabetically.
+    /// Lives in Core (not a CLI) so the clipmetascribe <c>--export</c> command and the MCP
+    /// <c>library_export</c> tool emit byte-identical CSV.
+    /// </summary>
+    /// <param name="records">Records to serialize. May be empty (header row only).</param>
+    /// <param name="output">Destination writer.</param>
+    public static void WriteCsv(IReadOnlyList<ExportRecord> records, TextWriter output)
+    {
+        var customFields = records
+            .SelectMany(r => r.Fields.Select(f => f.Field))
+            .Where(f => !ClipMetaSchema.KnownFields.Contains(f, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var columns = new[] { "file" }.Concat(ClipMetaSchema.KnownFields).Concat(customFields).ToList();
+        output.WriteLine(string.Join(",", columns.Select(CsvEscape)));
+
+        foreach (var r in records)
+        {
+            var fieldMap = r.Fields.ToDictionary(f => f.Field, f => f.Value, StringComparer.OrdinalIgnoreCase);
+            var row = columns.Select(col => col == "file" ? r.FilePath : fieldMap.GetValueOrDefault(col, ""));
+            output.WriteLine(string.Join(",", row.Select(CsvEscape)));
+        }
+    }
+
+    /// <summary>RFC-4180 quoting: wrap when the value contains a comma, quote, or newline.</summary>
+    private static string CsvEscape(string s)
+    {
+        if (s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
+            return $"\"{s.Replace("\"", "\"\"")}\"";
+        return s;
     }
 }

@@ -1,18 +1,11 @@
 using System.Text;
 using ClipMetaCore.Read;
-using ClipMetaCore.Schema;
 
 namespace ClipMetaScribe.Commands;
 
 /// <summary>Exports clipmeta metadata records to JSON or CSV format.</summary>
 internal static class ExportCommand
 {
-    private static readonly string[] KnownFields =
-    [
-        ClipMetaSchema.Game, ClipMetaSchema.Players, ClipMetaSchema.Tags,
-        ClipMetaSchema.Timecode, ClipMetaSchema.Rating, ClipMetaSchema.Notes,
-    ];
-
     /// <summary>
     /// Formats <paramref name="records"/> as JSON or CSV and writes to <paramref name="output"/>
     /// (defaults to <see cref="Console.Out"/>).
@@ -51,22 +44,9 @@ internal static class ExportCommand
 
     private static int WriteCsv(IReadOnlyList<ExportRecord> records, TextWriter output)
     {
-        var customFields = records
-            .SelectMany(r => r.Fields.Select(f => f.Field))
-            .Where(f => !KnownFields.Contains(f, StringComparer.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var columns = new[] { "file" }.Concat(KnownFields).Concat(customFields).ToList();
-        output.WriteLine(string.Join(",", columns.Select(CsvEscape)));
-
-        foreach (var r in records)
-        {
-            var fieldMap = r.Fields.ToDictionary(f => f.Field, f => f.Value, StringComparer.OrdinalIgnoreCase);
-            var row = columns.Select(col => col == "file" ? r.FilePath : fieldMap.GetValueOrDefault(col, ""));
-            output.WriteLine(string.Join(",", row.Select(CsvEscape)));
-        }
+        // CSV formatting lives in Core so the MCP server's library_export tool emits the
+        // exact same bytes as this command (same column order, same quoting).
+        ClipMetaExporter.WriteCsv(records, output);
         return 0;
     }
 
@@ -97,10 +77,4 @@ internal static class ExportCommand
         return sb.ToString();
     }
 
-    private static string CsvEscape(string s)
-    {
-        if (s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
-            return $"\"{s.Replace("\"", "\"\"")}\"";
-        return s;
-    }
 }

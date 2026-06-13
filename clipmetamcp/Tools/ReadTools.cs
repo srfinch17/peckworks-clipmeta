@@ -8,11 +8,23 @@ namespace ClipMetaMcp.Tools;
 /// <summary>
 /// Registers the read-only tools. Every handler delegates to an already-tested Core operation —
 /// the thin-shell rule applies to this MCP server exactly as it does to the CLIs.
-/// Phase 1 ships <c>clip_get_metadata</c> only; the remaining read tools arrive in phase 2
-/// (see docs/superpowers/plans/2026-06-11-clipmetamcp-server.md).
+/// Two kinds of tool live here:
+/// single-clip reads (<c>clip_get_metadata</c>, <c>clip_get_stats</c>) that take a path, and
+/// library-wide reads (<c>library_*</c>) that operate on the configured clips folder and
+/// refuse when none is configured (see <see cref="LibrarySandbox.RequireRoot"/>).
 /// </summary>
 public static class ReadTools
 {
+    /// <summary>
+    /// Library listings could return thousands of entries on a big clips folder; the result
+    /// travels through the model's context, so cap it and tell the model it was truncated
+    /// (it can narrow with 'pattern' or 'subfolder'). Default when the caller doesn't ask.
+    /// </summary>
+    private const int DefaultListLimit = 200;
+
+    /// <summary>Hard ceiling for the caller-supplied list limit.</summary>
+    private const int MaxListLimit = 1000;
+
     /// <summary>Registers all read tools against the given sandbox.</summary>
     public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
     {
@@ -27,6 +39,69 @@ public static class ReadTools
             SinglePathSchema(),
             args => GetMetadata(args, sandbox),
             clipPath => new JsonObject { ["path"] = clipPath }));
+
+        registry.Register(new ToolDefinition(
+            "clip_get_stats",
+            "Summarizes one MP4 game clip: file size plus which clipmeta fields are set, " +
+            "which well-known fields are unset, and which set fields are custom names. " +
+            "'path' must be an existing .mp4 file inside the configured clips library.",
+            SinglePathSchema(),
+            args => GetStats(args, sandbox),
+            clipPath => new JsonObject { ["path"] = clipPath }));
+
+        registry.Register(new ToolDefinition(
+            "library_list",
+            "Lists MP4 clip files in the clips library by file name (no metadata is read — " +
+            "use clip_get_metadata or library_find for that). Newest first. Optional 'pattern' " +
+            "is a wildcard on the file name (e.g. '*2026.01*'), optional 'subfolder' restricts " +
+            "to one folder inside the library, 'recursive' defaults to true, 'limit' caps the " +
+            $"result (default {DefaultListLimit}). Requires a configured clips library.",
+            ListSchema(),
+            args => ListLibrary(args, sandbox),
+            _ => new JsonObject()));
+
+        registry.Register(new ToolDefinition(
+            "library_find",
+            "Searches every clip in the library for a metadata field whose value contains the " +
+            "given text (case-insensitive substring) and returns the matching file paths. " +
+            "This parses each MP4, so it can take a while on large libraries — prefer " +
+            "library_search_index for repeated queries. Requires a configured clips library. " +
+            PipeFieldsSentence,
+            FieldValueSchema(
+                "Metadata field to search (e.g. game, tags, players, or a custom name).",
+                "Text the field value must contain (case-insensitive)."),
+            args => FindInLibrary(args, sandbox),
+            _ => new JsonObject { ["field"] = "game", ["value"] = "TF2" }));
+
+        registry.Register(new ToolDefinition(
+            "library_vocab",
+            "Lists every distinct value used for one metadata field across the whole library, " +
+            "with the number of clips using each value — e.g. all tags ever used, or all game " +
+            "names. Multi-value fields are split into individual items first. Requires a " +
+            "configured clips library.",
+            FieldOnlySchema(),
+            args => VocabForLibrary(args, sandbox),
+            _ => new JsonObject { ["field"] = "tags" }));
+
+        registry.Register(new ToolDefinition(
+            "library_export",
+            "Exports the metadata of every clip in the library (or one subfolder) as " +
+            "structured records ('json', the default) or CSV text ('csv' — same columns as " +
+            "the clipmetascribe --export command). Requires a configured clips library.",
+            ExportSchema(),
+            args => ExportLibrary(args, sandbox),
+            _ => new JsonObject()));
+
+        registry.Register(new ToolDefinition(
+            "library_search_index",
+            "Fast metadata search backed by an index file stored in the library root. " +
+            "Pass rebuild:true to (re)scan the library — do this once before searching, and " +
+            "again after clips are added or retagged; results reflect the index as of " +
+            "'indexBuilt'. With 'field' (and optional 'value' substring) returns matching " +
+            "clips; without, returns an index summary. Requires a configured clips library.",
+            SearchIndexSchema(),
+            args => SearchIndex(args, sandbox),
+            _ => new JsonObject { ["rebuild"] = true, ["field"] = "game", ["value"] = "TF2" }));
     }
 
     /// <summary>
@@ -38,6 +113,8 @@ public static class ReadTools
         "Multi-value fields (" +
         string.Join(", ", ClipMetaSchema.KnownFields.Where(ClipMetaSchema.PipeFields.Contains)) +
         ") are returned as pipe-delimited strings.";
+
+    // ── JSON Schemas ─────────────────────────────────────────────────────────────────────
 
     /// <summary>JSON Schema for tools whose only argument is a clip path.</summary>
     private static JsonObject SinglePathSchema() => new()
@@ -54,6 +131,105 @@ public static class ReadTools
         },
         ["required"] = new JsonArray("path"),
     };
+
+    private static JsonObject ListSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["subfolder"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Optional folder inside the library to list instead of the whole library.",
+            },
+            ["pattern"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Optional wildcard filter on the file name, e.g. '*2026.01*' or 'tf2*'. " +
+                                  "'*' matches any text, '?' any single character.",
+            },
+            ["recursive"] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "Include subfolders (default true).",
+            },
+            ["limit"] = new JsonObject
+            {
+                ["type"] = "integer",
+                ["description"] = $"Maximum number of clips to return (default {DefaultListLimit}, max {MaxListLimit}).",
+            },
+        },
+    };
+
+    private static JsonObject FieldValueSchema(string fieldDescription, string valueDescription) => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["field"] = new JsonObject { ["type"] = "string", ["description"] = fieldDescription },
+            ["value"] = new JsonObject { ["type"] = "string", ["description"] = valueDescription },
+        },
+        ["required"] = new JsonArray("field", "value"),
+    };
+
+    private static JsonObject FieldOnlySchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["field"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Metadata field to enumerate values for (e.g. tags, game, players).",
+            },
+        },
+        ["required"] = new JsonArray("field"),
+    };
+
+    private static JsonObject ExportSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["format"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray("json", "csv"),
+                ["description"] = "Output format (default json).",
+            },
+            ["subfolder"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Optional folder inside the library to export instead of the whole library.",
+            },
+        },
+    };
+
+    private static JsonObject SearchIndexSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["rebuild"] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "Rescan the library and rewrite the index before answering (default false).",
+            },
+            ["field"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Metadata field to search. Omit to just get an index summary.",
+            },
+            ["value"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Substring the field value must contain (case-insensitive). " +
+                                  "Omit or leave empty to match every clip that has the field.",
+            },
+        },
+    };
+
+    // ── Handlers ─────────────────────────────────────────────────────────────────────────
 
     private static JsonObject GetMetadata(JsonObject? args, LibrarySandbox sandbox)
     {
@@ -88,6 +264,209 @@ public static class ReadTools
         return result;
     }
 
+    private static JsonObject GetStats(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
+        BoxNode root = ParseClip(fullPath);
+
+        // Same categorization Core gives the CLI --stats command — one definition of
+        // set/unset/custom for every surface.
+        ClipMetaFieldStats stats = ClipMetaStats.Categorize(ClipMetaReader.GetUserFields(root));
+
+        return new JsonObject
+        {
+            ["path"] = fullPath,
+            ["sizeBytes"] = new FileInfo(fullPath).Length,
+            ["fieldsSet"] = ToJsonArray(stats.SetFields),
+            ["knownUnset"] = ToJsonArray(stats.KnownUnset),
+            ["customFields"] = ToJsonArray(stats.CustomFields),
+        };
+    }
+
+    private static JsonObject ListLibrary(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string directory = sandbox.ResolveLibraryDirectory(GetOptionalString(args, "subfolder"));
+        string? pattern = GetOptionalString(args, "pattern");
+        bool recursive = GetOptionalBool(args, "recursive", defaultValue: true);
+        int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultListLimit), 1, MaxListLimit);
+
+        IReadOnlyList<ClipFileInfo> all = ClipMetaLibrary.ListClips(directory, pattern, recursive);
+
+        var clips = new JsonArray();
+        foreach (ClipFileInfo clip in all.Take(limit))
+        {
+            clips.Add(new JsonObject
+            {
+                ["path"] = clip.FilePath,
+                ["name"] = Path.GetFileName(clip.FilePath),
+                ["sizeBytes"] = clip.SizeBytes,
+                ["lastModified"] = clip.LastModified.ToString("O"),
+            });
+        }
+
+        return new JsonObject
+        {
+            ["directory"] = directory,
+            ["totalMatches"] = all.Count,
+            ["returned"] = clips.Count,
+            // Spelled out so the model knows more exist and narrows instead of assuming
+            // this is everything.
+            ["truncated"] = all.Count > clips.Count,
+            ["clips"] = clips,
+        };
+    }
+
+    private static JsonObject FindInLibrary(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        string field = GetRequiredString(args, "field");
+        string value = GetRequiredString(args, "value");
+
+        var paths = new JsonArray();
+        foreach (string path in ClipMetaFinder.Find(root, field, value))
+            paths.Add(path);
+
+        return new JsonObject
+        {
+            ["field"] = field,
+            ["value"] = value,
+            ["matchCount"] = paths.Count,
+            ["paths"] = paths,
+        };
+    }
+
+    private static JsonObject VocabForLibrary(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        string field = GetRequiredString(args, "field");
+
+        VocabResult vocab = ClipMetaVocab.Enumerate(root, field);
+
+        // Most-used first, then alphabetical — the order a human (or model) summarizing
+        // "what tags do I use?" actually wants. Dictionary order would be arbitrary.
+        var values = new JsonObject();
+        foreach (var pair in vocab.Counts
+                     .OrderByDescending(p => p.Value)
+                     .ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            values[pair.Key] = pair.Value;
+        }
+
+        return new JsonObject
+        {
+            ["field"] = field,
+            ["clipsWithField"] = vocab.ClipsWithField,
+            ["distinctValues"] = values.Count,
+            ["values"] = values,
+        };
+    }
+
+    private static JsonObject ExportLibrary(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string directory = sandbox.ResolveLibraryDirectory(GetOptionalString(args, "subfolder"));
+        string format = GetOptionalString(args, "format")?.ToLowerInvariant() ?? "json";
+        if (format is not ("json" or "csv"))
+            throw new ToolException($"Unknown format '{format}'. Use 'json' or 'csv'.");
+
+        IEnumerable<string> paths = Directory.EnumerateFiles(directory, "*.mp4", SearchOption.AllDirectories);
+        IReadOnlyList<ExportRecord> records = ClipMetaExporter.GetRecords(paths);
+
+        if (format == "csv")
+        {
+            // Core's writer — byte-identical to clipmetascribe --export --format csv.
+            using var csv = new StringWriter();
+            ClipMetaExporter.WriteCsv(records, csv);
+            return new JsonObject
+            {
+                ["format"] = "csv",
+                ["clipCount"] = records.Count,
+                ["csv"] = csv.ToString(),
+            };
+        }
+
+        var jsonRecords = new JsonArray();
+        foreach (ExportRecord record in records)
+        {
+            var fields = new JsonObject();
+            foreach ((string f, string v) in record.Fields)
+                fields.TryAdd(f, v); // duplicate atoms: first wins, as in clip_get_metadata
+            jsonRecords.Add(new JsonObject { ["file"] = record.FilePath, ["fields"] = fields });
+        }
+        return new JsonObject
+        {
+            ["format"] = "json",
+            ["clipCount"] = records.Count,
+            ["records"] = jsonRecords,
+        };
+    }
+
+    private static JsonObject SearchIndex(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        string indexPath = Path.Combine(root, ClipMetaIndex.IndexFileName);
+        bool rebuildRequested = GetOptionalBool(args, "rebuild", defaultValue: false);
+
+        IndexData data;
+        bool rebuilt;
+        if (!rebuildRequested && File.Exists(indexPath))
+        {
+            try
+            {
+                data = ClipMetaIndex.ReadFromFile(indexPath);
+                rebuilt = false;
+            }
+            catch (Exception ex) when (ex is IOException or FormatException or ArgumentException)
+            {
+                // A corrupt or unreadable index self-heals with a rescan instead of wedging
+                // the tool — the index is a cache, never the source of truth.
+                data = RebuildIndex(root, indexPath);
+                rebuilt = true;
+            }
+        }
+        else
+        {
+            data = RebuildIndex(root, indexPath);
+            rebuilt = true;
+        }
+
+        var result = new JsonObject
+        {
+            ["indexBuilt"] = data.Built.ToString("O"),
+            ["rebuilt"] = rebuilt,
+            ["clipCount"] = data.Entries.Count,
+        };
+
+        string? field = GetOptionalString(args, "field");
+        if (field is null)
+            return result; // summary only — the model asked about the index, not a query
+
+        // Empty/absent value means "every clip that has this field" (ClipMetaSearch semantics).
+        string value = GetOptionalString(args, "value") ?? string.Empty;
+        var matches = new JsonArray();
+        foreach (IndexEntry entry in ClipMetaSearch.Find(data, field, value))
+        {
+            var fields = new JsonObject();
+            foreach ((string f, string v) in entry.Fields)
+                fields.TryAdd(f, v);
+            matches.Add(new JsonObject { ["path"] = entry.FilePath, ["fields"] = fields });
+        }
+        result["field"] = field;
+        result["value"] = value;
+        result["matchCount"] = matches.Count;
+        result["matches"] = matches;
+        return result;
+    }
+
+    /// <summary>Scans the library and persists the fresh index into the library root.</summary>
+    private static IndexData RebuildIndex(string root, string indexPath)
+    {
+        IndexData data = ClipMetaIndex.Build(root);
+        ClipMetaIndex.WriteToFile(data, indexPath);
+        return data;
+    }
+
+    // ── Shared plumbing ──────────────────────────────────────────────────────────────────
+
     /// <summary>Parses an MP4, converting Core's exceptions into model-readable refusals.</summary>
     internal static BoxNode ParseClip(string fullPath)
     {
@@ -109,6 +488,14 @@ public static class ReadTools
         }
     }
 
+    private static JsonArray ToJsonArray(IEnumerable<string> values)
+    {
+        var array = new JsonArray();
+        foreach (string value in values)
+            array.Add(value);
+        return array;
+    }
+
     /// <summary>Extracts a required string argument or refuses with a message naming it.</summary>
     internal static string GetRequiredString(JsonObject? args, string name)
     {
@@ -119,5 +506,41 @@ public static class ReadTools
             return text;
         }
         throw new ToolException($"The '{name}' argument is required and must be a non-empty string.");
+    }
+
+    /// <summary>
+    /// Extracts an optional string argument. Absent, JSON null, or blank all mean "not given"
+    /// (null); a present non-string value is a refusal, not a silent coercion.
+    /// </summary>
+    internal static string? GetOptionalString(JsonObject? args, string name)
+    {
+        JsonNode? node = args?[name];
+        if (node is null)
+            return null;
+        if (node is JsonValue value && value.TryGetValue(out string? text))
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        throw new ToolException($"The '{name}' argument must be a string when given.");
+    }
+
+    /// <summary>Extracts an optional boolean argument; a present non-boolean is a refusal.</summary>
+    internal static bool GetOptionalBool(JsonObject? args, string name, bool defaultValue)
+    {
+        JsonNode? node = args?[name];
+        if (node is null)
+            return defaultValue;
+        if (node is JsonValue value && value.TryGetValue(out bool flag))
+            return flag;
+        throw new ToolException($"The '{name}' argument must be true or false when given.");
+    }
+
+    /// <summary>Extracts an optional integer argument; a present non-integer is a refusal.</summary>
+    internal static int GetOptionalInt(JsonObject? args, string name, int defaultValue)
+    {
+        JsonNode? node = args?[name];
+        if (node is null)
+            return defaultValue;
+        if (node is JsonValue value && value.TryGetValue(out int number))
+            return number;
+        throw new ToolException($"The '{name}' argument must be an integer when given.");
     }
 }
