@@ -136,16 +136,28 @@ Core already provides everything the tools delegate to — no Core changes expec
 
 ## Phase 2 — read tools
 
-- [ ] `clip_get_stats` — Core primitives directly (`GetFields` + `FileInfo`), structured JSON
-  (`sizeBytes`, `fieldsSet`, `knownUnset`, `customFields`); known-field list from `ClipMetaSchema`.
-- [ ] `library_find` (`field`, `value`) → `ClipMetaFinder.Find` over the library root.
-- [ ] `library_vocab` (`field`) → `ClipMetaVocab.Enumerate`.
-- [ ] `library_export` (`format`: json|csv) → `ClipMetaExporter.GetRecords`; json returns the
-  records as structured content, csv returns the CSV text.
-- [ ] `library_search_index` (`rebuild?`, `field?`, `value?`) → `ClipMetaIndex` / `ClipMetaSearch`.
-- [ ] All directory-scoped tools operate on the sandbox root and **require** it to be configured
-  (refusal with the `CLIPMETA_LIBRARY_ROOT` explanation otherwise).
-- [ ] Tests per tool: happy path, empty library, unset root refusal.
+**Completed 2026-06-12** (all items; `library_list` added by user request after the E2E gate —
+he asked Claude to "show me the list of files in the directory" and no tool could: file
+*discovery* by name is a different need than metadata *search*).
+
+- [x] `clip_get_stats` — `ClipMetaStats.Categorize` over `GetUserFields` + `FileInfo`,
+  structured JSON (`sizeBytes`, `fieldsSet`, `knownUnset`, `customFields`).
+- [x] **`library_list` (added 2026-06-12)** (`subfolder?`, `pattern?`, `recursive?`, `limit?`) →
+  new Core `ClipMetaLibrary.ListClips`: name-only wildcard match, newest first, no parsing
+  (listing N clips costs N stat calls, not N MP4 parses). Capped (default 200, max 1000) with
+  an explicit `truncated` flag so the model knows to narrow. `subfolder` goes through the same
+  canonical containment check as clip paths (`LibrarySandbox.ResolveLibraryDirectory`).
+- [x] `library_find` (`field`, `value`) → `ClipMetaFinder.Find` over the library root.
+- [x] `library_vocab` (`field`) → `ClipMetaVocab.Enumerate`; counts ordered most-used-first.
+- [x] `library_export` (`format`: json|csv, `subfolder?`) → `ClipMetaExporter.GetRecords`; json
+  returns the records as structured content, csv returns the CSV text — via the new Core
+  `ClipMetaExporter.WriteCsv` (hoisted from the CLI's ExportCommand so both emit identical CSV).
+- [x] `library_search_index` (`rebuild?`, `field?`, `value?`) → `ClipMetaIndex` / `ClipMetaSearch`;
+  corrupt/unreadable index self-heals by rebuilding (it's a cache, never the source of truth).
+- [x] All directory-scoped tools operate on the sandbox root and **require** it to be configured
+  (refusal with the `CLIPMETA_LIBRARY_ROOT` explanation otherwise) — `LibrarySandbox.RequireRoot`.
+- [x] Tests per tool: happy path, empty library, unset root refusal (+ subfolder traversal
+  probe, CSV byte-equality vs the CLI, corrupt-index self-heal, truncation flag). Suite 385.
 
 ## Phase 3 — write tools
 
@@ -193,21 +205,21 @@ crash-proof SafeLogger around the shared log file, 2025-03-26 claim dropped (no 
 `id: null` → -32600, duplicate-field surfacing in clip_get_metadata, selftest stderr
 drain + timeout poisoning + dotnet-host spawn, ZipFile packaging.
 
-**Deferred — fold into phase 2 as pre-work:**
+**Deferred — fold into phase 2 as pre-work (all completed in PR #7, 2026-06-12):**
 
-- [ ] **Core `ClipMetaReader.GetUserFields`** (or `ClipMetaSchema.IsInternal`): the schema-field
+- [x] **Core `ClipMetaReader.GetUserFields`** (or `ClipMetaSchema.IsInternal`): the schema-field
   exclusion filter now exists in four places (Exporter, Index, StatsCommand, ReadTools); Core
   should own it once before phase 2 multiplies the copies. Note ListCommand does NOT filter it —
   decide deliberately whether that's a feature.
-- [ ] **Hoist stats categorization to Core** (`ClipMetaStats`) before building `clip_get_stats`,
+- [x] **Hoist stats categorization to Core** (`ClipMetaStats`) before building `clip_get_stats`,
   instead of re-implementing StatsCommand's fieldsSet/knownUnset/customFields in a second shell.
-- [ ] **`ToolDefinition` example-arguments member** so the stdout-purity test stops hand-mapping
+- [x] **`ToolDefinition` example-arguments member** so the stdout-purity test stops hand-mapping
   per-tool args — it must scale to the 9 tools of phases 2–3, especially write tools.
-- [ ] Build tool descriptions' multi-value-field sentence from `ClipMetaSchema.PipeFields`
+- [x] Build tool descriptions' multi-value-field sentence from `ClipMetaSchema.PipeFields`
   instead of prose listing the fields.
-- [ ] Derive `McpSession.ServerVersion` from the assembly informational version and make
+- [x] Derive `McpSession.ServerVersion` from the assembly informational version and make
   pack-mcpb.ps1 verify the manifest version matches.
-- [ ] Consider restructuring `Dispatch` so notification-vs-request is decided once (removes the
+- [x] Consider restructuring `Dispatch` so notification-vs-request is decided once (removes the
   repeated guards and `Id!` operators before more methods are added).
 
 **Robustness backlog (not gating):** bounded stdin line length (a no-newline multi-GB line
