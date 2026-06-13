@@ -8,6 +8,26 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-12 — File.Replace races antivirus on freshly-written files (fixed: bounded retry)
+- **Symptom:** The write suite intermittently failed (~1 test, ~30% of runs) with
+  `IOException: The process cannot access the file because it is being used by another process`
+  out of `Mp4Writer`'s final `File.Replace`. Diagnosed by looping the suite under a TRX logger
+  until it caught a red — it was always a *sharing violation*, never an assertion.
+- **Cause:** on Windows, antivirus / the Search indexer grabs a just-written file for a second
+  or two. The writer creates the temp, releases its own deny-writers handle, then calls
+  `File.Replace` — and if AV is mid-scan on the temp or the destination, ReplaceFile fails. The
+  writer correctly *failed safe* (refused, original untouched), but a clean write shouldn't lose
+  to a transient lock — and a real user tagging a clip seconds after a recorder made it could
+  hit the same thing.
+- **Fix:** `Mp4Writer.RetryOnTransientLock` wraps ONLY the final swap, retrying up to 5× with a
+  100 ms × attempt backoff on `IOException`/`UnauthorizedAccessException`. Safe by construction:
+  the temp is already fully written and verified before the swap, so retrying the atomic
+  operation weakens no guarantee; if every attempt fails the last exception still propagates
+  (fail safe, unchanged). Non-transient exceptions are not retried. Deterministic unit tests
+  drive the helper with zero delay (no real locks, no new timing-dependent flake).
+- **Lesson:** an atomic file swap on Windows must tolerate transient AV/indexer locks; retry the
+  *post-verification* swap, never the verification itself.
+
 ### 2026-06-12 — Media-integrity scanner's fixed window overran the final chunk (fixed test)
 - **Symptom:** Adding a new real clip (`ZC112.mp4`, mdat-first, 290 MB) made
   `RealClip_MultiFieldWrite_MediaByteIdentical` fail: "chunk table[1] entry 8931 points at
