@@ -8,6 +8,46 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-12 — Media-integrity scanner's fixed window overran the final chunk (fixed test)
+- **Symptom:** Adding a new real clip (`ZC112.mp4`, mdat-first, 290 MB) made
+  `RealClip_MultiFieldWrite_MediaByteIdentical` fail: "chunk table[1] entry 8931 points at
+  different data after rewrite ... the track would play garbage" — even though the mdat SHA-256
+  check (which runs first) PASSED, i.e. the media was provably byte-identical.
+- **Cause:** the WRITER was correct. `MediaIntegrityScanner` compares a fixed 64-byte window at
+  each chunk offset; ZC112's last chunk sits 38 bytes before mdat-end, so the window spilled 26
+  bytes into the following `moov` box — which legitimately changed when the test wrote metadata.
+  The mismatch at "index 40" was 2 bytes past the mdat boundary, i.e. non-media.
+- **Fix (test helper only):** `ClampToMdatEnd` bounds each comparison window to the end of the
+  mdat containing the offset, so only real sample bytes are compared. No production code
+  changed; ZC112 and the moov-first `Stargaze.mp4` both pass.
+- **Lesson:** chunk *sample* data is bounded by its mdat; a verifier reading a fixed span past a
+  boundary-hugging final chunk measures the next box, not the media. Diverse real clips (here a
+  chunk flush against mdat-end) surface harness assumptions that synthetic fixtures and
+  same-source clips never hit — exactly why the pristine set should span multiple creators.
+
+### 2026-06-12 — Clearing metadata left an ~80-byte schema/container husk (fixed)
+- **Symptom:** An agent hammering the MCP write tools noticed a clip that was tagged then fully
+  cleared came back ~80 bytes LARGER than pristine, twice (Stargaze 3,746,496 → 3,746,576;
+  ZC112 +80). The file *looked* bare (reads filter the internal field) but still carried a
+  `com.peckworkslab.clipmeta:schema=1` atom inside a live `udta→meta→hdlr→ilst` chain.
+- **Cause:** two gaps. (1) The schema stamp is only ADDED on value-storing writes, but nothing
+  ever REMOVED it when the last user field was deleted — `clip_clear_fields` (a delete-only
+  mutation, not clear-all) left it orphaned. (2) Even clear-all, which did sweep the schema
+  atom, left the now-empty `ilst`/`meta`/`udta` boxes behind.
+- **Fix (`Mp4Writer`):** `RemoveOrphanedSchemaStamp` adds the schema key to `DeleteFields` when
+  a mutation removes the last user field; `DetermineEmptyChainRemoval` then drops the emptied
+  container chain (innermost-out: ilst → meta-if-only-hdlr-left → udta-if-only-meta-left). A
+  write→clear round-trip is now byte-identical to pristine (new `WriteThenClearAll_ReturnsFile
+  ToBytePristine` test proves it on a moov-first fixture, offsets and all).
+- **Conservatism that matters:** the chain is dropped only when nothing else needs it. A
+  surviving clipmeta field, OR any foreign atom (iTunes `©nam`, another tool's `----`), keeps
+  the whole chain — tested by `ClearAll_WithForeignAtomPresent_KeepsChainAndForeignAtom`. The
+  moov-size prediction subtracts the exact removed-box size, and the existing hard moov-size
+  assert in `WriteMoov` is the backstop if that prediction is ever wrong.
+- **Lesson:** "remove the data" and "remove the now-empty containers that held it" are two
+  jobs; a rewriter that does only the first leaves growing cruft and makes "did we ever touch
+  this file" unanswerable.
+
 ### 2026-06-12 — Packed .mcpb install silently fails on the Microsoft Store build (workaround: unpacked)
 - **Symptom:** Settings → Extensions → Advanced settings → **Install Extension…** → pick
   `clipmeta.mcpb` → the file dialog closes and *nothing* happens. No toast, no error, no card.
@@ -79,8 +119,8 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ### 2026-06-10 — Parse and copy used separate file opens (fixed)
 - **Symptom (potential):** The writer parsed the source, closed it, then re-opened it to copy
-  bytes. A process writing to the file in between (Game Bar still recording the clip being
-  tagged) would make the copied bytes disagree with the parsed chunk offsets — torn output.
+  bytes. A process writing to the file in between (a capture tool still recording the clip
+  being tagged) would make the copied bytes disagree with the parsed chunk offsets — torn output.
 - **Fix:** One `FileShare.Read` (deny-writers) handle held across parse + copy via the new
   `Mp4Parser.Parse(FileStream)` overload. A live recorder now causes a clean up-front refusal
   ("another program has it open for writing") instead. The handle must be released *before*
@@ -145,8 +185,10 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
   stco/co64 entry (old offset in old file vs new offset in new file), on synthetic moov-first
   fixtures with two tracks and patterned chunks AND on every real pristine clip.
 - **Lesson:** For a file *rewriter*, round-trip tests must assert the payload bytes, not just
-  the structure. Also: all our real clips are mdat-first (Game Bar layout), so without a
-  moov-first fixture the offset-adjustment code path was never exercised at all.
+  the structure. Also: the real test clips that happen to be on hand are all mdat-first, so the
+  offset-adjustment code path is exercised ONLY by the synthetic moov-first fixtures. Layout is
+  a per-file fact, not a property of the source tool — never assume all clips share one layout;
+  both paths must stay covered regardless of what the real-clip sample looks like.
 
 ### 2026-06-09 — Build fails NU1100 on a machine with no NuGet source
 - **Symptom:** `dotnet build`/`restore` fails: `NU1100: Unable to resolve 'MSTest'`.
@@ -162,7 +204,7 @@ These are the things that **corrupt files silently** if missed. Each should have
 
 | # | Risk | Mitigation |
 |---|------|------------|
-| 1 | Fragmented MP4 (`moof` boxes — common with Xbox Game Bar) | Detect on parse; refuse write with a clear `UnsupportedFormatException`. |
+| 1 | Fragmented MP4 (`moof` boxes — produced by some streaming/live-capture recorders) | Detect on parse; refuse write with a clear `UnsupportedFormatException`. |
 | 2 | Only one `stco`/`co64` adjusted, others missed | Walk **ALL** `trak → stbl → stco/co64`. A stereo clip has video + audio tables; missing one desyncs that track. `Mp4WriteIntegrityTests` proves both tables on a two-track moov-first fixture byte-for-byte. |
 | 3 | `mean`/`name` FullBox 4-byte version+flags prefix omitted | Both are FullBoxes. Omitting the prefix shifts all following bytes → atom reads back as garbage. Unit test verifies byte structure. |
 | 4 | `hdlr` missing when creating `meta` from scratch | QuickTime/Final Cut **reject** a `meta` box with no `hdlr` (handler_type `mdir`). Scenario-3 test uses a file with no existing udta/meta/ilst. |

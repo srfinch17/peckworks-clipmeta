@@ -180,8 +180,19 @@ internal static class MediaIntegrityScanner
                 // The decisive check: whatever bytes the old offset addressed in the original,
                 // the new offset must address in the rewritten file. If the writer shifted an
                 // entry by the wrong delta (or forgot a table), this fails immediately.
-                int gotOld = ReadAt(fOrig, offsetsBefore[i], bytesAtOldOffset);
-                int gotNew = ReadAt(fNew, offsetsAfter[i], bytesAtNewOffset);
+                //
+                // The comparison window is clamped to the END of the mdat that contains the
+                // offset: a chunk near the mdat boundary (ZC112's last chunk sits 38 bytes from
+                // it) would otherwise have a fixed 64-byte read spill into the NEXT box — moov,
+                // which legitimately changed when metadata was written — and report a false
+                // "plays garbage". The chunk's actual sample bytes live inside mdat; comparing
+                // past mdat-end compares non-media. (mdat itself is already proven identical
+                // byte-for-byte by the SHA-256 check above, so this remains a strict offset
+                // check, just bounded to real media.)
+                int oldLimit = ClampToMdatEnd(offsetsBefore[i], before.MdatPayloads, bytesAtOldOffset.Length);
+                int newLimit = ClampToMdatEnd(offsetsAfter[i], after.MdatPayloads, bytesAtNewOffset.Length);
+                int gotOld = ReadAt(fOrig, offsetsBefore[i], bytesAtOldOffset, oldLimit);
+                int gotNew = ReadAt(fNew, offsetsAfter[i], bytesAtNewOffset, newLimit);
                 Assert.AreEqual(gotOld, gotNew,
                     $"chunk table[{t}] entry {i}: readable byte count differs " +
                     $"(old offset {offsetsBefore[i]}, new offset {offsetsAfter[i]})");
@@ -197,12 +208,30 @@ internal static class MediaIntegrityScanner
 
     // ── Low-level helpers ─────────────────────────────────────────────────────
 
-    /// <summary>Reads up to 64 bytes at an absolute offset; returns how many were available.</summary>
-    private static int ReadAt(FileStream f, long offset, byte[] buffer)
+    /// <summary>Reads up to <paramref name="maxCount"/> bytes at an absolute offset; returns how many were available.</summary>
+    private static int ReadAt(FileStream f, long offset, byte[] buffer, int maxCount)
     {
         if (offset < 0 || offset >= f.Length) return -1;   // offset points outside the file
         f.Position = offset;
-        return f.Read(buffer, 0, buffer.Length);
+        return f.Read(buffer, 0, Math.Min(maxCount, buffer.Length));
+    }
+
+    /// <summary>
+    /// How many bytes from <paramref name="offset"/> may be compared without reading past the
+    /// end of the mdat that contains it — capped at <paramref name="cap"/>. A chunk offset
+    /// addresses sample data inside some mdat; comparing beyond that mdat's last byte compares
+    /// non-media (the next box), which can change for legitimate reasons. If no mdat contains
+    /// the offset (unexpected), the full cap is allowed so the check still runs.
+    /// </summary>
+    private static int ClampToMdatEnd(long offset, List<(long Start, long Length)> mdats, int cap)
+    {
+        foreach (var (start, length) in mdats)
+        {
+            long end = start + length;
+            if (offset >= start && offset < end)
+                return (int)Math.Min(cap, end - offset);
+        }
+        return cap;
     }
 
     /// <summary>SHA-256 of a byte range, streamed in 1 MB blocks so huge mdats never load whole.</summary>

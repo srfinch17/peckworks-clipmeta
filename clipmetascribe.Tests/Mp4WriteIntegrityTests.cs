@@ -18,10 +18,12 @@ namespace ClipMetaScribe.Tests;
 ///   <item>When a file CANNOT be rewritten safely, the writer refuses up front, leaves the
 ///       original untouched, and cleans up its temp file.</item>
 /// </list>
-/// The moov-first fixtures matter most: all of our real test clips are mdat-first
-/// (ftyp, mdat, moov — the Game Bar layout), where chunk offsets never need adjusting. Only a
-/// moov-first file (the ffmpeg "+faststart" / iPhone-export layout) forces the writer to patch
-/// every stco entry, which is the single most corruption-prone operation in the codebase.
+/// The moov-first fixtures matter most: the real test clips that happen to be on hand are all
+/// mdat-first (ftyp, mdat, moov — a layout many screen recorders produce), where chunk offsets
+/// never need adjusting. But layout is a per-file fact, NOT a property of the source — clips
+/// from any tool may be either layout — so the moov-first path (which forces the writer to
+/// patch every stco entry, the single most corruption-prone operation in the codebase) is
+/// exercised here by synthetic moov-first fixtures rather than left to chance on real clips.
 /// </summary>
 [TestClass]
 public class Mp4WriteIntegrityTests
@@ -229,6 +231,117 @@ public class Mp4WriteIntegrityTests
 
         Assert.IsNotNull(FindClipmetaAtom(working, ClipMetaSchema.Schema),
             "a value-storing write must stamp the schema atom");
+    }
+
+    // ── Empty-container removal: clearing returns a file to pristine ────────────
+
+    [TestMethod]
+    public void WriteThenClearAll_ReturnsFileToBytePristine()
+    {
+        // The whole point of the empty-chain removal (field-discovered 2026-06-12): a clip that
+        // was bare, got tagged, then fully cleared must be byte-for-byte what it started as —
+        // no ~80-byte schema/container husk left behind. moov-first fixture, so the mdat offsets
+        // also have to round-trip exactly (grow on write, shrink back on clear).
+        var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
+
+        var set = new MetadataMutation();
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2";
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Tags)] = "a|b|c";
+        new Mp4Writer().WriteMetadata(working, set, NullLogger.Instance);
+        Assert.AreNotEqual(new FileInfo(original).Length, new FileInfo(working).Length,
+            "precondition: tagging must have grown the file");
+
+        new Mp4Writer().WriteMetadata(working, new MetadataMutation { ClearAll = true }, NullLogger.Instance);
+
+        CollectionAssert.AreEqual(File.ReadAllBytes(original), File.ReadAllBytes(working),
+            "a tag-then-clear round-trip must leave the file byte-identical to its original");
+    }
+
+    [TestMethod]
+    public void ClearAll_RemovesEmptyContainerChain_NoUdtaLeftBehind()
+    {
+        // After clearing the only metadata, the udta→meta→hdlr→ilst chain that held it is
+        // useless — it must be gone, not left as an empty husk.
+        var (_, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
+
+        var set = new MetadataMutation();
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";
+        new Mp4Writer().WriteMetadata(working, set, NullLogger.Instance);
+        Assert.IsNotNull(FindNode(Mp4Parser.ParseFile(working), n => n.Type == "udta"),
+            "precondition: tagging a chain-less fixture created a udta");
+
+        new Mp4Writer().WriteMetadata(working, new MetadataMutation { ClearAll = true }, NullLogger.Instance);
+
+        Assert.IsNull(FindNode(Mp4Parser.ParseFile(working), n => n.Type == "udta"),
+            "clearing the last metadata must drop the empty udta chain, not leave a husk");
+    }
+
+    [TestMethod]
+    public void ClearLastFieldByDelete_DropsOrphanedSchemaAndChain()
+    {
+        // Reproduces the exact field report: clip_clear_fields (a delete-only mutation, NOT
+        // clear-all) that removes the last user field must also take the orphaned schema stamp
+        // and the now-empty chain — otherwise the schema atom lingers invisibly.
+        var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
+
+        var set = new MetadataMutation();
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";
+        new Mp4Writer().WriteMetadata(working, set, NullLogger.Instance);
+
+        var delete = new MetadataMutation();
+        delete.DeleteFields.Add(ClipMetaSchema.AtomName(ClipMetaSchema.Game));
+        new Mp4Writer().WriteMetadata(working, delete, NullLogger.Instance);
+
+        Assert.IsNull(FindAnyClipmetaAtom(working),
+            "deleting the last user field must also remove the orphaned schema stamp");
+        CollectionAssert.AreEqual(File.ReadAllBytes(original), File.ReadAllBytes(working),
+            "delete-of-last-field must return the file to pristine too");
+    }
+
+    [TestMethod]
+    public void PartialClear_KeepsSurvivingFieldAndSchemaAndChain()
+    {
+        // The flip side: clearing ONE of several fields must keep the others, the schema stamp,
+        // and the container. Only an emptied-out ilst triggers removal.
+        var (_, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
+
+        var set = new MetadataMutation();
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Tags)] = "a|b";
+        new Mp4Writer().WriteMetadata(working, set, NullLogger.Instance);
+
+        var delete = new MetadataMutation();
+        delete.DeleteFields.Add(ClipMetaSchema.AtomName(ClipMetaSchema.Tags));
+        new Mp4Writer().WriteMetadata(working, delete, NullLogger.Instance);
+
+        Assert.IsNotNull(FindClipmetaAtom(working, ClipMetaSchema.Game), "surviving field must remain");
+        Assert.IsNull(FindClipmetaAtom(working, ClipMetaSchema.Tags), "cleared field must be gone");
+        Assert.IsNotNull(FindClipmetaAtom(working, ClipMetaSchema.Schema),
+            "the schema stamp must stay while any user field remains");
+    }
+
+    [TestMethod]
+    public void ClearAll_WithForeignAtomPresent_KeepsChainAndForeignAtom()
+    {
+        // Spec hazard #5, via the removal path: a non-clipmeta freeform atom (an iTunes-style
+        // foreign atom) keeps the container alive — clear-all strips OUR atoms only and must
+        // never drop a chain that still holds someone else's data.
+        const string foreignDomain = "com.apple.iTunes";
+        var (_, working) = SaveWithBackup(
+            MinimalMp4Builder.BuildMoovFirstWithPatternedMdat(foreignDomain, "rating", "5"));
+
+        var set = new MetadataMutation();
+        set.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";
+        new Mp4Writer().WriteMetadata(working, set, NullLogger.Instance);
+
+        new Mp4Writer().WriteMetadata(working, new MetadataMutation { ClearAll = true }, NullLogger.Instance);
+
+        var root = Mp4Parser.ParseFile(working);
+        Assert.IsNull(FindAnyClipmetaAtom(working), "clear-all must remove every clipmeta atom");
+        Assert.IsNotNull(FindNode(root, n => n.EditableKey == $"{foreignDomain}:rating"),
+            "a foreign atom must survive clear-all");
+        Assert.IsNotNull(FindNode(root, n => n.Type == "udta"),
+            "the container must NOT be dropped while a foreign atom still needs it");
     }
 
     // ── Real clips: every pristine clip survives a write byte-for-byte ──────────
