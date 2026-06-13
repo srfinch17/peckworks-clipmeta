@@ -100,6 +100,49 @@ public static class WriteTools
                 ["confirm"] = true,
                 ["backup"] = false,
             }));
+
+        registry.Register(new ToolDefinition(
+            "library_list_backups",
+            "Lists the timestamped backup copies the write tools created (named " +
+            "<clip>.mp4.bak-<timestamp>), newest first, with the clip each belongs to, its size, " +
+            "and when it was taken. Optional 'clip' limits the list to one clip's backups. " +
+            "Read-only. Requires a configured clips library. Use this to find what " +
+            "clip_restore_backup can restore, or what clip_prune_backups would remove.",
+            ListBackupsSchema(),
+            args => ListBackups(args, sandbox),
+            // Listing is path-independent; the example just exercises the happy path.
+            _ => new JsonObject()));
+
+        registry.Register(new ToolDefinition(
+            "clip_restore_backup",
+            "Restores a clip from one of its backups, overwriting the clip's current contents. " +
+            "Destructive (the current bytes are replaced), so it requires confirm:true — show " +
+            "the user which backup (from library_list_backups) and confirm first. The backup is " +
+            "validated as a complete MP4 before the swap; a corrupt backup is refused and the " +
+            "current file left untouched. The backup file itself is kept.",
+            RestoreBackupSchema(),
+            args => RestoreBackup(args, sandbox),
+            clipPath => new JsonObject
+            {
+                // A valid .bak-<stamp> name; the stdout-purity test creates a matching file.
+                ["backup"] = clipPath + ".bak-20200101-000000",
+                ["confirm"] = true,
+            }));
+
+        registry.Register(new ToolDefinition(
+            "clip_prune_backups",
+            "Deletes a clip's backup copies, keeping the newest 'keep' (default 0 = delete all). " +
+            "Destructive and irreversible: requires confirm:true. Only files matching this clip's " +
+            "<clip>.mp4.bak-<timestamp> backups are deleted — never the clip itself, never an " +
+            "unrelated file. Use library_list_backups first to see what would be removed.",
+            PruneBackupsSchema(),
+            args => PruneBackups(args, sandbox),
+            clipPath => new JsonObject
+            {
+                ["clip"] = clipPath,
+                ["keep"] = 0,
+                ["confirm"] = true,
+            }));
     }
 
     /// <summary>Well-known field names in schema order, for tool descriptions.</summary>
@@ -200,6 +243,63 @@ public static class WriteTools
         };
     }
 
+    private static JsonObject ListBackupsSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["clip"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Optional .mp4 clip whose backups to list. Omit to list all backups.",
+            },
+        },
+    };
+
+    private static JsonObject RestoreBackupSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["backup"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Path to the .bak-<timestamp> backup file to restore from " +
+                                  "(as reported by library_list_backups).",
+            },
+            ["confirm"] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "Must be literally true. Safety latch — restoring overwrites the clip.",
+            },
+        },
+        ["required"] = new JsonArray("backup", "confirm"),
+    };
+
+    private static JsonObject PruneBackupsSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["clip"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "The .mp4 clip whose backups to prune.",
+            },
+            ["keep"] = new JsonObject
+            {
+                ["type"] = "integer",
+                ["description"] = "How many of the newest backups to keep (default 0 = delete all).",
+            },
+            ["confirm"] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "Must be literally true. Safety latch — deletion is irreversible.",
+            },
+        },
+        ["required"] = new JsonArray("clip", "confirm"),
+    };
+
     // ── Handlers ─────────────────────────────────────────────────────────────────────────
 
     private static JsonObject SetFields(JsonObject? args, LibrarySandbox sandbox)
@@ -288,6 +388,140 @@ public static class WriteTools
             result => result["clearedAll"] = true);
     }
 
+    // ── Backup management handlers ─────────────────────────────────────────────────────────
+
+    private static JsonObject ListBackups(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+
+        // Optional clip filter: contain it in the library, but don't require it to exist — a
+        // user may want to see the backups of a clip they've since deleted.
+        string? clipFilter = null;
+        if (ReadTools.GetOptionalString(args, "clip") is string clipArg)
+            clipFilter = sandbox.ResolveContainedPath(clipArg, mustExist: false);
+
+        var backups = new JsonArray();
+        foreach (BackupInfo b in ClipBackup.ListBackups(root, clipFilter))
+        {
+            backups.Add(new JsonObject
+            {
+                ["backup"] = b.BackupPath,
+                ["clip"] = b.ClipPath,
+                ["sizeBytes"] = b.SizeBytes,
+                ["takenUtc"] = b.TakenUtc.ToString("O"),
+            });
+        }
+
+        return new JsonObject
+        {
+            ["directory"] = root,
+            ["clip"] = clipFilter,
+            ["backupCount"] = backups.Count,
+            ["backups"] = backups,
+        };
+    }
+
+    private static JsonObject RestoreBackup(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string backupPath = sandbox.ResolveContainedPath(
+            ReadTools.GetRequiredString(args, "backup"), mustExist: true);
+
+        if (args?["confirm"] is not JsonValue confirmValue ||
+            !confirmValue.TryGetValue(out bool confirmed) || !confirmed)
+        {
+            throw new ToolException(
+                "clip_restore_backup overwrites the clip with the backup and requires confirm:true. " +
+                "Confirm with the user, then call again with confirm:true.");
+        }
+
+        if (!ClipBackup.TryGetClipForBackup(backupPath, out string? clipPath))
+            throw new ToolException(
+                $"'{backupPath}' is not a clipmeta backup file (expected a name ending " +
+                ".mp4.bak-<timestamp>). Use library_list_backups to find valid backups.");
+
+        // The derived clip is a sibling of the (contained) backup, so it is contained too;
+        // single-flight with the write tools — restoring is a write.
+        WriteGate.Wait();
+        try
+        {
+            ClipBackup.Restore(backupPath, clipPath, NullLogger.Instance);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new ToolException(ex.Message); // corrupt backup refused; clip untouched
+        }
+        catch (IOException ex)
+        {
+            throw new ToolException($"Could not restore '{clipPath}': {ex.Message}");
+        }
+        finally
+        {
+            WriteGate.Release();
+        }
+
+        // Read the restored clip back so the model reports its actual post-restore state.
+        JsonObject result = ReadTools.GetMetadata(new JsonObject { ["path"] = clipPath }, sandbox);
+        result["restoredFrom"] = backupPath;
+        return result;
+    }
+
+    private static JsonObject PruneBackups(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        // Clip need not exist — prune the backups of a deleted clip too.
+        string clipPath = sandbox.ResolveContainedPath(
+            ReadTools.GetRequiredString(args, "clip"), mustExist: false);
+        int keep = Math.Max(0, ReadTools.GetOptionalInt(args, "keep", 0));
+
+        if (args?["confirm"] is not JsonValue confirmValue ||
+            !confirmValue.TryGetValue(out bool confirmed) || !confirmed)
+        {
+            throw new ToolException(
+                "clip_prune_backups permanently deletes backup files and requires confirm:true. " +
+                "Run library_list_backups first to see what would be removed, then call again " +
+                "with confirm:true.");
+        }
+
+        // ListBackups returns newest-first and only files matching the backup convention for
+        // this clip — so skipping the first `keep` and deleting the rest can never touch the
+        // clip itself or any unrelated file.
+        IReadOnlyList<BackupInfo> all = ClipBackup.ListBackups(root, clipPath);
+        var deleted = new JsonArray();
+        var kept = new JsonArray();
+        WriteGate.Wait();
+        try
+        {
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (i < keep) { kept.Add(all[i].BackupPath); continue; }
+                try
+                {
+                    File.Delete(all[i].BackupPath);
+                    deleted.Add(all[i].BackupPath);
+                }
+                catch (IOException ex)
+                {
+                    throw new ToolException(
+                        $"Deleted {deleted.Count} backup(s), then failed on " +
+                        $"'{all[i].BackupPath}': {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            WriteGate.Release();
+        }
+
+        return new JsonObject
+        {
+            ["clip"] = clipPath,
+            ["deletedCount"] = deleted.Count,
+            ["keptCount"] = kept.Count,
+            ["deleted"] = deleted,
+            ["kept"] = kept,
+        };
+    }
+
     // ── Shared write pipeline ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -309,10 +543,9 @@ public static class WriteTools
         bool dryRun = ReadTools.GetOptionalBool(args, "dry_run", defaultValue: false);
         mutation.DryRun = dryRun;
         // Timestamped sibling (clip.mp4.bak-20260612-153000): never silently overwrites a
-        // previous backup from an earlier session the user might still want.
-        mutation.BackupPath = backup && !dryRun
-            ? $"{fullPath}.bak-{DateTime.Now:yyyyMMdd-HHmmss}"
-            : null;
+        // previous backup the user might still want. The naming lives in Core (ClipBackup) so
+        // the backup-management tools recognize exactly what the writer produces.
+        mutation.BackupPath = backup && !dryRun ? ClipBackup.MakeBackupPath(fullPath) : null;
 
         WriteGate.Wait();
         try

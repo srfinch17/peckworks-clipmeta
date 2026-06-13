@@ -42,6 +42,11 @@ public class StdoutPurityTests
         mutation.SetFields[ClipMetaSchema.AtomName("game")] = "TF2";
         new Mp4Writer().WriteMetadata(clip, mutation, NullLogger.Instance);
 
+        // A real backup with the exact name clip_restore_backup's ExampleArguments references,
+        // so the backup tools (restore/prune) execute their happy path under stdout capture
+        // rather than short-circuiting on a missing file.
+        File.Copy(clip, clip + ".bak-20200101-000000");
+
         var registry = new ToolRegistry();
         var sandbox = new LibrarySandbox(_tempDir);
         ReadTools.RegisterAll(registry, sandbox);

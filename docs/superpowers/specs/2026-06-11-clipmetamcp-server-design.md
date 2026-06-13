@@ -317,3 +317,42 @@ integrity scanner.
 - MCP `prompts` capability (canned tagging workflows) and `resources` (expose the library index)
 - Streamable HTTP transport if a remote/shared-library scenario ever materializes
 - Round 4+: Web GUI, standalone `clipsearch`, MKV/MOV handlers (unchanged from prior spec)
+
+---
+
+## 9. Addendum — backup management tools (2026-06-12)
+
+**Why:** The first agent consumer's field report exposed a real gap: write tools create a
+`<clip>.mp4.bak-<timestamp>` sibling on every write (backup default ON, per §3), but **nothing
+can see those backups** — no list, no restore, no prune. A bulk tagging session buries the
+folder in multi-GB `.bak` copies the server itself can't manage, and the safety net (a backup
+you can't restore) is only half a net. Decision: keep backup-default-ON, close the gap with
+tools (chosen over flipping the default off or a silent retention sweep).
+
+**Core (`ClipBackup`)** — centralizes the convention currently hard-coded in `WriteTools`:
+- `MakeBackupPath(clipPath)` → `clip.mp4.bak-yyyyMMdd-HHmmss`. `WriteTools` switches to calling
+  this so the writer and the backup tools can never disagree on the naming scheme.
+- `TryGetClipForBackup(backupPath, out clipPath)` → recognizes the `.bak-<14-digit-stamp>`
+  suffix and yields the clip it belongs to; rejects anything else.
+- `ListBackups(directory, clipPath?)` → `(BackupPath, ClipPath, SizeBytes, TakenUtc)[]`, newest
+  first, recursive; ignores files that don't match the convention.
+- `Restore(backupPath, clipPath)` → **validate-then-swap**: the backup must parse as a complete
+  MP4 (`Mp4Parser` + the writer's whole-file-accounting gate) before it replaces the clip via
+  the same temp+`File.Replace` atomic path the writer uses. A corrupt backup is refused, the
+  clip untouched. Restoring does NOT consume the backup (it stays on disk).
+
+**MCP tools (3):**
+- `library_list_backups` (optional `clip`) — list backups across the library or for one clip:
+  owning clip, size, timestamp. Read-only; requires the configured library.
+- `clip_restore_backup` (`backup`, `confirm:true`) — overwrites the live clip with a backup.
+  Destructive (replaces current bytes), so it takes the same literal-`confirm:true` latch as
+  `clip_clear_all`; the backup is validated as real MP4 before the swap. Sandbox: both the
+  backup and the target clip must resolve inside the library (write-grade).
+- `clip_prune_backups` (`clip`, `keep` default 0, `confirm:true`) — deletes a clip's backups,
+  keeping the newest `keep`. The only tool that DELETES files, so: confirm latch, sandbox-
+  contained, and it touches only files matching the `.bak-<stamp>` convention for that clip —
+  never the clip itself, never a foreign `.bak`.
+
+**Out of scope for this addendum:** auto-pruning on write (keep the default dumb and
+predictable; let the agent/user prune deliberately), and unifying the CLI's `<clip>.bak`
+(no-timestamp) convention with the MCP's timestamped one — the CLI keeps its own.

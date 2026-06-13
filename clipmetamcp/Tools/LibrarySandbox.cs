@@ -124,6 +124,51 @@ public sealed class LibrarySandbox
     }
 
     /// <summary>
+    /// Resolves an arbitrary file path for a library-management operation (a backup file, or a
+    /// clip whose backups are being managed) and enforces canonical containment in the library.
+    /// Unlike <see cref="ResolveClipPath"/> it does NOT require a <c>.mp4</c> extension (backups
+    /// are <c>clip.mp4.bak-&lt;stamp&gt;</c>) and existence is the caller's choice — you can list
+    /// or prune the backups of a clip that has since been deleted. Requires a configured library
+    /// and rejects ADS syntax, exactly like the clip resolver.
+    /// </summary>
+    /// <param name="path">Absolute, or relative to the library root.</param>
+    /// <param name="mustExist">When true, refuses unless the file is present.</param>
+    public string ResolveContainedPath(string path, bool mustExist)
+    {
+        RequireRoot();
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ToolException("A non-empty 'path' is required.");
+
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path, Root!);
+        }
+        catch (ArgumentException)
+        {
+            throw new ToolException($"'{path}' is not a valid file path.");
+        }
+
+        if (Path.GetFileName(full).Contains(':'))
+            throw new ToolException(
+                $"'{path}' uses NTFS alternate-data-stream syntax, which is not supported.");
+
+        if (mustExist && !File.Exists(full))
+            throw new ToolException($"No file exists at '{full}'. Check the path and try again.");
+
+        // Canonical containment — junctions/symlinks resolved, same rule as ResolveClipPath.
+        // A nonexistent path can't be link-resolved, so judge it lexically (GetFullPath already
+        // collapsed ".."); an existing path is resolved through its reparse points.
+        string toCheck = File.Exists(full) || Directory.Exists(full) ? ResolveRealPath(full) : full;
+        if (!IsContained(toCheck, _canonicalRoot!))
+            throw new ToolException(
+                $"'{full}' is outside the configured clips library '{Root}'. " +
+                "Only files inside that folder can be accessed.");
+
+        return full;
+    }
+
+    /// <summary>
     /// Returns the configured library root, or refuses when none is set. Directory-scoped tools
     /// (list/find/vocab/export/index) have no meaningful "anywhere" mode — scanning an undefined
     /// directory tree on an LLM's behalf is exactly the surprise this sandbox exists to prevent —

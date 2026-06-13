@@ -975,6 +975,18 @@ public sealed class Mp4Writer : IMediaWriter
     /// </remarks>
     /// <exception cref="UnsupportedFormatException">When any byte of the file is unaccounted for.</exception>
     private static void VerifyParseAccountsForWholeFile(BoxNode root, string filePath)
+        => VerifyWholeFileAccounted(root, filePath);
+
+    /// <summary>
+    /// Public entry to the whole-file-accounting gate, so callers that adopt a file as
+    /// authoritative (e.g. <see cref="ClipBackup.Restore"/> validating a backup before swapping
+    /// it over the live clip) apply the SAME strictness the writer does before a write — the
+    /// parse must tile the whole file and contain no size-clamped (truncated) box.
+    /// </summary>
+    /// <param name="root">Parse tree from <see cref="Mp4Parser.ParseFile"/>.</param>
+    /// <param name="filePath">Path, for error messages.</param>
+    /// <exception cref="UnsupportedFormatException">When any byte of the file is unaccounted for.</exception>
+    public static void VerifyWholeFileAccounted(BoxNode root, string filePath)
     {
         long covered = 0;
         foreach (var child in root.Children)
