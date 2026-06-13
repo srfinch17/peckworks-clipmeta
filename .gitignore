@@ -11,7 +11,11 @@ dist/
 
 # Test clips (local only — too large for git)
 testclips/pristine/
-testclips/scratch/*.mp4
+# Everything in scratch is regenerated — copies plus write-engine temp artifacts
+# (clip.mp4.<guid>.tmp, File.Replace's clip.mp4~RFxxxx.TMP) — but keep the dir itself
+# (via .gitkeep) so a fresh clone has the path the tests expect.
+testclips/scratch/*
+!testclips/scratch/.gitkeep
 
 # Test results
 TestResults/
