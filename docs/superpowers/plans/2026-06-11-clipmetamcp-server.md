@@ -228,12 +228,19 @@ real use. Triage, folded into the phase-3 PR:
 
 ## Phase 5 — polish + Definition of Done
 
-- [ ] README install section (bundle install via Settings → Extensions → Advanced settings →
-  Install Extension…, SmartScreen note per R5, `--install` fallback,
-  `--selftest` for support).
-- [ ] PITFALLS entries for anything learned in phases 1–4.
-- [ ] Full manual E2E gate: tag a real clip conversationally; verify with `clipmetascribe --list`
-  and the integrity scanner; spec §7 checklist all green.
+- [x] README install section (bundle install via Settings → Extensions → Advanced settings →
+  Install Extension…, Store-build unpacked fallback, SmartScreen note per R5, `--install`
+  fallback, `--selftest` for support, tool inventory + safety summary). Done 2026-06-12.
+- [x] PITFALLS entries for anything learned in phases 1–4 — swept 2026-06-12: phase-1 era
+  entries (no drag-drop, Store packed-install bug, zip separators, garbage-parse leniency)
+  were recorded as they happened; phases 2–4 produced no new field gotchas to record.
+- [ ] **Full manual E2E gate (user):** tag a REAL clip conversationally in the actual clips
+  folder (not the test copies), then verify from the repo: `clipmetascribe --list` shows the
+  fields, and the media-integrity scanner proves the clip byte-identical to its pre-tag backup.
+  This also gives the first real-sized-library datapoint for `library_find` performance (field
+  report follow-up). Spec §7 status at 2026-06-12: items 1–4 and 6 green (409 tests, 0
+  warnings, zero NuGet, pack works, README done); item 5 passed on the test library — the
+  real-clip pass is what remains.
 
 ---
 
