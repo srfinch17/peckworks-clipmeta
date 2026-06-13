@@ -33,26 +33,21 @@ public static class ReadTools
 
         registry.Register(new ToolDefinition(
             "clip_get_metadata",
-            "Reads all clipmeta metadata fields stored inside one MP4 game clip. " +
-            "'path' must be an existing .mp4 file inside the configured clips library; " +
-            "relative paths resolve against the library root. " + PipeFieldsSentence,
+            "Reads everything about one MP4 game clip in a single call: all clipmeta metadata " +
+            "values, file size, which well-known fields are unset, and which set fields are " +
+            "custom names. 'path' must be an existing .mp4 file inside the configured clips " +
+            "library; relative paths resolve against the library root. " + PipeFieldsSentence +
+            " For MANY clips, do NOT call this per file — library_export returns every clip's " +
+            "metadata in one call, and library_search_index answers field queries in one call.",
             SinglePathSchema(),
             args => GetMetadata(args, sandbox),
             clipPath => new JsonObject { ["path"] = clipPath }));
 
         registry.Register(new ToolDefinition(
-            "clip_get_stats",
-            "Summarizes one MP4 game clip: file size plus which clipmeta fields are set, " +
-            "which well-known fields are unset, and which set fields are custom names. " +
-            "'path' must be an existing .mp4 file inside the configured clips library.",
-            SinglePathSchema(),
-            args => GetStats(args, sandbox),
-            clipPath => new JsonObject { ["path"] = clipPath }));
-
-        registry.Register(new ToolDefinition(
             "library_list",
             "Lists MP4 clip files in the clips library by file name (no metadata is read — " +
-            "use clip_get_metadata or library_find for that). Newest first. Optional 'pattern' " +
+            "to see every clip's metadata in one call use library_export; to query by field " +
+            "use library_find or library_search_index). Newest first. Optional 'pattern' " +
             "is a wildcard on the file name (e.g. '*2026.01*'), optional 'subfolder' restricts " +
             "to one folder inside the library, 'recursive' defaults to true, 'limit' caps the " +
             $"result (default {DefaultListLimit}). Requires a configured clips library.",
@@ -95,10 +90,10 @@ public static class ReadTools
         registry.Register(new ToolDefinition(
             "library_search_index",
             "Fast metadata search backed by an index file stored in the library root. " +
-            "Pass rebuild:true to (re)scan the library — do this once before searching, and " +
-            "again after clips are added or retagged; results reflect the index as of " +
-            "'indexBuilt'. With 'field' (and optional 'value' substring) returns matching " +
-            "clips; without, returns an index summary. Requires a configured clips library.",
+            "Results reflect the index as of 'indexBuilt'; the response's 'staleClipCount' " +
+            "says how many files changed since — pass rebuild:true when it is above zero. " +
+            "With 'field' (and optional 'value' substring) returns matching clips; without, " +
+            "returns an index summary. Requires a configured clips library.",
             SearchIndexSchema(),
             args => SearchIndex(args, sandbox),
             _ => new JsonObject { ["rebuild"] = true, ["field"] = "game", ["value"] = "TF2" }));
@@ -231,7 +226,13 @@ public static class ReadTools
 
     // ── Handlers ─────────────────────────────────────────────────────────────────────────
 
-    private static JsonObject GetMetadata(JsonObject? args, LibrarySandbox sandbox)
+    /// <summary>
+    /// One call, the whole picture. Field-report driven (2026-06-12): the first consumer agent
+    /// needed values AND set/unset/custom categorization for one clip and had to make two calls
+    /// (clip_get_metadata + the since-removed clip_get_stats), each a full MP4 parse. The file
+    /// is already parsed here — return everything.
+    /// </summary>
+    internal static JsonObject GetMetadata(JsonObject? args, LibrarySandbox sandbox)
     {
         string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
         BoxNode root = ParseClip(fullPath);
@@ -241,9 +242,10 @@ public static class ReadTools
         // written by another tagger): keep the FIRST occurrence and report the conflict, rather
         // than silently last-wins — the model must not present one value as authoritative when
         // the file disagrees with itself.
+        IReadOnlyList<(string Field, string Value)> userFields = ClipMetaReader.GetUserFields(root);
         var fields = new JsonObject();
         var duplicated = new JsonArray();
-        foreach ((string field, string value) in ClipMetaReader.GetUserFields(root))
+        foreach ((string field, string value) in userFields)
         {
             if (fields.ContainsKey(field))
             {
@@ -254,33 +256,21 @@ public static class ReadTools
             fields[field] = value;
         }
 
+        // Same categorization Core gives the CLI --stats command — one definition of
+        // set/unset/custom for every surface.
+        ClipMetaFieldStats stats = ClipMetaStats.Categorize(userFields);
+
         var result = new JsonObject
         {
             ["path"] = fullPath,
+            ["sizeBytes"] = new FileInfo(fullPath).Length,
             ["fields"] = fields,
+            ["knownUnset"] = ToJsonArray(stats.KnownUnset),
+            ["customFields"] = ToJsonArray(stats.CustomFields),
         };
         if (duplicated.Count > 0)
             result["duplicatedFields"] = duplicated; // names that appeared more than once; first value kept
         return result;
-    }
-
-    private static JsonObject GetStats(JsonObject? args, LibrarySandbox sandbox)
-    {
-        string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
-        BoxNode root = ParseClip(fullPath);
-
-        // Same categorization Core gives the CLI --stats command — one definition of
-        // set/unset/custom for every surface.
-        ClipMetaFieldStats stats = ClipMetaStats.Categorize(ClipMetaReader.GetUserFields(root));
-
-        return new JsonObject
-        {
-            ["path"] = fullPath,
-            ["sizeBytes"] = new FileInfo(fullPath).Length,
-            ["fieldsSet"] = ToJsonArray(stats.SetFields),
-            ["knownUnset"] = ToJsonArray(stats.KnownUnset),
-            ["customFields"] = ToJsonArray(stats.CustomFields),
-        };
     }
 
     private static JsonObject ListLibrary(JsonObject? args, LibrarySandbox sandbox)
@@ -434,6 +424,10 @@ public static class ReadTools
             ["indexBuilt"] = data.Built.ToString("O"),
             ["rebuilt"] = rebuilt,
             ["clipCount"] = data.Entries.Count,
+            // Field-report driven (2026-06-12): the agent had no way to know whether the index
+            // still matched the filesystem and had to guess about rebuild:true. This costs one
+            // stat call per file — no parsing — and makes the decision mechanical.
+            ["staleClipCount"] = CountStaleClips(root, data),
         };
 
         string? field = GetOptionalString(args, "field");
@@ -463,6 +457,38 @@ public static class ReadTools
         IndexData data = ClipMetaIndex.Build(root);
         ClipMetaIndex.WriteToFile(data, indexPath);
         return data;
+    }
+
+    /// <summary>
+    /// How many clips on disk disagree with the index: new files, deleted files, and files
+    /// whose size or last-write time changed since the index was built. Stat calls only.
+    /// </summary>
+    private static int CountStaleClips(string root, IndexData data)
+    {
+        var indexed = data.Entries.ToDictionary(
+            e => e.FilePath, e => e, StringComparer.OrdinalIgnoreCase);
+
+        int stale = 0;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string path in Directory.EnumerateFiles(root, "*.mp4", SearchOption.AllDirectories))
+        {
+            seen.Add(path);
+            if (!indexed.TryGetValue(path, out IndexEntry? entry))
+            {
+                stale++; // new file the index has never seen
+                continue;
+            }
+            var info = new FileInfo(path);
+            if (info.Length != entry.FileSizeBytes ||
+                new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero) != entry.LastModified)
+            {
+                stale++; // modified (retagged clips change both, but either alone counts)
+            }
+        }
+
+        // Indexed entries whose files are gone are stale too — searches would return ghosts.
+        stale += indexed.Keys.Count(path => !seen.Contains(path));
+        return stale;
     }
 
     // ── Shared plumbing ──────────────────────────────────────────────────────────────────

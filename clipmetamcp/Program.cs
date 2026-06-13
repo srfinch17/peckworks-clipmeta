@@ -53,6 +53,7 @@ internal static class Program
             var sandbox = LibrarySandbox.FromEnvironment();
             var registry = new ToolRegistry();
             ReadTools.RegisterAll(registry, sandbox);
+            WriteTools.RegisterAll(registry, sandbox);
 
             logger.Log(
                 $"clipmetamcp {McpSession.ServerVersion} serving; protocol {McpSession.LatestProtocolVersion}; " +
