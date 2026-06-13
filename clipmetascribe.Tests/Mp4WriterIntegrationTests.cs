@@ -35,12 +35,13 @@ public class Mp4WriterIntegrationTests
     }
 
     public static IEnumerable<object[]> PristineClips()
-        => TestClipsLocator.AllPristine().Select(p => new object[] { p });
+        => TestClipsLocator.PristineClipRows();
 
     [DataTestMethod]
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_SetGameField_RoundTrips(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratchPath = PrepareScratch(pristinePath);
         var mutation = new MetadataMutation();
         mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2";
@@ -58,6 +59,7 @@ public class Mp4WriterIntegrationTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_SetTagsField_RoundTrips(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratchPath = PrepareScratch(pristinePath);
         var mutation = new MetadataMutation();
         mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Tags)] = "rocket jump|headshot";
@@ -75,6 +77,7 @@ public class Mp4WriterIntegrationTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_WriteAllFields_AllRoundTrip(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratchPath = PrepareScratch(pristinePath);
         var mutation = new MetadataMutation();
         mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2";
@@ -99,6 +102,7 @@ public class Mp4WriterIntegrationTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_ForeignAtoms_Preserved(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         var rootBefore = Mp4Parser.ParseFile(pristinePath);
         var ilst = FindNode(rootBefore, n => n.Type == "ilst");
         var foreignAtomsBefore = ilst?.Children
@@ -127,6 +131,7 @@ public class Mp4WriterIntegrationTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_OriginalUnchanged_WhenDryRun(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         byte[] before = File.ReadAllBytes(pristinePath);
         var mutation = new MetadataMutation { DryRun = true };
         mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";
@@ -141,6 +146,7 @@ public class Mp4WriterIntegrationTests
     [DynamicData(nameof(PristineClips), DynamicDataSourceType.Method)]
     public void Write_NoTempFileLeft_AfterSuccess(string pristinePath)
     {
+        TestClipsLocator.SkipIfMissing(pristinePath);
         string scratchPath = PrepareScratch(pristinePath);
         var mutation = new MetadataMutation();
         mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "TF2";

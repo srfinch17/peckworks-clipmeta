@@ -1,0 +1,55 @@
+name: CI
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# REVISIT LATER — make CI exercise REAL clips.
+# The real-clip integration tests (media-integrity hashing, real-MP4 round-trips) currently
+# SKIP on CI: the clips in testclips/pristine/ are git-ignored (large, personal footage), so a
+# fresh cloud runner has none, and TestClipsLocator reports those tests Inconclusive ("graceful
+# skip") instead of failing. So CI today proves: the build is clean, and every synthetic / unit
+# / protocol / sandbox / write-engine-logic test passes — but NOT the real-clip media path.
+# To close that gap later (see memory note "ci-setup"), pick one:
+#   1. commit a couple of tiny, throwaway (non-personal) sample .mp4s just for CI;
+#   2. fetch clips in a pre-test step from a private store / GitHub Release / artifact;
+#   3. use a self-hosted runner that already has the clips.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+# A newer push to the same ref cancels an in-flight run for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Windows-specific behavior is load-bearing here: File.Replace + the antivirus-retry,
+    # NTFS alternate-data-stream sandbox checks, junction/path containment, win-x64 publish.
+    # Running on ubuntu would make several tests meaningless — keep it on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      # Definition of Done requires 0 warnings; -warnaserror enforces it so a warning can't creep in.
+      - name: Build (Release, warnings = errors)
+        run: dotnet build --configuration Release --no-restore -warnaserror
+
+      # Real-clip tests report Inconclusive (skipped) here — that does NOT fail the run.
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      # Proves the MCP server actually spawns and completes the stdio handshake — no clips needed.
+      - name: MCP server self-test
+        run: dotnet run --project clipmetamcp --configuration Release --no-build -- --selftest
