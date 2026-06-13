@@ -30,6 +30,25 @@ $distDir    = Join-Path $repoRoot 'dist'
 $stageDir   = Join-Path $distDir 'mcpb-stage'
 $mcpbPath   = Join-Path $distDir 'clipmeta.mcpb'
 
+# Deletes a directory tree, retrying briefly on transient sharing violations. On Windows the
+# antivirus/Search-indexer often grabs a just-written file for a second or two, so a Remove-Item
+# immediately after staging can fail with "being used by another process" — observed on this
+# repo. Retry with a short backoff rather than failing a clean pack over a transient lock.
+function Remove-DirWithRetry([string]$path) {
+    if (-not (Test-Path $path)) { return }
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try { Remove-Item $path -Recurse -Force -ErrorAction Stop; return }
+        catch [System.IO.IOException] {
+            if ($attempt -eq 5) { throw }
+            Start-Sleep -Milliseconds (200 * $attempt)
+        }
+        catch [System.UnauthorizedAccessException] {
+            if ($attempt -eq 5) { throw }
+            Start-Sleep -Milliseconds (200 * $attempt)
+        }
+    }
+}
+
 # ── 1. Publish: one self-contained exe, runtime bundled ─────────────────────────────
 Write-Host "Publishing clipmetamcp ($Configuration / $Runtime)..."
 dotnet publish $projectDir -c $Configuration -r $Runtime --self-contained true `
@@ -55,7 +74,7 @@ if ($exeVersion -ne $manifest.version) {
 }
 
 # ── 2. Stage the bundle layout: manifest.json + server/clipmetamcp.exe ──────────────
-if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
+Remove-DirWithRetry $stageDir
 New-Item -ItemType Directory -Force (Join-Path $stageDir 'server') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'mcpb-manifest.json') (Join-Path $stageDir 'manifest.json')
 Copy-Item $exePath (Join-Path $stageDir 'server\clipmetamcp.exe')
@@ -65,7 +84,7 @@ Copy-Item $exePath (Join-Path $stageDir 'server\clipmetamcp.exe')
 # no-op; see PITFALLS 2026-06-12). The working install path there is "Install Unpacked
 # Extension" pointed at exactly this folder, so it ships next to the bundle.
 $unpackedDir = Join-Path $distDir 'clipmeta-unpacked'
-if (Test-Path $unpackedDir) { Remove-Item $unpackedDir -Recurse -Force }
+Remove-DirWithRetry $unpackedDir
 Copy-Item $stageDir $unpackedDir -Recurse
 
 # ── 3. Zip: a .mcpb is just a zip with a manifest at its root ───────────────────────
@@ -77,7 +96,7 @@ Copy-Item $stageDir $unpackedDir -Recurse
 Remove-Item $mcpbPath -Force -ErrorAction SilentlyContinue
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($stageDir, $mcpbPath)
-Remove-Item $stageDir -Recurse -Force
+Remove-DirWithRetry $stageDir
 
 $sizeMb = (Get-Item $mcpbPath).Length / 1MB
 Write-Host ("Packed {0}  ({1:N1} MB)" -f $mcpbPath, $sizeMb)

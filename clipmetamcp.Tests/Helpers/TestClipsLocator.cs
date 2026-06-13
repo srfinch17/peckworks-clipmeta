@@ -19,8 +19,16 @@ internal static class TestClipsLocator
         throw new DirectoryNotFoundException("testclips/pristine not found from " + AppContext.BaseDirectory);
     }
 
+    /// <summary>
+    /// All pristine .mp4 clips, ordered deterministically by file name. Sorting matters:
+    /// <c>Directory.EnumerateFiles</c> order is filesystem-defined and NOT guaranteed stable
+    /// between runs, so tests doing <c>AllPristine().First()</c> would otherwise pick a
+    /// different clip run-to-run — an order-dependent flake. A fixed order makes "the first
+    /// clip" reproducible.
+    /// </summary>
     public static IEnumerable<string> AllPristine()
-        => Directory.EnumerateFiles(FindPristinePath(), "*.mp4");
+        => Directory.EnumerateFiles(FindPristinePath(), "*.mp4")
+                    .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The smallest pristine clip — deterministic, and orders of magnitude less I/O than
