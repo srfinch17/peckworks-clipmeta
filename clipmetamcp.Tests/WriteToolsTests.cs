@@ -1,0 +1,377 @@
+using System.Security.Cryptography;
+using System.Text.Json.Nodes;
+using ClipMetaMcp.Tests.Helpers;
+using ClipMetaScribe.Tests.Helpers;
+
+namespace ClipMetaMcp.Tests;
+
+/// <summary>
+/// End-to-end tests for the phase-3 write tools, driven through the full session → registry →
+/// sandbox → Mp4Writer pipeline against real clips. Unlike the read-tool tests these MUST copy
+/// a pristine clip per test — every test mutates its own file.
+///
+/// The safety contract under test (spec §3):
+/// backup defaults ON, dry_run never touches bytes, clear_all demands confirm:true,
+/// writes refuse without a configured library, and — the one that matters most to the user —
+/// the media bytes survive every MCP-driven write (proved by the independent integrity
+/// scanner, source-linked from clipmetascribe.Tests).
+/// </summary>
+[TestClass]
+public class WriteToolsTests
+{
+    private string _lib = null!;
+
+    [TestInitialize]
+    public void SetUp()
+    {
+        _lib = Path.Combine(Path.GetTempPath(), "clipmeta-p3-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_lib);
+    }
+
+    [TestCleanup]
+    public void TearDown()
+    {
+        if (Directory.Exists(_lib))
+            Directory.Delete(_lib, recursive: true);
+    }
+
+    /// <summary>Copies the smallest pristine clip into the library and returns its path.</summary>
+    private string PrepareClip(string fileName = "clip.mp4")
+    {
+        string dest = Path.Combine(_lib, fileName);
+        File.Copy(TestClipsLocator.SmallestPristine(), dest);
+        return dest;
+    }
+
+    private JsonObject Call(string tool, JsonObject arguments, string? libraryRoot = "lib")
+    {
+        string? root = libraryRoot == "lib" ? _lib : libraryRoot;
+        var responses = McpHarness.Run(root,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, tool, arguments));
+        return (JsonObject)responses[1]["result"]!;
+    }
+
+    private JsonObject ReadFields(string path)
+    {
+        JsonObject result = Call("clip_get_metadata", new JsonObject { ["path"] = path });
+        Assert.IsNull(result["isError"]);
+        return (JsonObject)result["structuredContent"]!["fields"]!;
+    }
+
+    private static JsonObject Structured(JsonObject result) => (JsonObject)result["structuredContent"]!;
+
+    private static string ErrorText(JsonObject result) =>
+        result["content"]![0]!["text"]!.GetValue<string>();
+
+    private static void AssertOk(JsonObject result) =>
+        Assert.IsNull(result["isError"], "expected success but got: " + ErrorText(result));
+
+    private static void AssertRefused(JsonObject result, string messageFragment)
+    {
+        Assert.IsTrue(result["isError"]?.GetValue<bool>(), "expected a tool refusal");
+        StringAssert.Contains(ErrorText(result), messageFragment);
+    }
+
+    private string[] BackupFiles() => Directory.GetFiles(_lib, "*.bak-*");
+
+    // ── clip_set_fields ──────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void SetFields_WritesValues_VerifiedByIndependentReRead()
+    {
+        string clip = PrepareClip();
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject
+            {
+                ["game"] = "Team Fortress 2",
+                ["tags"] = "win|comeback",
+                ["map"] = "2fort",
+            },
+        });
+
+        AssertOk(result);
+        JsonObject s = Structured(result);
+        Assert.IsFalse(s["dryRun"]!.GetValue<bool>());
+        CollectionAssert.AreEquivalent(
+            new[] { "game", "tags", "map" },
+            s["setFields"]!.AsArray().Select(n => n!.GetValue<string>()).ToList());
+        // The response's fields block is a post-write read-back, but verify independently too.
+        JsonObject fields = ReadFields(clip);
+        Assert.AreEqual("Team Fortress 2", fields["game"]!.GetValue<string>());
+        Assert.AreEqual("win|comeback", fields["tags"]!.GetValue<string>());
+    }
+
+    [TestMethod]
+    public void SetFields_BackupDefaultsOn_TimestampedSiblingCreated()
+    {
+        string clip = PrepareClip();
+        long originalLength = new FileInfo(clip).Length;
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+        });
+
+        AssertOk(result);
+        string? backupPath = Structured(result)["backupPath"]?.GetValue<string>();
+        Assert.IsNotNull(backupPath, "backup must be on by default");
+        StringAssert.Contains(backupPath, ".bak-");
+        Assert.IsTrue(File.Exists(backupPath));
+        Assert.AreEqual(originalLength, new FileInfo(backupPath).Length,
+            "the backup is the pre-write original");
+    }
+
+    [TestMethod]
+    public void SetFields_BackupFalse_NoBakFileAndNullInResponse()
+    {
+        string clip = PrepareClip();
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        Assert.IsNull(Structured(result)["backupPath"]?.GetValue<string>());
+        Assert.AreEqual(0, BackupFiles().Length);
+    }
+
+    [TestMethod]
+    public void SetFields_EmptyString_DeletesFieldAndReportsIt()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2", ["notes"] = "temp" },
+            ["backup"] = false,
+        }));
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["notes"] = "" },
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        CollectionAssert.AreEqual(new[] { "notes" },
+            Structured(result)["deletedFields"]!.AsArray().Select(n => n!.GetValue<string>()).ToList());
+        JsonObject fields = ReadFields(clip);
+        Assert.IsNull(fields["notes"], "empty string is the delete idiom");
+        Assert.AreEqual("TF2", fields["game"]!.GetValue<string>(), "other fields untouched");
+    }
+
+    [TestMethod]
+    public void SetFields_InvalidRating_IsFriendlyRefusal_SessionSurvives()
+    {
+        string clip = PrepareClip();
+
+        var responses = McpHarness.Run(_lib,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "clip_set_fields", new JsonObject
+            {
+                ["path"] = clip,
+                ["fields"] = new JsonObject { ["rating"] = "five stars" },
+                ["backup"] = false,
+            }),
+            McpHarness.Request(3, "ping"));
+
+        var result = (JsonObject)responses[1]["result"]!;
+        AssertRefused(result, "Invalid value");
+        Assert.AreEqual(3, responses[2]["id"]?.GetValue<int>(), "session must survive the refusal");
+        Assert.AreEqual(0, ReadFields(clip).Count, "nothing may have been written");
+    }
+
+    // ── clip_append_field ────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void AppendField_MergesIntoPipeList()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["tags"] = "win" },
+            ["backup"] = false,
+        }));
+
+        JsonObject result = Call("clip_append_field", new JsonObject
+        {
+            ["path"] = clip,
+            ["field"] = "tags",
+            ["value"] = "comeback",
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        Assert.AreEqual("win|comeback", ReadFields(clip)["tags"]!.GetValue<string>());
+    }
+
+    // ── clip_clear_fields ────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ClearFields_RemovesOnlyNamedFields()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2", ["tags"] = "win" },
+            ["backup"] = false,
+        }));
+
+        JsonObject result = Call("clip_clear_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonArray("tags"),
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        JsonObject fields = ReadFields(clip);
+        Assert.IsNull(fields["tags"]);
+        Assert.AreEqual("TF2", fields["game"]!.GetValue<string>());
+    }
+
+    // ── clip_clear_all ───────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ClearAll_WithoutConfirm_IsRefusedAndNothingChanges()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+            ["backup"] = false,
+        }));
+
+        // No confirm at all, and the string "true" — both must refuse (literal boolean only).
+        AssertRefused(Call("clip_clear_all", new JsonObject { ["path"] = clip }), "confirm:true");
+        AssertRefused(Call("clip_clear_all", new JsonObject { ["path"] = clip, ["confirm"] = "true" }),
+            "confirm:true");
+        Assert.AreEqual("TF2", ReadFields(clip)["game"]!.GetValue<string>());
+    }
+
+    [TestMethod]
+    public void ClearAll_WithConfirm_RemovesEverything()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2", ["map"] = "2fort" },
+            ["backup"] = false,
+        }));
+
+        JsonObject result = Call("clip_clear_all", new JsonObject
+        {
+            ["path"] = clip,
+            ["confirm"] = true,
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        Assert.IsTrue(Structured(result)["clearedAll"]!.GetValue<bool>());
+        Assert.AreEqual(0, ReadFields(clip).Count,
+            "clear-all must leave no clipmeta fields (including the schema stamp)");
+    }
+
+    // ── dry run ──────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void DryRun_LeavesEveryByteUntouched_NoBackup()
+    {
+        string clip = PrepareClip();
+        byte[] before = SHA256.HashData(File.ReadAllBytes(clip));
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+            ["dry_run"] = true,
+        });
+
+        AssertOk(result);
+        JsonObject s = Structured(result);
+        Assert.IsTrue(s["dryRun"]!.GetValue<bool>());
+        Assert.IsNull(s["backupPath"]?.GetValue<string>(), "a dry run must not create backups");
+        CollectionAssert.AreEqual(before, SHA256.HashData(File.ReadAllBytes(clip)),
+            "dry run must not change a single byte");
+        Assert.AreEqual(0, BackupFiles().Length);
+    }
+
+    // ── sandbox ──────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void Write_NoRootConfigured_IsRefusedOutright()
+    {
+        // Reads are allowed anywhere when unconfigured; writes are NOT (spec §3).
+        string clip = PrepareClip();
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+        }, libraryRoot: null);
+
+        AssertRefused(result, "Writing is disabled");
+    }
+
+    [TestMethod]
+    public void Write_PathOutsideRoot_IsRefused()
+    {
+        string clip = PrepareClip();
+        string innerRoot = Path.Combine(_lib, "library");
+        Directory.CreateDirectory(innerRoot);
+
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2" },
+        }, libraryRoot: innerRoot);
+
+        AssertRefused(result, "outside the configured clips library");
+    }
+
+    // ── media integrity (the test that matters most) ─────────────────────────────────────
+
+    [TestMethod]
+    public void McpWriteLifecycle_MediaBytesIdentical_ByIndependentScanner()
+    {
+        // set → append → clear one → clear all, then prove the video/audio payload and every
+        // chunk offset survived — using the scanner that shares no code with the writer.
+        string pristine = TestClipsLocator.SmallestPristine();
+        string clip = PrepareClip();
+
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "TF2", ["tags"] = "a|b", ["rating"] = "5" },
+            ["backup"] = false,
+        }));
+        AssertOk(Call("clip_append_field", new JsonObject
+        {
+            ["path"] = clip, ["field"] = "tags", ["value"] = "c", ["backup"] = false,
+        }));
+        AssertOk(Call("clip_clear_fields", new JsonObject
+        {
+            ["path"] = clip, ["fields"] = new JsonArray("rating"), ["backup"] = false,
+        }));
+        MediaIntegrityScanner.AssertMediaUnchanged(pristine, clip);
+
+        AssertOk(Call("clip_clear_all", new JsonObject
+        {
+            ["path"] = clip, ["confirm"] = true, ["backup"] = false,
+        }));
+        MediaIntegrityScanner.AssertMediaUnchanged(pristine, clip);
+    }
+}

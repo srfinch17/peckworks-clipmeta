@@ -161,18 +161,49 @@ he asked Claude to "show me the list of files in the directory" and no tool coul
 
 ## Phase 3 — write tools
 
-- [ ] `WriteTools.cs`: `clip_set_fields`, `clip_append_field`, `clip_clear_fields`,
+**Completed 2026-06-12.**
+
+- [x] `WriteTools.cs`: `clip_set_fields`, `clip_append_field`, `clip_clear_fields`,
   `clip_clear_all` — each builds a `MetadataMutation` (field names through
   `ClipMetaSchema.AtomName`) and calls `Mp4Writer.WriteMetadata`.
-- [ ] Safety semantics (spec §3): `backup` defaults **true** (timestamped sibling
+- [x] Safety semantics (spec §3): `backup` defaults **true** (timestamped sibling
   `<name>.mp4.bak-yyyyMMdd-HHmmss`); `dry_run` honored; `clip_clear_all` refuses without literal
-  `confirm: true`; sandbox check uses a **write**-grade message.
-- [ ] Single-flight: one process-wide `SemaphoreSlim(1,1)` around write-tool dispatch (R8).
-- [ ] Result payload echoes: what changed, backup path (or null), dry-run flag — truthful
-  reporting for the model.
-- [ ] Tests: each write verified by re-read; backup appears by default and respects
-  `backup: false`; dry-run leaves bytes identical; `confirm` refusal; outside-root refusal;
-  **media-integrity check with the existing scanner** after MCP-driven writes.
+  boolean `confirm: true` (the string `"true"` refuses too — tested); sandbox check uses a
+  **write**-grade message (`LibrarySandbox.ResolveWritePath`; writes hard-refuse with no root,
+  unlike single-clip reads).
+- [x] Single-flight: one process-wide `SemaphoreSlim(1,1)` around write execution (R8).
+- [x] Result payload echoes: what changed (set/deleted/appended/cleared), backup path (or
+  null), dry-run flag — plus a **post-write read-back** of the clip's metadata (one extra
+  parse buys the model ground truth instead of an assumption).
+- [x] Tests (13): each write verified by re-read; backup appears by default and respects
+  `backup: false`; dry-run leaves bytes hash-identical and creates no backup; `confirm`
+  refusal (missing AND string-typed); no-root and outside-root refusals; invalid rating →
+  friendly refusal + session survives; **media-integrity scanner** (source-linked from
+  clipmetascribe.Tests) proves media bytes + chunk offsets survive a full MCP-driven
+  set→append→clear→clear-all lifecycle.
+
+## Post-phase-2 field report from the first agent consumer (2026-06-12)
+
+The user had Claude Desktop (Opus, using the live extension) critique the tool surface after
+real use. Triage, folded into the phase-3 PR:
+
+**Accepted:**
+- Cross-references in tool descriptions ("for many clips use library_export / search_index") —
+  the agent never found library_export because nothing routed it there; agents route on
+  descriptions.
+- `clip_get_metadata` enriched with `sizeBytes` + `knownUnset` + `customFields`, and
+  **`clip_get_stats` removed** — values + categorization previously cost 2 calls and 2 full
+  parses of an already-parsed file; a tighter surface also routes better.
+- `staleClipCount` in every `library_search_index` response (stat calls only) — the agent had
+  no signal for when to pass `rebuild:true`.
+
+**Deferred (with reasons):**
+- Per-clip `hasTags`/`fieldCount` in `library_list` — would put parsing back into the one tool
+  designed never to parse; the description cross-refs + `library_export` answer "what's
+  tagged?" in one call already. Revisit only if field reports still show N+1 loops.
+- ASCII atom-tree format option, MCP Apps `ui://` HTML, MCP prompts, `outputSchema` — UI/
+  presentation track, exploratory; spec deliberately skipped `outputSchema` in v1. Backlog.
+- `library_find` performance at scale — needs a real-sized library; user doesn't have one yet.
 
 ## Phase 4 — install fallback + full selftest
 

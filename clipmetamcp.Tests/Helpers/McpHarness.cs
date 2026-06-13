@@ -36,7 +36,9 @@ internal static class McpHarness
     public static IReadOnlyList<JsonObject> Run(string? libraryRoot, params string[] requestLines)
     {
         var registry = new ToolRegistry();
-        ReadTools.RegisterAll(registry, new LibrarySandbox(libraryRoot));
+        var sandbox = new LibrarySandbox(libraryRoot);
+        ReadTools.RegisterAll(registry, sandbox);
+        WriteTools.RegisterAll(registry, sandbox);
 
         using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
         using var output = new StringWriter();

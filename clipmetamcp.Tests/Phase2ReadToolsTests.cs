@@ -90,7 +90,7 @@ public class Phase2ReadToolsTests
     // ── tools/list surface ───────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public void ToolsList_ContainsAllSevenReadTools()
+    public void ToolsList_ContainsTheFullToolSurface()
     {
         var responses = McpHarness.Run(_lib,
             McpHarness.InitializeRequest,
@@ -102,42 +102,33 @@ public class Phase2ReadToolsTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "clip_get_metadata", "clip_get_stats", "library_list", "library_find",
+                "clip_get_metadata", "library_list", "library_find",
                 "library_vocab", "library_export", "library_search_index",
+                "clip_set_fields", "clip_append_field", "clip_clear_fields", "clip_clear_all",
             },
             names,
-            "tools/list must expose the full phase-2 read surface in registration order");
+            "tools/list must expose the read + write surface in registration order");
     }
 
-    // ── clip_get_stats ───────────────────────────────────────────────────────────────────
+    // ── clip_get_metadata enrichment (phase-3 field report: one call, whole picture) ──────
 
     [TestMethod]
-    public void GetStats_CategorizesSetUnsetAndCustom()
+    public void GetMetadata_IncludesSizeAndFieldCategorization()
     {
-        JsonObject result = Call("clip_get_stats", new JsonObject { ["path"] = _taggedPath });
+        JsonObject result = Call("clip_get_metadata", new JsonObject { ["path"] = _taggedPath });
 
         AssertOk(result);
         JsonObject s = Structured(result);
         Assert.IsTrue(s["sizeBytes"]!.GetValue<long>() > 0);
-
-        var fieldsSet = s["fieldsSet"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
-        CollectionAssert.IsSubsetOf(new[] { "game", "tags", "map" }, fieldsSet);
-        CollectionAssert.DoesNotContain(fieldsSet, ClipMetaSchema.Schema,
-            "internal schema field must not appear in stats");
+        Assert.AreEqual("Team Fortress 2", s["fields"]!["game"]!.GetValue<string>(),
+            "values and categorization must come from ONE call");
 
         var knownUnset = s["knownUnset"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         CollectionAssert.IsSubsetOf(new[] { "players", "timecode", "rating", "notes" }, knownUnset);
+        CollectionAssert.DoesNotContain(knownUnset, "game");
 
         var custom = s["customFields"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         CollectionAssert.AreEqual(new[] { "map" }, custom);
-    }
-
-    [TestMethod]
-    public void GetStats_MissingFile_IsToolError()
-    {
-        JsonObject result = Call("clip_get_stats", new JsonObject { ["path"] = "nope.mp4" });
-
-        AssertRefused(result, "No file exists");
     }
 
     // ── library_list ─────────────────────────────────────────────────────────────────────
@@ -395,6 +386,23 @@ public class Phase2ReadToolsTests
         JsonObject s = Structured(result);
         Assert.IsTrue(s["rebuilt"]!.GetValue<bool>(), "corrupt index must self-heal");
         Assert.AreEqual(1, s["matchCount"]!.GetValue<int>());
+    }
+
+    [TestMethod]
+    public void SearchIndex_StaleClipCount_TracksFilesystemDrift()
+    {
+        // Fresh rebuild → in sync.
+        JsonObject fresh = Call("library_search_index", new JsonObject { ["rebuild"] = true });
+        AssertOk(fresh);
+        Assert.AreEqual(0, Structured(fresh)["staleClipCount"]!.GetValue<int>());
+
+        // Touch one clip (newer mtime, still the library's newest so the list-ordering test
+        // stays valid in any execution order) and ask again WITHOUT rebuilding.
+        File.SetLastWriteTimeUtc(_noisePath, DateTime.UtcNow.AddMinutes(5));
+        JsonObject stale = Call("library_search_index", new JsonObject());
+        AssertOk(stale);
+        Assert.AreEqual(1, Structured(stale)["staleClipCount"]!.GetValue<int>(),
+            "a modified file must register as stale so the model knows to rebuild");
     }
 
     [TestMethod]

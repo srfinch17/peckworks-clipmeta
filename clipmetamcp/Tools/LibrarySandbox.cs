@@ -108,6 +108,22 @@ public sealed class LibrarySandbox
     }
 
     /// <summary>
+    /// Validates a clip path for WRITING. Same checks as <see cref="ResolveClipPath"/>, with one
+    /// stricter precondition: writes with no configured library are refused outright (spec §3) —
+    /// a read outside a sandbox shows someone data; a write outside a sandbox mutates their
+    /// files. The message names the fix because the model relays it to the user.
+    /// </summary>
+    public string ResolveWritePath(string path)
+    {
+        if (Root is null)
+            throw new ToolException(
+                "Writing is disabled: no clips library is configured. Tools may only modify " +
+                $"files inside a configured library ({EnvVarName}; set automatically when the " +
+                "extension is installed with a clips folder).");
+        return ResolveClipPath(path);
+    }
+
+    /// <summary>
     /// Returns the configured library root, or refuses when none is set. Directory-scoped tools
     /// (list/find/vocab/export/index) have no meaningful "anywhere" mode — scanning an undefined
     /// directory tree on an LLM's behalf is exactly the surprise this sandbox exists to prevent —

@@ -16,4 +16,11 @@
     <ProjectReference Include="..\clipmeta.core\clipmeta.core.csproj" />
     <ProjectReference Include="..\clipmetamcp\clipmetamcp.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Source-linked, not copied: the media-integrity scanner deliberately shares no code
+         with clipmeta.core (it independently re-derives mdat hashes and chunk offsets), and
+         there must be exactly ONE implementation of it in the repo. -->
+    <Compile Include="..\clipmetascribe.Tests\Helpers\MediaIntegrityScanner.cs"
+             Link="Helpers\MediaIntegrityScanner.cs" />
+  </ItemGroup>
 </Project>
