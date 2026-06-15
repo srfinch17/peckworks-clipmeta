@@ -100,6 +100,62 @@ public class Mp4WriteIntegrityTests
         MediaIntegrityScanner.AssertMediaUnchanged(original, working);
     }
 
+    // ── Moov-first WITH co64: the 64-bit offset-patching path (no real clip hits it) ──
+
+    [TestMethod]
+    public void MoovFirstCo64_CreateScenario_Grow_AllChunkOffsetsPointAtSameData()
+    {
+        // No real pristine clip is both moov-first AND co64 (the co64 clips are all mdat-first,
+        // where offsets never move), and CI runs clip-less — so this synthetic fixture is the
+        // ONLY coverage of the writer rewriting a 64-bit chunk-offset table when moov grows and
+        // shifts mdat. Create scenario: no seed metadata, so the write synthesizes the whole
+        // udta/meta/ilst chain — the largest moov growth, shifting mdat the furthest.
+        var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstCo64WithPatternedMdat());
+
+        // Teeth: prove the fixture actually exercises co64, not stco — otherwise this test would
+        // silently duplicate the 32-bit path and prove nothing about the 64-bit one.
+        var tables = MediaIntegrityScanner.Scan(original).ChunkTables;
+        Assert.AreEqual(2, tables.Count, "fixture should have two tracks (catches single-table bugs)");
+        Assert.IsTrue(tables.All(t => t.Type == "co64"),
+            "fixture must use co64 tables to exercise the 64-bit offset-patching path");
+
+        var mutation = new MetadataMutation();
+        mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2";
+        mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Notes)] = "moov must grow a lot here";
+        new Mp4Writer().WriteMetadata(working, mutation, NullLogger.Instance);
+
+        // Every 64-bit offset must now point at the same marker bytes as before the write.
+        MediaIntegrityScanner.AssertMediaUnchanged(original, working);
+    }
+
+    [TestMethod]
+    public void MoovFirstCo64_UpdateScenario_GrowAndShrink_AllChunkOffsetsPointAtSameData()
+    {
+        // Seeded with one atom so the write takes the Update path (rewrite existing ilst), over
+        // co64 tables. Exercises both a positive delta (grow) and a negative one (shrink) — the
+        // 64-bit offsets must shift forward then back and still address the same media.
+        var (original, working) = SaveWithBackup(
+            MinimalMp4Builder.BuildMoovFirstCo64WithPatternedMdat(Domain, "tags", "short"));
+
+        Assert.IsTrue(MediaIntegrityScanner.Scan(original).ChunkTables.All(t => t.Type == "co64"),
+            "fixture must use co64 tables");
+
+        var grow = new MetadataMutation();
+        grow.SetFields[$"{Domain}:tags"] = "a substantially longer value than before|second|third";
+        new Mp4Writer().WriteMetadata(working, grow, NullLogger.Instance);
+        MediaIntegrityScanner.AssertMediaUnchanged(original, working);
+
+        string afterGrow = working + ".grown.mp4";
+        File.Copy(working, afterGrow);
+        _tempFiles.Add(afterGrow);
+
+        var shrink = new MetadataMutation();
+        shrink.DeleteFields.Add($"{Domain}:tags");
+        new Mp4Writer().WriteMetadata(working, shrink, NullLogger.Instance);
+        MediaIntegrityScanner.AssertMediaUnchanged(afterGrow, working);
+        MediaIntegrityScanner.AssertMediaUnchanged(original, working);
+    }
+
     // ── Refusal cases: damaged files must be rejected, not quietly truncated ────
 
     [TestMethod]

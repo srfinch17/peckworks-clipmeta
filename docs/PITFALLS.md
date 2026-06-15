@@ -8,6 +8,30 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-15 — Foreign-atom test assumed a single `ilst`; a real clip has two `meta` boxes (fixed test)
+- **Symptom:** Expanding the pristine corpus made `Write_ForeignAtoms_Preserved` fail on exactly
+  one clip (`2022-02-01 21.50.02.mp4`): "Foreign atom count changed. Before: 2, After: 0" — as if
+  a clipmeta write had *deleted* two pre-existing metadata atoms.
+- **Investigation (NOT a writer bug):** dumping the post-write tree proved the writer was correct
+  and safe. This clip carries **two metadata containers**: a **moov-level `meta`** (a *sibling* of
+  `udta`, `hdlr` type **`mdta`**, with a **`keys`** box and a key-indexed `ilst` — the Apple/
+  QuickTime metadata-keys format used for make/model/GPS-style data), plus `udta/©xyz`. On write,
+  clipmeta correctly leaves that foreign `meta` **byte-for-byte untouched** and creates its OWN
+  iTunes-style `udta→meta→hdlr(mdir)→ilst` for its `----` atoms. The file now has **two `ilst`
+  boxes**. mdat + all chunk offsets were also proven identical (media-integrity test passed).
+- **Cause (in the test):** `Write_ForeignAtoms_Preserved` did `FindNode(root, type=="ilst")`,
+  which returns the **first** `ilst`. Before the write that's the foreign one (2 atoms); after,
+  the writer's brand-new (foreign-free) `ilst` sorts first → 0 foreign → false "lost atoms".
+- **Fix (test only):** count foreign atoms across **every** `ilst` (`FindAllNodes`), not just the
+  first. No production change — the writer's "don't touch a metadata format you don't own" behavior
+  is exactly right.
+- **Lesson:** an MP4 may hold more than one `meta`/`ilst` container, in different formats
+  (iTunes `mdir` vs Apple `mdta`/keys), at different levels (movie `udta` vs moov-level `meta`).
+  Test helpers that assume "the one ilst" are wrong on real-world clips. (Same class of harness
+  assumption as the ZC112 chunk-window overrun below — diverse real clips surface what same-source
+  fixtures never do. **`mdta`/keys metadata is a documented format the writer preserves but does
+  not edit.**)
+
 ### 2026-06-12 — File.Replace races antivirus on freshly-written files (fixed: bounded retry)
 - **Symptom:** The write suite intermittently failed (~1 test, ~30% of runs) with
   `IOException: The process cannot access the file because it is being used by another process`

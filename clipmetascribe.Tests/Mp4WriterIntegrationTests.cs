@@ -103,13 +103,23 @@ public class Mp4WriterIntegrationTests
     public void Write_ForeignAtoms_Preserved(string pristinePath)
     {
         TestClipsLocator.SkipIfMissing(pristinePath);
-        var rootBefore = Mp4Parser.ParseFile(pristinePath);
-        var ilst = FindNode(rootBefore, n => n.Type == "ilst");
-        var foreignAtomsBefore = ilst?.Children
-            .Where(c => c.Type != "----" || !c.EditableKey!.StartsWith(ClipMetaSchema.Domain))
-            .ToList() ?? new();
 
-        if (foreignAtomsBefore.Count == 0) return;
+        // Count foreign (non-clipmeta) atoms across EVERY ilst in the file, not just the first.
+        // A real clip can carry more than one metadata container: 2022-02-01 21.50.02.mp4 has a
+        // moov-level mdta/keys `meta` (Apple/QuickTime keyed atoms — make/model/GPS-style data)
+        // that is a SIBLING of udta. When clipmeta writes, it leaves that foreign meta untouched
+        // and creates its own iTunes-style udta→meta→ilst for its `----` atoms — so the file now
+        // has TWO ilst boxes. Inspecting only the first ilst would compare the writer's brand-new
+        // (foreign-free) ilst against the original foreign one and spuriously report the foreign
+        // atoms as "lost" when they are in fact fully preserved in the other meta box. (Diverse
+        // real clips surface harness assumptions that synthetic single-ilst fixtures never hit.)
+        static int CountForeign(BoxNode root) =>
+            FindAllNodes(root, n => n.Type == "ilst")
+                .SelectMany(ilst => ilst.Children)
+                .Count(c => c.Type != "----" || !c.EditableKey!.StartsWith(ClipMetaSchema.Domain));
+
+        int foreignBefore = CountForeign(Mp4Parser.ParseFile(pristinePath));
+        if (foreignBefore == 0) return;
 
         string scratchPath = PrepareScratch(pristinePath);
         var mutation = new MetadataMutation();
@@ -117,14 +127,10 @@ public class Mp4WriterIntegrationTests
 
         new Mp4Writer().WriteMetadata(scratchPath, mutation, NullLogger.Instance);
 
-        var rootAfter = Mp4Parser.ParseFile(scratchPath);
-        var ilstAfter = FindNode(rootAfter, n => n.Type == "ilst");
-        var foreignAtomsAfter = ilstAfter?.Children
-            .Where(c => c.Type != "----" || !c.EditableKey!.StartsWith(ClipMetaSchema.Domain))
-            .ToList() ?? new();
-
-        Assert.AreEqual(foreignAtomsBefore.Count, foreignAtomsAfter.Count,
-            $"Foreign atom count changed. Before: {foreignAtomsBefore.Count}, After: {foreignAtomsAfter.Count}");
+        int foreignAfter = CountForeign(Mp4Parser.ParseFile(scratchPath));
+        Assert.AreEqual(foreignBefore, foreignAfter,
+            $"Foreign atom count changed. Before: {foreignBefore}, After: {foreignAfter}. " +
+            "Every pre-existing non-clipmeta atom must survive a write untouched.");
     }
 
     [DataTestMethod]
@@ -199,5 +205,15 @@ public class Mp4WriterIntegrationTests
             if (found != null) return found;
         }
         return null;
+    }
+
+    /// <summary>Depth-first enumeration of every node matching <paramref name="predicate"/>
+    /// (a file can legitimately hold more than one of a given box, e.g. two ilst containers).</summary>
+    private static IEnumerable<BoxNode> FindAllNodes(BoxNode node, Func<BoxNode, bool> predicate)
+    {
+        if (predicate(node)) yield return node;
+        foreach (var child in node.Children)
+            foreach (var match in FindAllNodes(child, predicate))
+                yield return match;
     }
 }
