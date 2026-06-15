@@ -18,6 +18,12 @@ internal static class MinimalMp4Builder
         bw.Write((byte)v);
     }
 
+    private static void WriteBE64(BinaryWriter bw, ulong v)
+    {
+        WriteBE32(bw, (uint)(v >> 32));
+        WriteBE32(bw, (uint)v);
+    }
+
     private static byte[] Box(string type, byte[] payload)
     {
         uint size = (uint)(8 + payload.Length);
@@ -112,7 +118,22 @@ internal static class MinimalMp4Builder
     }
 
     /// <summary>
-    /// Builds a minimal stbl box wrapping a stco box.
+    /// Builds a minimal co64 FullBox with the given chunk offsets (big-endian uint64 each).
+    /// co64 is stco's 64-bit sibling: identical layout but 8-byte entries. Used to exercise the
+    /// writer's 64-bit offset-patching path. Entry width is fixed (8 bytes) regardless of value,
+    /// so the two-pass moov build stays length-stable just as it does for stco.
+    /// </summary>
+    public static byte[] Co64Box(params ulong[] offsets)
+    {
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+        WriteBE32(bw, (uint)offsets.Length);   // entry_count
+        foreach (ulong o in offsets) WriteBE64(bw, o);
+        return FullBox("co64", 0, 0, ms.ToArray());
+    }
+
+    /// <summary>
+    /// Builds a minimal stbl box wrapping a stco (or co64) box.
     /// (stts, stsc, stsz are omitted since the write engine only touches stco/co64.)
     /// </summary>
     public static byte[] StblBox(byte[] stcoBox) => Box("stbl", stcoBox);
@@ -240,6 +261,59 @@ internal static class MinimalMp4Builder
     {
         byte[][] trakBoxes = Enumerable.Range(0, traks)
             .Select(t => TrakBox(StcoBox(
+                allOffsets.Skip(t * chunksPerTrak).Take(chunksPerTrak).ToArray())))
+            .ToArray();
+        return MoovBox(udta, trakBoxes);
+    }
+
+    /// <summary>
+    /// The co64 twin of <see cref="BuildMoovFirstWithPatternedMdat"/>: a moov-FIRST MP4 whose
+    /// chunk-offset tables are <b>co64</b> (64-bit) rather than stco. This is the ONLY coverage of
+    /// the writer rewriting a 64-bit offset table when moov growth shifts mdat — no real pristine
+    /// clip is both moov-first AND co64 (the co64 real clips are all mdat-first, where offsets
+    /// never move), and CI runs clip-less. Identical patterned-mdat / two-track / two-pass scheme
+    /// as the stco builder; see its remarks. Parameters mirror it exactly.
+    /// </summary>
+    public static MemoryStream BuildMoovFirstCo64WithPatternedMdat(
+        string? seedDomain = null, string? seedField = null, string? seedValue = null,
+        int traks = 2, int chunksPerTrak = 3, int chunkSize = 64, int seedDataType = 1)
+    {
+        byte[]? udta = seedDomain != null
+            ? UdtaBox(MetaBox(IlstBox(FreeformAtom(seedDomain, seedField!, seedValue!, seedDataType))))
+            : null;
+
+        byte[] mdatPayload = new byte[traks * chunksPerTrak * chunkSize];
+        for (int t = 0; t < traks; t++)
+            for (int c = 0; c < chunksPerTrak; c++)
+                Array.Fill(mdatPayload, (byte)(0xA0 + t * 16 + c),
+                           (t * chunksPerTrak + c) * chunkSize, chunkSize);
+        byte[] mdat = Box("mdat", mdatPayload);
+
+        // Pass 1: dummy offsets, just to learn the moov length (co64 entry width is fixed at 8).
+        byte[] moovDummy = BuildMultiTrackMoovCo64(udta, traks, chunksPerTrak, new ulong[traks * chunksPerTrak]);
+
+        long mdatPayloadStart = moovDummy.Length + 8;
+        ulong[] offsets = new ulong[traks * chunksPerTrak];
+        for (int i = 0; i < offsets.Length; i++)
+            offsets[i] = (ulong)(mdatPayloadStart + i * chunkSize);
+
+        // Pass 2: same structure, real offsets. Lengths must match or the offsets are garbage.
+        byte[] moov = BuildMultiTrackMoovCo64(udta, traks, chunksPerTrak, offsets);
+        if (moov.Length != moovDummy.Length)
+            throw new InvalidOperationException("two-pass co64 moov build produced different lengths");
+
+        var ms = new MemoryStream();
+        ms.Write(moov);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>co64 twin of <see cref="BuildMultiTrackMoov"/>.</summary>
+    private static byte[] BuildMultiTrackMoovCo64(byte[]? udta, int traks, int chunksPerTrak, ulong[] allOffsets)
+    {
+        byte[][] trakBoxes = Enumerable.Range(0, traks)
+            .Select(t => TrakBox(Co64Box(
                 allOffsets.Skip(t * chunksPerTrak).Take(chunksPerTrak).ToArray())))
             .ToArray();
         return MoovBox(udta, trakBoxes);

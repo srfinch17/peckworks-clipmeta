@@ -64,8 +64,9 @@ dotnet build  --nologo -v q          # must be 0 warnings, 0 errors
 dotnet test   --nologo --no-build -v q
 ```
 
-- 360 tests total. `clipmetascribe.Tests` takes ~3–4 min (real-clip integration + media-integrity hashing) — not a hang; use a long timeout.
-- Integration tests need local clips: `testclips/pristine/` (read-only ground truth) and `testclips/scratch/` (regenerated copies). Both are git-ignored.
+- `clipmetascribe.Tests` takes a few minutes (real-clip integration + media-integrity hashing) — not a hang; use a long timeout. Wall-time scales with the pristine corpus, so keep it curated (below).
+- Integration tests need local clips: `testclips/pristine/` (read-only ground truth) and `testclips/scratch/` (regenerated copies). Both are git-ignored; CI runs clip-less and graceful-skips.
+- **The pristine corpus is curated and documented.** `testclips/PRISTINE-MANIFEST.md` (checked in) records every clip's source, structure, and the code path it uniquely covers. **Adding a clip:** drop it in `pristine/`, run the scribe tests (it rides every `[DynamicData]` integration test automatically), then add a manifest row describing what it *uniquely* covers — don't keep same-shape duplicates (they only slow the suite). Keep clips small: write correctness is structural, not size-driven (64-bit `co64`/`largesize` is the only size-gated path and triggers at 4 GB — covered synthetically, not by giant clips). See `docs/superpowers/specs/2026-06-15-pristine-test-corpus-baseline-design.md`.
 - **New machine?** If restore fails with `NU1100`, the machine likely has no NuGet source. Run:
   `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`
 
@@ -78,6 +79,6 @@ Custom fields use the reverse-domain namespace `com.peckworkslab.clipmeta`, stor
 ## Definition of Done (every change)
 
 1. `dotnet build` — 0 warnings, 0 errors, all projects.
-2. `dotnet test` — all 360 pass, including real-clip integration and media-integrity tests.
+2. `dotnet test` — all pass, including real-clip integration and media-integrity tests.
 3. Zero NuGet packages added to production projects.
 4. Public types documented; new gotchas recorded in `docs/PITFALLS.md`.
