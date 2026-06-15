@@ -35,6 +35,24 @@ internal static class MinimalMp4Builder
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Builds a box with a 64-bit <c>largesize</c> header: the 32-bit size field is set to 1 and
+    /// the real size follows as an 8-byte big-endian value, making the header 16 bytes instead of
+    /// 8. Real muxers use this for boxes that may exceed 4 GB (notably mdat); here it lets a tiny
+    /// fixture exercise the writer's 64-bit-header relocation path.
+    /// </summary>
+    private static byte[] LargesizeBox(string type, byte[] payload)
+    {
+        ulong size = (ulong)(16 + payload.Length);   // 4 (size==1) + 4 (type) + 8 (largesize) + payload
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+        WriteBE32(bw, 1);                             // size field == 1 → 64-bit largesize follows
+        bw.Write(Encoding.Latin1.GetBytes(type.PadRight(4)[..4]));
+        WriteBE64(bw, size);
+        bw.Write(payload);
+        return ms.ToArray();
+    }
+
     private static byte[] FullBox(string type, byte version, uint flags, byte[] payload)
     {
         byte[] header = new byte[4];
@@ -317,6 +335,49 @@ internal static class MinimalMp4Builder
                 allOffsets.Skip(t * chunksPerTrak).Take(chunksPerTrak).ToArray())))
             .ToArray();
         return MoovBox(udta, trakBoxes);
+    }
+
+    /// <summary>
+    /// A moov-FIRST MP4 whose mdat carries a 64-bit <b>largesize</b> header (16-byte header, not
+    /// 8). Uses ordinary 32-bit stco offsets — the point is the box HEADER, not the offset table:
+    /// when moov grows and shifts the mdat, the writer must correctly parse and relocate a box
+    /// whose own size is encoded as a 64-bit largesize. No real pristine clip is moov-first with a
+    /// largesize mdat (the real largesize clips are all mdat-first, where the box never moves), so
+    /// this is the only coverage of that path. The chunk-offset math accounts for the 16-byte
+    /// header (payload starts at moov-length + 16, not + 8).
+    /// </summary>
+    public static MemoryStream BuildMoovFirstLargesizeMdatWithPatternedMdat(
+        string? seedDomain = null, string? seedField = null, string? seedValue = null,
+        int traks = 2, int chunksPerTrak = 3, int chunkSize = 64, int seedDataType = 1)
+    {
+        byte[]? udta = seedDomain != null
+            ? UdtaBox(MetaBox(IlstBox(FreeformAtom(seedDomain, seedField!, seedValue!, seedDataType))))
+            : null;
+
+        byte[] mdatPayload = new byte[traks * chunksPerTrak * chunkSize];
+        for (int t = 0; t < traks; t++)
+            for (int c = 0; c < chunksPerTrak; c++)
+                Array.Fill(mdatPayload, (byte)(0xA0 + t * 16 + c),
+                           (t * chunksPerTrak + c) * chunkSize, chunkSize);
+        byte[] mdat = LargesizeBox("mdat", mdatPayload);   // 16-byte largesize header
+
+        byte[] moovDummy = BuildMultiTrackMoov(udta, traks, chunksPerTrak, new uint[traks * chunksPerTrak]);
+
+        // mdat payload starts after moov + mdat's 16-byte LARGESIZE header (not the usual 8).
+        long mdatPayloadStart = moovDummy.Length + 16;
+        uint[] offsets = new uint[traks * chunksPerTrak];
+        for (int i = 0; i < offsets.Length; i++)
+            offsets[i] = (uint)(mdatPayloadStart + i * chunkSize);
+
+        byte[] moov = BuildMultiTrackMoov(udta, traks, chunksPerTrak, offsets);
+        if (moov.Length != moovDummy.Length)
+            throw new InvalidOperationException("two-pass moov build produced different lengths");
+
+        var ms = new MemoryStream();
+        ms.Write(moov);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
     }
 
     /// <summary>
