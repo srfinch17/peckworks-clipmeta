@@ -156,6 +156,49 @@ public class Mp4WriteIntegrityTests
         MediaIntegrityScanner.AssertMediaUnchanged(original, working);
     }
 
+    // ── Moov-first with a largesize (64-bit) mdat HEADER: the box itself must relocate ──
+
+    [TestMethod]
+    public void MoovFirstLargesizeMdat_Grow_MediaSurvivesAcrossTheShiftedHeader()
+    {
+        // The co64 fixtures cover 64-bit OFFSET tables; this covers a 64-bit (largesize) box
+        // HEADER. A moov-first mdat with a 16-byte largesize header is shifted when moov grows, so
+        // the writer must parse and relocate a box whose own size is a 64-bit largesize. No real
+        // clip is moov-first with a largesize mdat (the real largesize clips are all mdat-first,
+        // where the box never moves), and CI runs clip-less — so this fixture is the only coverage.
+        var (original, working) =
+            SaveWithBackup(MinimalMp4Builder.BuildMoovFirstLargesizeMdatWithPatternedMdat());
+
+        // Teeth: prove the mdat really uses a 64-bit largesize header (size field == 1), else this
+        // test silently collapses to the ordinary 8-byte-header path and proves nothing new.
+        AssertMdatUsesLargesizeHeader(original);
+
+        var mutation = new MetadataMutation();
+        mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2";
+        mutation.SetFields[ClipMetaSchema.AtomName(ClipMetaSchema.Notes)] = "moov grows and shifts the largesize mdat";
+        new Mp4Writer().WriteMetadata(working, mutation, NullLogger.Instance);
+
+        // mdat payload identical and every (now-shifted) chunk offset still addresses it.
+        MediaIntegrityScanner.AssertMediaUnchanged(original, working);
+    }
+
+    /// <summary>Asserts the file's mdat box uses a 64-bit largesize header — the 32-bit size field
+    /// immediately before the "mdat" type bytes must be exactly 1 (the largesize sentinel).</summary>
+    private static void AssertMdatUsesLargesizeHeader(string path)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        byte[] tag = System.Text.Encoding.ASCII.GetBytes("mdat");
+        int idx = -1;
+        for (int i = 0; i + tag.Length <= bytes.Length; i++)
+        {
+            if (bytes[i] == tag[0] && bytes[i + 1] == tag[1] && bytes[i + 2] == tag[2] && bytes[i + 3] == tag[3])
+            { idx = i; break; }
+        }
+        Assert.IsTrue(idx >= 4, "mdat box not found");
+        uint sizeField = (uint)((bytes[idx - 4] << 24) | (bytes[idx - 3] << 16) | (bytes[idx - 2] << 8) | bytes[idx - 1]);
+        Assert.AreEqual(1u, sizeField, "mdat must use a 64-bit largesize header (32-bit size field == 1)");
+    }
+
     // ── Refusal cases: damaged files must be rejected, not quietly truncated ────
 
     [TestMethod]

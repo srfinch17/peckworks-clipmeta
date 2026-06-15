@@ -33,12 +33,19 @@ clips just slow the suite.
 - **Offset tables / box sizes:** `stco`; `co64` + `largesize` (64-bit) — emitted even on the 46 MB `2022-02-01` clip.
 - **Foreign metadata formats preserved across writes:** Apple `mdta`/`keys` (moov-level `meta`), Windows-Media `Xtra`, `udta/©xyz` GPS.
 
-### Known gap → covered synthetically (not by a stored clip)
-No real clip is **moov-first AND `co64`**, so 64-bit offset *patching* is exercised by a synthetic
-fixture — `MinimalMp4Builder.BuildMoovFirstCo64WithPatternedMdat`, tested by
-`MoovFirstCo64_CreateScenario_Grow_…` and `MoovFirstCo64_UpdateScenario_GrowAndShrink_…` in
-`Mp4WriteIntegrityTests` — rather than a giant >4 GB clip. This also gives CI, which has no clips,
-coverage of the 64-bit path.
+### 64-bit paths → covered synthetically (not by a stored clip)
+No real clip is **moov-first AND 64-bit**, so the two 64-bit code paths are exercised by synthetic
+fixtures in `MinimalMp4Builder` / `Mp4WriteIntegrityTests` (not a giant >4 GB clip), which also
+gives clip-less CI coverage:
+- **64-bit offset *table* (`co64`)** — `BuildMoovFirstCo64WithPatternedMdat`, tested by
+  `MoovFirstCo64_CreateScenario_Grow_…` and `MoovFirstCo64_UpdateScenario_GrowAndShrink_…`.
+- **64-bit box *header* (`largesize` mdat)** — `BuildMoovFirstLargesizeMdatWithPatternedMdat`,
+  tested by `MoovFirstLargesizeMdat_Grow_…`.
+
+### Manifest ↔ folder drift guard
+`PristineCorpusManifestTests.Manifest_ListsExactlyTheClipsOnDisk` fails if a clip in
+`pristine/` has no row here, or a row here names a file not on disk — so this table can't drift
+from the folder. (Graceful-skips clip-less.)
 
 ### Excluded (moved, not deleted)
 Two redundant ~215 MB NVIDIA DVR clips (same `mp42 [ftyp,mdat,moov]` co64 shape `tf2testclip1/2`
