@@ -239,6 +239,15 @@ internal static class Program
                 return WriteCommand.RunClearAll(filePath, dryRun, yes, backup ? filePath + ".bak" : null, logger);
             }
 
+            if (ContainsFlag(args, "--copy-from"))
+            {
+                int cfIndex = Array.FindIndex(args, a => a.Equals("--copy-from", StringComparison.OrdinalIgnoreCase));
+                string source = RequireArg(args, cfIndex, 1, "a source .mp4 path");
+                // Explicit --set/--append/--clear in the same invocation layer over the copied fields.
+                var extra = BuildMutation(args, filePath, dryRun, backup);
+                return CopyTagsCommand.Run(filePath, source, extra, logger);
+            }
+
             var mutation = BuildMutation(args, filePath, dryRun, backup);
 
             if (mutation.SetFields.Count > 0 || mutation.AppendFields.Count > 0 || mutation.DeleteFields.Count > 0)
@@ -295,7 +304,7 @@ internal static class Program
     /// </summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "--set", "--append", "--clear", "--clear-all", "--list", "--stats",
+        "--set", "--append", "--clear", "--clear-all", "--copy-from", "--list", "--stats",
         "--find", "--vocab", "--index", "--index-search", "--export",
         "--format", "--output", "--dry-run", "--backup", "--verbose",
         "--log", "--yes", "--version",
@@ -418,6 +427,7 @@ internal static class Program
               clipmetascribe "clip.mp4" --append <field> <value>
               clipmetascribe "clip.mp4" --clear <field>
               clipmetascribe "clip.mp4" --clear-all [--yes]
+              clipmetascribe "dest.mp4" --copy-from "source.mp4"
               clipmetascribe "C:\clips\" --find <field> <value>
               clipmetascribe "C:\clips\" --vocab <field>
               clipmetascribe "C:\clips\" --export [--format json|csv] [--output <path>]
@@ -437,6 +447,7 @@ internal static class Program
               clipmetascribe "clip.mp4" --append tags "market garden"
               clipmetascribe "clip.mp4" --clear tags
               clipmetascribe "clip.mp4" --clear-all --yes
+              clipmetascribe "dest.mp4" --copy-from "source.mp4"
               clipmetascribe "clip.mp4" --set game "TF2" --append tags "headshot" --set rating "4"
               clipmetascribe "C:\clips\" --find game "Team Fortress 2"
               clipmetascribe "C:\clips\" --find tags "headshot"
