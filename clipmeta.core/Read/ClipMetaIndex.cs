@@ -1,4 +1,5 @@
 using ClipMetaCore.Mp4;
+using ClipMetaCore.Write;
 
 namespace ClipMetaCore.Read;
 
@@ -175,13 +176,38 @@ public static class ClipMetaIndex
         return new IndexData(directory, built, entries);
     }
 
-    /// <summary>Writes <paramref name="data"/> to <paramref name="filePath"/> using UTF-8.</summary>
+    /// <summary>
+    /// Writes <paramref name="data"/> to <paramref name="filePath"/> (UTF-8) <b>atomically</b>:
+    /// the content is serialized to a temp file and then swapped into place, so the previous
+    /// index is never visible half-written and a failed write (crash, disk-full, an exception
+    /// mid-serialization) leaves the existing index untouched. Mirrors the write engine's
+    /// temp-then-atomic-swap discipline.
+    /// </summary>
     /// <param name="data">The index data to write.</param>
     /// <param name="filePath">Destination file path.</param>
     public static void WriteToFile(IndexData data, string filePath)
     {
-        using var writer = new StreamWriter(filePath, append: false, System.Text.Encoding.UTF8);
-        Write(data, writer);
+        // Unique temp name in the same directory (same volume → the swap is atomic).
+        string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            using (var writer = new StreamWriter(tempPath, append: false, System.Text.Encoding.UTF8))
+                Write(data, writer);
+
+            // Swap the fully-written temp into place. File.Move(overwrite) is a same-volume
+            // atomic MoveFileEx(REPLACE_EXISTING) that works whether or not the target exists.
+            // Retry only this post-write swap on a transient AV/indexer lock — the temp is
+            // already complete, so retrying the atomic op weakens nothing (see PITFALLS
+            // 2026-06-12; reuses the write engine's tested helper).
+            Mp4Writer.RetryOnTransientLock(
+                () => File.Move(tempPath, filePath, overwrite: true),
+                maxAttempts: 5, baseDelayMs: 100);
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
+            throw;
+        }
     }
 
     /// <summary>Reads an <see cref="IndexData"/> from <paramref name="filePath"/> using UTF-8.</summary>

@@ -182,4 +182,63 @@ public class ClipMetaIndexTests
 
         Assert.AreEqual(@"C:\path\to\file", result.Entries[0].Fields[0].Value);
     }
+
+    // ── Atomic WriteToFile: a failed write must never corrupt the existing index ──
+
+    private string IndexPath() => Path.Combine(_tempDir, ClipMetaIndex.IndexFileName);
+
+    private static IndexData OneEntry(string value) => new(
+        "C:\\clips", DateTimeOffset.UtcNow,
+        new[] { new IndexEntry("a.mp4", 1, DateTimeOffset.UtcNow, new[] { ("game", value) }) });
+
+    [TestMethod]
+    public void WriteToFile_FailureMidSerialization_LeavesExistingIndexIntactAndNoTemp()
+    {
+        // The bug this feature fixes: the old WriteToFile opened the target with
+        // StreamWriter(append:false), truncating it on open — so a write that fails partway
+        // (here, an entry list that throws mid-enumeration, standing in for a crash / disk-full)
+        // would leave the user's previously-built index truncated. Atomic temp-then-swap must
+        // leave the existing index byte-for-byte intact.
+        string idx = IndexPath();
+        ClipMetaIndex.WriteToFile(OneEntry("original"), idx);
+        byte[] before = File.ReadAllBytes(idx);
+
+        var poisoned = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new ThrowingEntryList());
+        Assert.ThrowsExactly<InvalidOperationException>(() => ClipMetaIndex.WriteToFile(poisoned, idx));
+
+        CollectionAssert.AreEqual(before, File.ReadAllBytes(idx),
+            "a failed write must not corrupt the existing index");
+        Assert.IsFalse(Directory.EnumerateFiles(_tempDir, "*.tmp").Any(),
+            "a failed write must not leave a temp file behind");
+    }
+
+    [TestMethod]
+    public void WriteToFile_Success_LeavesNoTempFile()
+    {
+        ClipMetaIndex.WriteToFile(OneEntry("v"), IndexPath());
+        Assert.IsFalse(Directory.EnumerateFiles(_tempDir, "*.tmp").Any(),
+            "a successful write must clean up its temp file");
+    }
+
+    [TestMethod]
+    public void WriteToFile_FirstWriteThenOverwrite_RoundTrips()
+    {
+        string idx = IndexPath();
+        ClipMetaIndex.WriteToFile(OneEntry("first"), idx);          // no pre-existing target (Move path)
+        ClipMetaIndex.WriteToFile(OneEntry("second"), idx);         // overwrite existing (Replace path)
+
+        var read = ClipMetaIndex.ReadFromFile(idx);
+        Assert.AreEqual("second", read.Entries[0].Fields[0].Value);
+    }
+
+    /// <summary>An entry list that yields nothing and throws as soon as it is enumerated —
+    /// stands in for an interrupted serialization (crash / disk-full) mid-write.</summary>
+    private sealed class ThrowingEntryList : IReadOnlyList<IndexEntry>
+    {
+        public int Count => 1;
+        public IndexEntry this[int index] => throw new InvalidOperationException("simulated write failure");
+        public IEnumerator<IndexEntry> GetEnumerator()
+            => throw new InvalidOperationException("simulated write failure");
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }
