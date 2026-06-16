@@ -23,6 +23,16 @@ public record IndexData(
     /// <summary>One entry per MP4 file in the indexed directory.</summary>
     IReadOnlyList<IndexEntry> Entries);
 
+/// <summary>Why an index entry no longer reflects the file on disk.</summary>
+public enum StaleReason
+{
+    /// <summary>The file's size or last-modified time differs from what the index recorded.</summary>
+    Modified,
+
+    /// <summary>The file no longer exists at the recorded path.</summary>
+    Missing,
+}
+
 /// <summary>Builds and serializes a metadata index for a directory of MP4 files.</summary>
 public static class ClipMetaIndex
 {
@@ -217,5 +227,43 @@ public static class ClipMetaIndex
     {
         using var reader = new StreamReader(filePath, System.Text.Encoding.UTF8);
         return Read(reader);
+    }
+
+    /// <summary>
+    /// Classifies one index entry against the file on disk: <see cref="StaleReason.Missing"/> if
+    /// the file is gone, <see cref="StaleReason.Modified"/> if its size or last-modified time no
+    /// longer matches what the index recorded, or <see langword="null"/> if it is unchanged.
+    /// Last-modified is compared at one-second precision (matching how the index serializes the
+    /// timestamp), so tick-level rounding never raises a false "modified".
+    /// </summary>
+    /// <param name="entry">The index entry to check.</param>
+    /// <returns>The reason the entry is stale, or <see langword="null"/> if it is current.</returns>
+    public static StaleReason? CheckEntry(IndexEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (!File.Exists(entry.FilePath))
+            return StaleReason.Missing;
+
+        FileInfo info;
+        try
+        {
+            info = new FileInfo(entry.FilePath);
+            if (info.Length != entry.FileSizeBytes)
+                return StaleReason.Modified;
+
+            long recorded = entry.LastModified.ToUnixTimeSeconds();
+            long current = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero).ToUnixTimeSeconds();
+            if (recorded != current)
+                return StaleReason.Modified;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file exists but we cannot confirm it is current — treat as changed rather than
+            // crashing the search.
+            return StaleReason.Modified;
+        }
+
+        return null;
     }
 }

@@ -231,6 +231,52 @@ public class ClipMetaIndexTests
         Assert.AreEqual("second", read.Entries[0].Fields[0].Value);
     }
 
+    // ── CheckEntry: detect clips changed/removed since the index was built ────────
+
+    private string MakeFile(string name, byte[] bytes)
+    {
+        string path = Path.Combine(_tempDir, name);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    private static IndexEntry EntryFor(string path) =>
+        new(path, new FileInfo(path).Length,
+            new DateTimeOffset(new FileInfo(path).LastWriteTimeUtc, TimeSpan.Zero),
+            new[] { ("game", "TF2") });
+
+    [TestMethod]
+    public void CheckEntry_UnchangedFile_ReturnsNull()
+    {
+        string path = MakeFile("clip.mp4", new byte[] { 1, 2, 3, 4 });
+        Assert.IsNull(ClipMetaIndex.CheckEntry(EntryFor(path)));
+    }
+
+    [TestMethod]
+    public void CheckEntry_SizeChanged_ReturnsModified()
+    {
+        string path = MakeFile("clip.mp4", new byte[] { 1, 2, 3, 4 });
+        var entry = EntryFor(path) with { FileSizeBytes = 999 };   // recorded size no longer matches
+        Assert.AreEqual(StaleReason.Modified, ClipMetaIndex.CheckEntry(entry));
+    }
+
+    [TestMethod]
+    public void CheckEntry_LastModifiedChanged_ReturnsModified()
+    {
+        string path = MakeFile("clip.mp4", new byte[] { 1, 2, 3, 4 });
+        // Same size, but recorded one hour earlier than the file's real mtime.
+        var entry = EntryFor(path) with { LastModified = EntryFor(path).LastModified.AddHours(-1) };
+        Assert.AreEqual(StaleReason.Modified, ClipMetaIndex.CheckEntry(entry));
+    }
+
+    [TestMethod]
+    public void CheckEntry_MissingFile_ReturnsMissing()
+    {
+        var entry = new IndexEntry(
+            Path.Combine(_tempDir, "gone.mp4"), 10, DateTimeOffset.UtcNow, new[] { ("game", "TF2") });
+        Assert.AreEqual(StaleReason.Missing, ClipMetaIndex.CheckEntry(entry));
+    }
+
     /// <summary>An entry list that yields nothing and throws as soon as it is enumerated —
     /// stands in for an interrupted serialization (crash / disk-full) mid-write.</summary>
     private sealed class ThrowingEntryList : IReadOnlyList<IndexEntry>

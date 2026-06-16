@@ -39,15 +39,29 @@ internal static class IndexSearchCommand
         if (matches.Count == 0)
         {
             output.WriteLine("  No matches found.");
+            return 0;
         }
-        else
+
+        int stale = 0;
+        foreach (var entry in matches)
         {
-            foreach (var entry in matches)
+            string relative = Path.GetRelativePath(directory, entry.FilePath);
+            string marker = ClipMetaIndex.CheckEntry(entry) switch
             {
-                string relative = Path.GetRelativePath(directory, entry.FilePath);
-                output.WriteLine($"  {relative}");
-            }
-            output.WriteLine($"{matches.Count} match(es) found.");
+                StaleReason.Missing => "  [missing — file no longer exists]",
+                StaleReason.Modified => "  [changed since index]",
+                _ => "",
+            };
+            if (marker.Length > 0) stale++;
+            output.WriteLine($"  {relative}{marker}");
+        }
+        output.WriteLine($"{matches.Count} match(es) found.");
+
+        if (stale > 0)
+        {
+            output.WriteLine(
+                $"Warning: {stale} result(s) changed or were removed since the index was built " +
+                $"({data.Built:yyyy-MM-dd HH:mm} UTC). Run --index to refresh.");
         }
         return 0;
     }
