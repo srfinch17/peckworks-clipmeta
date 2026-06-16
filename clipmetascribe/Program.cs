@@ -1,6 +1,7 @@
 using ClipMetaCore;
 using ClipMetaCore.Abstractions;
 using ClipMetaCore.Logging;
+using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Write;
@@ -205,6 +206,21 @@ internal static class Program
             }
         }
 
+        // A directory plus a write operation → batch the write across every .mp4 in the directory.
+        // (Directory READ commands — find/vocab/index/export — were handled and returned above.)
+        if (filePath != null && Directory.Exists(filePath) && IsWriteOp(args))
+        {
+            try
+            {
+                return RunBatch(args, filePath, dryRun, yes, backup, logger);
+            }
+            catch (ArgumentException ex)   // e.g. --copy-from missing its source path
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                return 1;
+            }
+        }
+
         if (filePath == null || !File.Exists(filePath))
         {
             if (filePath != null && Path.HasExtension(filePath))
@@ -387,6 +403,97 @@ internal static class Program
         return mutation;
     }
 
+    /// <summary>True when the arguments contain any metadata-write operation (the ops that batch
+    /// over a directory). Directory READ commands are dispatched earlier and are not included.</summary>
+    private static bool IsWriteOp(string[] args) =>
+        ContainsFlag(args, "--set") || ContainsFlag(args, "--append") ||
+        ContainsFlag(args, "--clear") || ContainsFlag(args, "--clear-all") ||
+        ContainsFlag(args, "--copy-from");
+
+    /// <summary>
+    /// Applies a write operation to every .mp4 in <paramref name="directory"/> (recursive),
+    /// delegating per-file iteration and failure isolation to <see cref="BatchCommand"/>. Builds
+    /// the op-specific per-file mutation factory; confirms a folder-wide --clear-all once; parses a
+    /// --copy-from source a single time and skips that source clip.
+    /// </summary>
+    private static int RunBatch(string[] args, string directory, bool dryRun, bool yes, bool backup, IClipMetaLogger logger)
+    {
+        var files = Directory.EnumerateFiles(directory, "*.mp4", SearchOption.AllDirectories)
+                             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                             .ToList();
+        if (files.Count == 0)
+        {
+            Console.WriteLine($"No .mp4 files found in '{directory}'.");
+            return 0;
+        }
+
+        if (ContainsFlag(args, "--clear-all"))
+        {
+            if (!yes && !dryRun)
+            {
+                Console.Write(
+                    $"This will remove ALL clipmeta metadata from {files.Count} clip(s) under " +
+                    $"'{directory}'. Type YES to confirm: ");
+                if (Console.ReadLine()?.Trim() != "YES")
+                {
+                    Console.WriteLine("Cancelled.");
+                    return 0;
+                }
+            }
+            return BatchCommand.Run(files,
+                file => new MetadataMutation
+                {
+                    ClearAll = true,
+                    DryRun = dryRun,
+                    BackupPath = backup ? file + ".bak" : null,
+                },
+                logger);
+        }
+
+        if (ContainsFlag(args, "--copy-from"))
+        {
+            int cfIndex = Array.FindIndex(args, a => a.Equals("--copy-from", StringComparison.OrdinalIgnoreCase));
+            string source = RequireArg(args, cfIndex, 1, "a source .mp4 path");
+            if (!File.Exists(source) ||
+                !Path.GetExtension(source).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine($"Error: --copy-from source must be an existing .mp4 file: {source}");
+                return 1;
+            }
+
+            BoxNode sourceTree;
+            try
+            {
+                sourceTree = Mp4Parser.ParseFile(source);
+            }
+            catch (Exception ex) when (ex is UnsupportedFormatException or InvalidDataException or IOException)
+            {
+                Console.Error.WriteLine($"Error: cannot read --copy-from source '{source}': {ex.Message}");
+                return 1;
+            }
+
+            string sourceFull = Path.GetFullPath(source);
+            return BatchCommand.Run(files, file =>
+            {
+                // Copying a clip onto itself is a no-op, not a failure — skip the source.
+                if (string.Equals(Path.GetFullPath(file), sourceFull, StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var mutation = ClipMetaCopier.BuildCopyMutation(sourceTree);
+                var extra = BuildMutation(args, file, dryRun, backup);   // explicit ops layer on top
+                foreach (var (key, value) in extra.SetFields) mutation.SetFields[key] = value;
+                foreach (var (key, value) in extra.AppendFields) mutation.AppendFields[key] = value;
+                foreach (var key in extra.DeleteFields) mutation.DeleteFields.Add(key);
+                mutation.DryRun = extra.DryRun;
+                mutation.BackupPath = extra.BackupPath;
+                return mutation;
+            }, logger);
+        }
+
+        // --set / --append / --clear across the folder: a fresh mutation per file.
+        return BatchCommand.Run(files, file => BuildMutation(args, file, dryRun, backup), logger);
+    }
+
     private static bool ContainsFlag(string[] args, string flag)
         => Array.Exists(args, a => a.Equals(flag, StringComparison.OrdinalIgnoreCase));
 
@@ -433,6 +540,11 @@ internal static class Program
               clipmetascribe "C:\clips\" --export [--format json|csv] [--output <path>]
               clipmetascribe "C:\clips\" --index
               clipmetascribe "C:\clips\" --index-search <field> <value>
+
+            Batch (a write op on a directory applies to every .mp4 in it, recursively):
+              clipmetascribe "C:\clips\" --set <field> <value>
+              clipmetascribe "C:\clips\" --copy-from "source.mp4"
+              clipmetascribe "C:\clips\" --clear-all --yes
 
             Fields:  game  players  tags  timecode  rating  notes  (or any custom name)
 
