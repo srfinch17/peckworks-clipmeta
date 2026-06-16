@@ -14,7 +14,7 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 |---------|-----------|---------|
 | `clipmeta.core` | `ClipMetaCore` | All business logic: MP4 parse/read/write, schema, search/index, logging. Zero NuGet deps. |
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
-| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search metadata (8 commands). References Core. |
+| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (9 commands, incl. `--copy-from`). References Core. |
 | `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
 | `clipmetaview.Tests` | — | MSTest, 80 tests. |
 | `clipmetascribe.Tests` | — | MSTest, 239 tests (incl. real-clip integration and byte-level media-integrity tests). |
