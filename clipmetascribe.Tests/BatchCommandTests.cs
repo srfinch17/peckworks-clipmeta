@@ -71,6 +71,25 @@ public class BatchCommandTests
         StringAssert.Contains(sw.ToString(), "0 updated, 2 failed");
     }
 
+    [TestMethod]
+    public void Run_DryRun_ReportsWouldUpdate_NotCompletion()
+    {
+        // Dry-run mutations short-circuit in Mp4Writer before opening the file, so each "succeeds"
+        // without writing. The summary must say nothing was modified — not claim N were updated.
+        var files = new[] { Path.Combine(_dir, "a.mp4"), Path.Combine(_dir, "b.mp4") };
+        var sw = new StringWriter();
+
+        int code = BatchCommand.Run(files,
+            _ => { var m = SetGame("X"); m.DryRun = true; return m; },
+            NullLogger.Instance, sw, dryRun: true);
+
+        Assert.AreEqual(0, code);
+        string output = sw.ToString();
+        StringAssert.Contains(output, "dry-run");
+        StringAssert.Contains(output, "No files modified");
+        Assert.IsFalse(output.Contains("Batch complete"), "dry-run must not claim writes completed");
+    }
+
     // ── Integration over real clips ───────────────────────────────────────────
 
     [TestMethod]

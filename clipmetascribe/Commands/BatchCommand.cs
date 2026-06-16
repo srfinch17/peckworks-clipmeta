@@ -23,7 +23,8 @@ internal static class BatchCommand
         IReadOnlyList<string> files,
         Func<string, MetadataMutation?> mutationFor,
         IClipMetaLogger logger,
-        TextWriter? output = null)
+        TextWriter? output = null,
+        bool dryRun = false)
     {
         TextWriter o = output ?? Console.Out;
         int updated = 0, failed = 0, skipped = 0;
@@ -60,7 +61,9 @@ internal static class BatchCommand
             }
         }
 
-        o.WriteLine($"Batch complete: {updated} updated, {failed} failed, {skipped} skipped ({files.Count} clips).");
+        o.WriteLine(dryRun
+            ? $"Batch dry-run: {updated} clip(s) would be updated, {failed} failed, {skipped} skipped ({files.Count} total). No files modified."
+            : $"Batch complete: {updated} updated, {failed} failed, {skipped} skipped ({files.Count} clips).");
         return failed == 0 ? 0 : 2;
     }
 

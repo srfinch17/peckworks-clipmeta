@@ -219,6 +219,14 @@ internal static class Program
                 Console.Error.WriteLine($"Error: {ex.Message}");
                 return 1;
             }
+            // Enumerating the directory (or reading a --copy-from source) can surface an IO or
+            // permission error — e.g. a disconnected share or an unreadable subfolder. Report it
+            // cleanly instead of crashing the batch with an unhandled stack trace.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                return 2;
+            }
         }
 
         if (filePath == null || !File.Exists(filePath))
@@ -447,7 +455,7 @@ internal static class Program
                     DryRun = dryRun,
                     BackupPath = backup ? file + ".bak" : null,
                 },
-                logger);
+                logger, dryRun: dryRun);
         }
 
         if (ContainsFlag(args, "--copy-from"))
@@ -487,11 +495,11 @@ internal static class Program
                 mutation.DryRun = extra.DryRun;
                 mutation.BackupPath = extra.BackupPath;
                 return mutation;
-            }, logger);
+            }, logger, dryRun: dryRun);
         }
 
         // --set / --append / --clear across the folder: a fresh mutation per file.
-        return BatchCommand.Run(files, file => BuildMutation(args, file, dryRun, backup), logger);
+        return BatchCommand.Run(files, file => BuildMutation(args, file, dryRun, backup), logger, dryRun: dryRun);
     }
 
     private static bool ContainsFlag(string[] args, string flag)
