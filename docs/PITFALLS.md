@@ -8,6 +8,23 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-15 — Index write truncated the existing index on open (fixed: temp-then-atomic-swap)
+- **Symptom (latent):** `ClipMetaIndex.WriteToFile` opened the destination with
+  `new StreamWriter(filePath, append: false, …)`, which truncates the target the instant it
+  opens. A write interrupted between that open and the final flush — crash, power loss,
+  disk-full, or an exception while serializing — left the user's previously-built
+  `.clipmeta-index` truncated or empty. Provable in a test: feed an `IndexData` whose entry
+  list throws mid-enumeration and the on-disk index is left corrupt at the failure point.
+- **Cause:** writing in place. Every *other* mutation in the codebase already goes temp →
+  verify → atomic swap; the index writer was the one place that didn't.
+- **Fix:** serialize to `"{filePath}.{guid}.tmp"`, then `File.Move(temp, filePath, overwrite: true)`
+  (same-volume atomic `MoveFileEx(REPLACE_EXISTING)`), wrapped in the write engine's
+  `Mp4Writer.RetryOnTransientLock` for the AV/indexer race. On any failure the temp is deleted
+  and the original index is untouched (it is never opened for writing until the swap). Encoding
+  unchanged (UTF-8) so the format round-trips exactly.
+- **Lesson:** any "overwrite a file the user cares about" path must be temp-then-atomic-swap, not
+  write-in-place — truncation happens at *open*, long before the bytes you meant to write.
+
 ### 2026-06-15 — Foreign-atom test assumed a single `ilst`; a real clip has two `meta` boxes (fixed test)
 - **Symptom:** Expanding the pristine corpus made `Write_ForeignAtoms_Preserved` fail on exactly
   one clip (`2022-02-01 21.50.02.mp4`): "Foreign atom count changed. Before: 2, After: 0" — as if
