@@ -145,6 +145,32 @@ internal static class Program
             }
         }
 
+        if (ContainsFlag(args, "--watching"))
+        {
+            if (filePath == null || !Directory.Exists(filePath))
+            {
+                Console.Error.WriteLine("Error: --watching requires a valid clips directory as the first argument.");
+                return 1;
+            }
+            int watchLimit = 5;
+            string? limitArg = GetFlag(args, "--limit");
+            if (limitArg != null && (!int.TryParse(limitArg, out watchLimit) || watchLimit < 1))
+            {
+                Console.Error.WriteLine("Error: --limit requires a positive integer.");
+                return 1;
+            }
+            bool includeAccessFallback = !ContainsFlag(args, "--no-access-fallback");
+            try
+            {
+                return WatchingCommand.Run(filePath, watchLimit, includeAccessFallback);
+            }
+            catch (IOException ex)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                return 2;
+            }
+        }
+
         if (ContainsFlag(args, "--export"))
         {
             if (filePath == null)
@@ -332,6 +358,7 @@ internal static class Program
         "--find", "--vocab", "--index", "--index-search", "--export",
         "--format", "--output", "--dry-run", "--backup", "--verbose",
         "--log", "--yes", "--version",
+        "--watching", "--limit", "--no-access-fallback",
     };
 
     /// <summary>
@@ -548,6 +575,7 @@ internal static class Program
               clipmetascribe "C:\clips\" --export [--format json|csv] [--output <path>]
               clipmetascribe "C:\clips\" --index
               clipmetascribe "C:\clips\" --index-search <field> <value>
+              clipmetascribe "C:\clips\" --watching [--limit <n>] [--no-access-fallback]
 
             Batch (a write op on a directory applies to every .mp4 in it, recursively):
               clipmetascribe "C:\clips\" --set <field> <value>
@@ -586,6 +614,8 @@ internal static class Program
               --version         Print version and exit
               --format json|csv Export format (default: json). Use with --export.
               --output <path>   Write export to file instead of stdout. Use with --export.
+              --limit <n>             Max watched-clip candidates (use with --watching; default 5).
+              --no-access-fallback    Only open-player candidates (use with --watching).
 
             Exit codes:  0=success  1=bad args / not found  2=write failure  3=verification failure
             """);
