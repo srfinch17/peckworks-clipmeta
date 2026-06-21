@@ -249,4 +249,42 @@ public class WatchingResolverTests
         Assert.AreEqual(0, result.Diagnostics.UnresolvedPlayers.Count, "no .mp4 in title is not a wrong-dir signal");
         Assert.IsTrue(result.Candidates.Count >= 1, "normal access-time fallback still answers");
     }
+
+    [TestMethod]
+    public void Resolve_MultipleResolvingPlayers_AllLow()
+    {
+        // Row 6: two players each resolve to a library clip → ambiguous → all low (never auto-tag).
+        // b.mp4 is even locked, to show multi-player ambiguity dominates the bare-name lock rule.
+        string a = Touch("a.mp4");
+        string b = Touch("b.mp4");
+        using var holdB = new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        IReadOnlyList<WatchingCandidate> result = Candidates(
+            Resolver(
+                new ProcessWindow("mpc-hc64", $"{a} - MPC-HC"),
+                new ProcessWindow("vlc", "b.mp4 - VLC media player")),
+            _tempDir, 5, true);
+
+        Assert.AreEqual("low", result.Single(c => c.Name == "a.mp4").Confidence);
+        Assert.AreEqual("low", result.Single(c => c.Name == "b.mp4").Confidence);
+    }
+
+    [TestMethod]
+    public void Resolve_BareNameMatchesMultipleClips_AllLow()
+    {
+        // The canonical same-name-in-two-folders collision: a bare name resolving to >1 library
+        // clip is ambiguous and must never be high.
+        Touch("dup.mp4");
+        string subdir = Path.Combine(_tempDir, "sub");
+        Directory.CreateDirectory(subdir);
+        File.WriteAllBytes(Path.Combine(subdir, "dup.mp4"), Array.Empty<byte>());
+
+        IReadOnlyList<WatchingCandidate> result = Candidates(
+            Resolver(new ProcessWindow("vlc", "dup.mp4 - VLC media player")),
+            _tempDir, 5, true);
+
+        var dups = result.Where(c => c.Name == "dup.mp4").ToList();
+        Assert.AreEqual(2, dups.Count);
+        Assert.IsTrue(dups.All(c => c.Confidence == "low"));
+    }
 }
