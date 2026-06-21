@@ -8,6 +8,24 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-21 — Watched-clip resolution
+
+- **Writing to a clip a player still holds open fails.** `File.Replace` deletes-and-swaps the
+  target; that throws a sharing violation unless every open handle used `FILE_SHARE_DELETE`, which
+  MPC-HC/VLC do not. A clip is writable only after the player advances ("next") or closes. The
+  watched-clip resolver surfaces `inUse` so callers warn before attempting a write. **TODO when
+  dogfooding:** confirm per player whether the lock releases on *stop*, on *next*, or only on
+  *close* — this sets the deferred-tag queue's drain timing (pass 2).
+- **ClipMeta's own reads bump last-access time.** That pollutes the access-time resolution signal.
+  Fixed at the single parse choke point (`Mp4Parser.ParseFile`) with `AccessTimeGuard`
+  (capture-then-restore, best-effort — restoring is itself a write that can lose to a lock).
+- **Window titles only *select*, never *construct*.** A resolver candidate must come from a clip
+  enumerated under the library root; a title naming a path outside the library matches nothing and
+  is dropped. This is the containment guarantee — do not "resolve" a title path by trusting it.
+- **Player title formats:** MPC-HC emits the full path; VLC emits `name.mp4 - VLC media player`
+  (bare name). A VLC title with no `.mp4` is an embedded metadata title — expected, yields no player
+  candidate. The recognized-player list lives in `MediaPlayers.KnownProcessNames` (extensible).
+
 ### 2026-06-15 — Index write truncated the existing index on open (fixed: temp-then-atomic-swap)
 - **Symptom (latent):** `ClipMetaIndex.WriteToFile` opened the destination with
   `new StreamWriter(filePath, append: false, …)`, which truncates the target the instant it

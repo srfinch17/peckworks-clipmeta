@@ -28,14 +28,17 @@ clipmetascribe "C:\clips\" --vocab tags
 clipmetascribe "C:\clips\" --export --format csv --output library.csv
 clipmetascribe "C:\clips\" --index
 clipmetascribe "C:\clips\" --index-search tags "competitive"
+clipmetascribe "C:\clips\" --watching
 ```
+
+`--watching` resolves the clip currently open in a media player. Supported players (extensible): MPC-HC (title is the full path) and VLC (title is the bare file name). Resolve-only — use `--set` with the returned path to tag.
 
 Run with no arguments for full usage, including `--dry-run`, `--backup`, and `--log`.
 
 ### clipmetamcp
 An MCP (Model Context Protocol) server exposing the clipmeta tools to MCP hosts such as Claude Desktop, so you can read, search, and **tag clips conversationally** ("tag that last clip with game TF2 and rating 5"). Pure C#, zero dependencies, self-contained — the person installing it needs no .NET, Node, Python, terminal, or JSON editing.
 
-**Thirteen tools.** Reads: `clip_get_metadata` (everything about one clip in one call), `library_list` (find clips by file name), `library_find` / `library_search_index` (find clips by metadata), `library_vocab` (every value used for a field), `library_export` (the whole library as JSON or CSV). Writes: `clip_set_fields`, `clip_append_field`, `clip_clear_fields`, `clip_clear_all` — every write keeps a timestamped backup next to the file unless told otherwise, supports dry-run previews, and `clip_clear_all` refuses without an explicit confirmation argument. Backups: `library_list_backups` (see what backups exist), `clip_restore_backup` (roll a clip back to a backup — validated as a real MP4 first, confirmation required), `clip_prune_backups` (clean up old backups, confirmation required). All file access is sandboxed to the clips folder you pick at install time; nothing outside it can be read or written.
+**Fourteen tools.** Reads: `clip_get_metadata` (everything about one clip in one call), `library_list` (find clips by file name), `library_find` / `library_search_index` (find clips by metadata), `library_vocab` (every value used for a field), `library_export` (the whole library as JSON or CSV), `library_watching` (resolve the clip currently open in a media player — returns ranked candidates; supported players are extensible, with MPC-HC supplying the full path in the title and VLC the bare file name). Writes: `clip_set_fields`, `clip_append_field`, `clip_clear_fields`, `clip_clear_all` — every write keeps a timestamped backup next to the file unless told otherwise, supports dry-run previews, and `clip_clear_all` refuses without an explicit confirmation argument. Backups: `library_list_backups` (see what backups exist), `clip_restore_backup` (roll a clip back to a backup — validated as a real MP4 first, confirmation required), `clip_prune_backups` (clean up old backups, confirmation required). All file access is sandboxed to the clips folder you pick at install time; nothing outside it can be read or written.
 
 #### Installing in Claude Desktop
 
