@@ -287,4 +287,18 @@ public class WatchingResolverTests
         Assert.AreEqual(2, dups.Count);
         Assert.IsTrue(dups.All(c => c.Confidence == "low"));
     }
+
+    [TestMethod]
+    public void Resolve_SameForeignFileInTwoPlayers_DeduplicatesWarning()
+    {
+        Touch("inlibrary.mp4");
+
+        WatchingResult result = Resolver(
+                new ProcessWindow("vlc", "foreign.mp4 - VLC media player"),
+                new ProcessWindow("vlc", "foreign.mp4 - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count,
+            "identical foreign players must collapse to one warning entry");
+    }
 }

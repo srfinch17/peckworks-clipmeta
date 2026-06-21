@@ -56,6 +56,7 @@ public sealed class WatchingResolver
                 m.Window.ProcessName,
                 m.ReferencedValue,
                 m.Kind == TitleExtractionKind.FullPath ? Path.GetDirectoryName(m.ReferencedValue) : null))
+            .Distinct()
             .ToList();
         var diagnostics = new WatchDiagnostics(unresolvedPlayers);
 
