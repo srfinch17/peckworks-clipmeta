@@ -89,7 +89,7 @@ public sealed class WatchingResolver
             .ToList();
 
         for (int i = 0; i < ranked.Count; i++)
-            ranked[i] = ranked[i] with { InUse = ProbeInUse(ranked[i].Path) };
+            ranked[i] = ranked[i] with { InUse = LockProbe.IsInUse(ranked[i].Path) };
 
         // Final ordering applies the lock probe as a tiebreaker within equal confidence.
         return ranked
@@ -97,26 +97,5 @@ public sealed class WatchingResolver
             .ThenByDescending(c => c.InUse)
             .ThenByDescending(c => c.LastAccessTimeUtc)
             .ToList();
-    }
-
-    /// <summary>
-    /// True when the file has an open handle that denies exclusive access. Best-effort and never
-    /// fatal: an unexpected failure reports not-in-use and the resolution continues.
-    /// </summary>
-    private static bool ProbeInUse(string path)
-    {
-        try
-        {
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-            return false;
-        }
-        catch (IOException)
-        {
-            return true;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 }
