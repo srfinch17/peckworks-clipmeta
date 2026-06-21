@@ -38,7 +38,7 @@ public sealed class WatchingResolver
     /// at <paramref name="limit"/>. When <paramref name="includeAccessFallback"/> is false, only
     /// player-title candidates are returned (empty when no player resolves a clip).
     /// </summary>
-    public IReadOnlyList<WatchingCandidate> Resolve(string libraryRoot, int limit, bool includeAccessFallback)
+    public WatchingResult Resolve(string libraryRoot, int limit, bool includeAccessFallback)
     {
         WatchContext context = WatchContext.Build(libraryRoot, _windowSource, _playerNames);
 
@@ -92,10 +92,12 @@ public sealed class WatchingResolver
             ranked[i] = ranked[i] with { InUse = LockProbe.IsInUse(ranked[i].Path) };
 
         // Final ordering applies the lock probe as a tiebreaker within equal confidence.
-        return ranked
+        List<WatchingCandidate> finalCandidates = ranked
             .OrderByDescending(c => c.Confidence == HighConfidence)
             .ThenByDescending(c => c.InUse)
             .ThenByDescending(c => c.LastAccessTimeUtc)
             .ToList();
+
+        return new WatchingResult(finalCandidates, new WatchDiagnostics(Array.Empty<UnresolvedPlayer>()));
     }
 }

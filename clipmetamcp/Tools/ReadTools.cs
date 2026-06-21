@@ -502,7 +502,8 @@ public static class ReadTools
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
 
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
-        IReadOnlyList<WatchingCandidate> candidates = resolver.Resolve(root, limit, includeAccessFallback);
+        WatchingResult result = resolver.Resolve(root, limit, includeAccessFallback);
+        IReadOnlyList<WatchingCandidate> candidates = result.Candidates;
 
         var array = new JsonArray();
         foreach (WatchingCandidate c in candidates)

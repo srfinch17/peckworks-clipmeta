@@ -32,6 +32,9 @@ public class WatchingResolverTests
     private WatchingResolver Resolver(params ProcessWindow[] windows) =>
         WatchingResolver.CreateDefault(new FakeProcessWindowSource(windows));
 
+    private static IReadOnlyList<WatchingCandidate> Candidates(WatchingResolver resolver, string dir, int limit, bool fallback) =>
+        resolver.Resolve(dir, limit, fallback).Candidates;
+
     [TestMethod]
     public void Resolve_SingleUnambiguousPlayerHit_IsHighAndFirst()
     {
@@ -39,8 +42,7 @@ public class WatchingResolverTests
         Touch("other.mp4");
 
         IReadOnlyList<WatchingCandidate> result =
-            Resolver(new ProcessWindow("vlc", "clip.mp4 - VLC media player"))
-                .Resolve(_tempDir, limit: 5, includeAccessFallback: true);
+            Candidates(Resolver(new ProcessWindow("vlc", "clip.mp4 - VLC media player")), _tempDir, 5, true);
 
         Assert.AreEqual(clip, result[0].Path);
         Assert.AreEqual("high", result[0].Confidence);
@@ -57,7 +59,7 @@ public class WatchingResolverTests
         File.SetLastAccessTimeUtc(newer, DateTime.UtcNow);
 
         IReadOnlyList<WatchingCandidate> result =
-            Resolver().Resolve(_tempDir, limit: 5, includeAccessFallback: true);
+            Candidates(Resolver(), _tempDir, 5, true);
 
         Assert.AreEqual(newer, result[0].Path);
         Assert.IsTrue(result.All(c => c.Confidence == "low"));
@@ -70,7 +72,7 @@ public class WatchingResolverTests
         Touch("a.mp4");
 
         IReadOnlyList<WatchingCandidate> result =
-            Resolver().Resolve(_tempDir, limit: 5, includeAccessFallback: false);
+            Candidates(Resolver(), _tempDir, 5, false);
 
         Assert.AreEqual(0, result.Count);
     }
@@ -81,10 +83,11 @@ public class WatchingResolverTests
         Touch("a.mp4");
         Touch("b.mp4");
 
-        IReadOnlyList<WatchingCandidate> result = Resolver(
+        IReadOnlyList<WatchingCandidate> result = Candidates(
+            Resolver(
                 new ProcessWindow("vlc", "a.mp4 - VLC media player"),
-                new ProcessWindow("mpc-hc64", "b.mp4"))
-            .Resolve(_tempDir, limit: 5, includeAccessFallback: false);
+                new ProcessWindow("mpc-hc64", "b.mp4")),
+            _tempDir, 5, false);
 
         Assert.AreEqual(2, result.Count);
         Assert.IsTrue(result.All(c => c.Confidence == "low"));
@@ -93,7 +96,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_EmptyLibrary_ReturnsEmpty()
     {
-        Assert.AreEqual(0, Resolver().Resolve(_tempDir, limit: 5, includeAccessFallback: true).Count);
+        Assert.AreEqual(0, Candidates(Resolver(), _tempDir, 5, true).Count);
     }
 
     [TestMethod]
@@ -102,8 +105,8 @@ public class WatchingResolverTests
         string busy = Touch("busy.mp4");
         using var hold = new FileStream(busy, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-        WatchingCandidate candidate = Resolver(new ProcessWindow("vlc", "busy.mp4 - VLC media player"))
-            .Resolve(_tempDir, limit: 5, includeAccessFallback: true)
+        WatchingCandidate candidate = Candidates(
+                Resolver(new ProcessWindow("vlc", "busy.mp4 - VLC media player")), _tempDir, 5, true)
             .Single(c => c.Path == busy);
 
         Assert.IsTrue(candidate.InUse);
@@ -114,8 +117,8 @@ public class WatchingResolverTests
     {
         string free = Touch("free.mp4");
 
-        WatchingCandidate candidate = Resolver(new ProcessWindow("vlc", "free.mp4 - VLC media player"))
-            .Resolve(_tempDir, limit: 5, includeAccessFallback: true)
+        WatchingCandidate candidate = Candidates(
+                Resolver(new ProcessWindow("vlc", "free.mp4 - VLC media player")), _tempDir, 5, true)
             .Single(c => c.Path == free);
 
         Assert.IsFalse(candidate.InUse);
@@ -128,7 +131,7 @@ public class WatchingResolverTests
             Touch($"clip{i}.mp4");
 
         IReadOnlyList<WatchingCandidate> result =
-            Resolver().Resolve(_tempDir, limit: 3, includeAccessFallback: true);
+            Candidates(Resolver(), _tempDir, 3, true);
 
         Assert.AreEqual(3, result.Count);
     }
@@ -140,8 +143,7 @@ public class WatchingResolverTests
         string bystander = Touch("bystander.mp4");
 
         IReadOnlyList<WatchingCandidate> result =
-            Resolver(new ProcessWindow("vlc", "watched.mp4 - VLC media player"))
-                .Resolve(_tempDir, limit: 10, includeAccessFallback: true);
+            Candidates(Resolver(new ProcessWindow("vlc", "watched.mp4 - VLC media player")), _tempDir, 10, true);
 
         WatchingCandidate watchedCandidate = result.Single(c => c.Name == "watched.mp4");
         Assert.AreEqual("high", watchedCandidate.Confidence);

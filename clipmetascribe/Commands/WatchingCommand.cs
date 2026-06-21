@@ -18,7 +18,8 @@ internal static class WatchingCommand
         output ??= Console.Out;
 
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
-        IReadOnlyList<WatchingCandidate> candidates = resolver.Resolve(libraryDir, limit, includeAccessFallback);
+        WatchingResult result = resolver.Resolve(libraryDir, limit, includeAccessFallback);
+        IReadOnlyList<WatchingCandidate> candidates = result.Candidates;
 
         if (candidates.Count == 0)
         {
