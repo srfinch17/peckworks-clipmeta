@@ -132,4 +132,23 @@ public class WatchingResolverTests
 
         Assert.AreEqual(3, result.Count);
     }
+
+    [TestMethod]
+    public void Resolve_PlayerHitWithFallback_AccessOnlyClipsAppearAsLowRows()
+    {
+        string watched = Touch("watched.mp4");
+        string bystander = Touch("bystander.mp4");
+
+        IReadOnlyList<WatchingCandidate> result =
+            Resolver(new ProcessWindow("vlc", "watched.mp4 - VLC media player"))
+                .Resolve(_tempDir, limit: 10, includeAccessFallback: true);
+
+        WatchingCandidate watchedCandidate = result.Single(c => c.Name == "watched.mp4");
+        Assert.AreEqual("high", watchedCandidate.Confidence);
+        Assert.AreEqual(PlayerTitleSignal.SourceName, watchedCandidate.Source);
+
+        WatchingCandidate bystanderCandidate = result.Single(c => c.Name == "bystander.mp4");
+        Assert.AreEqual("low", bystanderCandidate.Confidence);
+        Assert.AreEqual(AccessTimeSignal.SourceName, bystanderCandidate.Source);
+    }
 }
