@@ -54,6 +54,7 @@ Persistent project memory lives in the Claude memory store (indexed in `MEMORY.m
 - **Never load `mdat` into memory**; stream-copy. The source file is **never opened for writing** — mutations go to a temp file, verified by re-parse, then `File.Replace`.
 - XML doc comments on all public types/methods. Named constants, no magic numbers.
 - `BoxNode` keeps its name until a second media format actually earns a generic abstraction.
+- **Testable surfaces.** A thin shell that builds its own dependency internally (e.g. `WatchingCommand` / the MCP handler calling `ProcessWindowSource.ForCurrentPlatform()`) takes a *trailing optional* injectable that defaults to the real impl, so rendering/output can be tested with a fake without changing production wiring.
 
 ---
 
@@ -71,6 +72,7 @@ dotnet test   --nologo --no-build -v q
 - **The pristine corpus is curated and documented.** `testclips/PRISTINE-MANIFEST.md` (checked in) records every clip's source, structure, and the code path it uniquely covers. **Adding a clip:** drop it in `pristine/`, run the scribe tests (it rides every `[DynamicData]` integration test automatically), then add a manifest row describing what it *uniquely* covers — don't keep same-shape duplicates (they only slow the suite). Keep clips small: write correctness is structural, not size-driven (64-bit `co64`/`largesize` is the only size-gated path and triggers at 4 GB — covered synthetically, not by giant clips). See `docs/superpowers/specs/2026-06-15-pristine-test-corpus-baseline-design.md`.
 - **New machine?** If restore fails with `NU1100`, the machine likely has no NuGet source. Run:
   `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`
+- **Changed an MCP tool registration or a CLI command surface? Run the FULL relevant test project, not a `--filter`.** Surface-wide assertions live OUTSIDE your diff — e.g. `clipmetamcp.Tests` `ToolsList_ContainsTheFullToolSurface` asserts the exact tool set and registration order, so adding a tool without updating it passes a filtered run and fails only on the full suite. (It bit us registering `library_watching`.)
 
 ---
 
