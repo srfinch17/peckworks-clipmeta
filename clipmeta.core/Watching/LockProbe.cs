@@ -1,14 +1,21 @@
+using System.Security;
+
 namespace ClipMetaCore.Watching;
 
 /// <summary>
 /// Best-effort check of whether a file currently has an open handle that denies exclusive access —
 /// the signal that a media player is actively reading it. Cloud-safe: an offline/placeholder file
 /// (Dropbox/OneDrive online-only) is reported not-in-use WITHOUT being opened, so the probe can
-/// never trigger a hydration download. Never throws — any failure reports not-in-use.
+/// never trigger a hydration download. Never throws — any inaccessible, invalid, missing, or
+/// offline path is reported not-in-use; no non-fatal exception ever escapes this method.
 /// </summary>
 public static class LockProbe
 {
-    /// <summary>True when the file has an exclusive-denying open handle; false otherwise.</summary>
+    /// <summary>
+    /// Returns <see langword="true"/> when the file has an exclusive-denying open handle;
+    /// <see langword="false"/> for any inaccessible, invalid, missing, or offline path.
+    /// This method never throws for any non-fatal exception.
+    /// </summary>
     public static bool IsInUse(string path)
     {
         try
@@ -18,9 +25,9 @@ public static class LockProbe
             if ((File.GetAttributes(path) & FileAttributes.Offline) != 0)
                 return false;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return false; // missing/inaccessible/invalid path — not lockable
+            return false; // missing/inaccessible/invalid/malformed path — not lockable
         }
 
         try
@@ -32,9 +39,9 @@ public static class LockProbe
         {
             return true; // a sharing violation means another handle holds it
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or NotSupportedException or SecurityException or ArgumentException)
         {
-            return false;
+            return false; // inaccessible/invalid/malformed path — not lockable
         }
     }
 }

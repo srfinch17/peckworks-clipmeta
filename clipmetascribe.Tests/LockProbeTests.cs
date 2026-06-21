@@ -58,4 +58,22 @@ public class LockProbeTests
     {
         Assert.IsFalse(LockProbe.IsInUse(Path.Combine(_tempDir, "nope.mp4")));
     }
+
+    [TestMethod]
+    public void IsInUse_MalformedPath_ReturnsFalseWithoutThrowing()
+    {
+        // A malformed-format path can make File.GetAttributes throw NotSupportedException; the probe
+        // must absorb it (never throw — that would crash resolution) and report not-in-use.
+        string malformed = @"::\\not a real path::|*?";
+        bool result = false;
+        try
+        {
+            result = LockProbe.IsInUse(malformed);
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"IsInUse must never throw, but threw {ex.GetType().Name}: {ex.Message}");
+        }
+        Assert.IsFalse(result);
+    }
 }
