@@ -16,38 +16,19 @@ public sealed class PlayerTitleSignal : IWatchSignal
     /// <inheritdoc/>
     public IEnumerable<SignalHit> Detect(WatchContext context)
     {
-        var perPlayer = new List<(ProcessWindow Window, IReadOnlyList<LibraryClip> Clips)>();
-        foreach (ProcessWindow window in context.PlayerWindows)
-        {
-            TitleExtraction? extraction = PlayerTitleParser.Extract(window.WindowTitle);
-            if (extraction is null)
-                continue;
-            IReadOnlyList<LibraryClip> matches = Resolve(extraction.Value, context);
-            if (matches.Count > 0)
-                perPlayer.Add((window, matches));
-        }
+        // Only players whose title resolved to at least one library clip become hits; the resolver
+        // handles the unresolved ones (wrong-directory diagnostics) via the same helper.
+        var resolved = PlayerTitleResolution.For(context)
+            .Where(match => match.Matches.Count > 0)
+            .ToList();
 
-        bool multiplePlayers = perPlayer.Count > 1;
-        foreach ((ProcessWindow window, IReadOnlyList<LibraryClip> clips) in perPlayer)
+        bool multiplePlayers = resolved.Count > 1;
+        foreach (PlayerMatch match in resolved)
         {
-            bool ambiguousFile = clips.Count > 1;
-            foreach (LibraryClip clip in clips)
-                yield return new SignalHit(clip.FullPath, SourceName, window.ProcessName,
-                    Ambiguous: multiplePlayers || ambiguousFile);
+            bool ambiguousFile = match.Matches.Count > 1;
+            foreach (LibraryClip clip in match.Matches)
+                yield return new SignalHit(clip.FullPath, SourceName, match.Window.ProcessName,
+                    Ambiguous: multiplePlayers || ambiguousFile, MatchKind: match.Kind);
         }
-    }
-
-    private static IReadOnlyList<LibraryClip> Resolve(TitleExtraction extraction, WatchContext context)
-    {
-        if (extraction.Kind == TitleExtractionKind.FullPath)
-        {
-            return context.ByFullPath.TryGetValue(extraction.Value, out LibraryClip? clip)
-                ? new[] { clip }
-                : Array.Empty<LibraryClip>();
-        }
-
-        return context.ByFileName.TryGetValue(extraction.Value, out IReadOnlyList<LibraryClip>? list)
-            ? list
-            : Array.Empty<LibraryClip>();
     }
 }
