@@ -17,8 +17,8 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 | `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (9 commands, incl. `--copy-from`; write ops also batch over a directory). References Core. |
 | `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
 | `clipmetaview.Tests` | — | MSTest, 101 tests. |
-| `clipmetascribe.Tests` | — | MSTest, 351 tests (incl. real-clip integration and byte-level media-integrity tests). |
-| `clipmetamcp.Tests` | — | MSTest, 106 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
+| `clipmetascribe.Tests` | — | MSTest, 371 tests (incl. real-clip integration and byte-level media-integrity tests). |
+| `clipmetamcp.Tests` | — | MSTest, 107 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
 
 > `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag).
 
