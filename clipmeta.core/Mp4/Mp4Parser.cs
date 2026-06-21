@@ -58,6 +58,9 @@ public class Mp4Parser : IMediaParser
     /// <exception cref="InvalidDataException">Thrown when the file cannot be parsed as valid MP4.</exception>
     public static BoxNode ParseFile(string path)
     {
+        // Capture/restore last-access time around the read so ClipMeta's own reads don't pollute
+        // the watched-clip access-time signal (best-effort; see AccessTimeGuard).
+        using var accessTimeGuard = new AccessTimeGuard(path);
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         return Parse(fs);
     }

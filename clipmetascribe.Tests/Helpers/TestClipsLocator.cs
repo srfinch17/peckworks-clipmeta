@@ -40,6 +40,14 @@ internal static class TestClipsLocator
     public static string FindScratchPath() => TryFind("scratch") ?? SkipNoClips();
 
     /// <summary>
+    /// The smallest pristine clip by file size — fast to copy, and orders of magnitude less I/O
+    /// than whatever the filesystem happens to enumerate first. Skips the calling test when no
+    /// clips are present.
+    /// </summary>
+    public static string SmallestPristine()
+        => AllPristine().OrderBy(path => new FileInfo(path).Length).First();
+
+    /// <summary>
     /// All pristine .mp4 clips, name-sorted for determinism (filesystem enumeration order is not
     /// guaranteed stable, so the many <c>AllPristine().First()</c> callers must not depend on it).
     /// SKIPS the calling test when no clips are present.
