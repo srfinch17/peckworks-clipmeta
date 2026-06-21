@@ -33,6 +33,10 @@ public sealed class WatchingResolver
     public static WatchingResolver CreateDefault(IProcessWindowSource windowSource) =>
         new(new IWatchSignal[] { new PlayerTitleSignal(), new AccessTimeSignal() }, windowSource);
 
+    /// <summary>The caveat attached to a bare-name match whose file is not currently locked.</summary>
+    private const string NotLockedNote =
+        "not currently locked — may be a same-named file elsewhere; confirm before tagging";
+
     /// <summary>
     /// Resolves the watched-clip candidates under <paramref name="libraryRoot"/>, best first, capped
     /// at <paramref name="limit"/>. When <paramref name="includeAccessFallback"/> is false, only
@@ -41,6 +45,23 @@ public sealed class WatchingResolver
     public WatchingResult Resolve(string libraryRoot, int limit, bool includeAccessFallback)
     {
         WatchContext context = WatchContext.Build(libraryRoot, _windowSource, _playerNames);
+
+        // One source of truth for player→library resolution: feeds both the hit grouping (below)
+        // and the wrong-directory diagnostics (here).
+        IReadOnlyList<PlayerMatch> playerMatches = PlayerTitleResolution.For(context);
+        bool anyPlayerResolved = playerMatches.Any(m => m.Matches.Count > 0);
+        var unresolvedPlayers = playerMatches
+            .Where(m => m.Matches.Count == 0)
+            .Select(m => new UnresolvedPlayer(
+                m.Window.ProcessName,
+                m.ReferencedValue,
+                m.Kind == TitleExtractionKind.FullPath ? Path.GetDirectoryName(m.ReferencedValue) : null))
+            .ToList();
+        var diagnostics = new WatchDiagnostics(unresolvedPlayers);
+
+        // Row 7: a player is open on a file outside the library and NOTHING resolved → suppress the
+        // access-time guesses so there is no tempting wrong answer; the warning leads.
+        bool suppressAccessFallback = !anyPlayerResolved && unresolvedPlayers.Count > 0;
 
         var hitsByPath = new Dictionary<string, List<SignalHit>>(StringComparer.OrdinalIgnoreCase);
         foreach (IWatchSignal signal in _signals)
@@ -52,52 +73,79 @@ public sealed class WatchingResolver
             }
 
         DateTime now = DateTime.UtcNow;
-        var candidates = new List<WatchingCandidate>();
+        var working = new List<WorkingCandidate>();
         foreach ((string path, List<SignalHit> hits) in hitsByPath)
         {
             bool hasPlayer = hits.Any(h => h.Source == PlayerTitleSignal.SourceName);
 
-            // include_access_fallback governs whether access-only candidates appear at all.
             if (!hasPlayer && !includeAccessFallback)
                 continue;
+            if (!hasPlayer && suppressAccessFallback)
+                continue;
 
-            // Safety: only ever surface clips that were enumerated from the library.
             if (!context.ByFullPath.TryGetValue(path, out LibraryClip? clip))
                 continue;
 
             bool playerUnambiguous = hits.Any(h => h.Source == PlayerTitleSignal.SourceName && !h.Ambiguous);
+            bool bareNameUnambiguous = hits.Any(h =>
+                h.Source == PlayerTitleSignal.SourceName && !h.Ambiguous &&
+                h.MatchKind == TitleExtractionKind.BareName);
             string source = hasPlayer ? PlayerTitleSignal.SourceName : AccessTimeSignal.SourceName;
             string? player = hits.FirstOrDefault(h => h.Player is not null)?.Player;
 
-            candidates.Add(new WatchingCandidate(
+            var candidate = new WatchingCandidate(
                 Path: clip.FullPath,
                 Name: clip.FileName,
                 Source: source,
                 Player: player,
                 LastAccessTimeUtc: clip.LastAccessTimeUtc,
                 SecondsSinceAccess: Math.Max(0, (now - clip.LastAccessTimeUtc).TotalSeconds),
-                InUse: false, // enriched below, only for the returned set
-                Confidence: playerUnambiguous ? HighConfidence : LowConfidence));
+                InUse: false,
+                Confidence: playerUnambiguous ? HighConfidence : LowConfidence,
+                Note: null);
+
+            working.Add(new WorkingCandidate(candidate, hasPlayer, bareNameUnambiguous));
         }
 
-        // Rank (high first, then most-recent access) and cap BEFORE probing, so the lock probe only
-        // opens the handful of files we actually return — never the whole library on a fallback pass.
-        List<WatchingCandidate> ranked = candidates
-            .OrderByDescending(c => c.Confidence == HighConfidence)
-            .ThenByDescending(c => c.LastAccessTimeUtc)
+        // Collision guard: probe player-hit candidates now (there are at most a few — one per open
+        // player), so a bare-name high hit whose file is NOT locked is demoted to low + note. This
+        // is the only probing done before the cap; access-time candidates are still probed after it.
+        for (int i = 0; i < working.Count; i++)
+        {
+            if (!working[i].IsPlayerHit)
+                continue;
+            bool inUse = LockProbe.IsInUse(working[i].Candidate.Path);
+            WatchingCandidate c = working[i].Candidate with { InUse = inUse };
+            if (working[i].BareNameUnambiguous && c.Confidence == HighConfidence && !inUse)
+                c = c with { Confidence = LowConfidence, Note = NotLockedNote };
+            working[i] = working[i] with { Candidate = c };
+        }
+
+        // Rank (high first, then most-recent access) and cap BEFORE probing the access-time rows,
+        // so the lock probe never opens the whole library on a fallback pass.
+        List<WorkingCandidate> ranked = working
+            .OrderByDescending(w => w.Candidate.Confidence == HighConfidence)
+            .ThenByDescending(w => w.Candidate.LastAccessTimeUtc)
             .Take(limit)
             .ToList();
 
         for (int i = 0; i < ranked.Count; i++)
-            ranked[i] = ranked[i] with { InUse = LockProbe.IsInUse(ranked[i].Path) };
+            if (!ranked[i].IsPlayerHit) // player hits already probed above
+                ranked[i] = ranked[i] with
+                {
+                    Candidate = ranked[i].Candidate with { InUse = LockProbe.IsInUse(ranked[i].Candidate.Path) },
+                };
 
-        // Final ordering applies the lock probe as a tiebreaker within equal confidence.
         List<WatchingCandidate> finalCandidates = ranked
+            .Select(w => w.Candidate)
             .OrderByDescending(c => c.Confidence == HighConfidence)
             .ThenByDescending(c => c.InUse)
             .ThenByDescending(c => c.LastAccessTimeUtc)
             .ToList();
 
-        return new WatchingResult(finalCandidates, new WatchDiagnostics(Array.Empty<UnresolvedPlayer>()));
+        return new WatchingResult(finalCandidates, diagnostics);
     }
+
+    /// <summary>A candidate plus the per-path facts the collision guard needs before finalizing.</summary>
+    private sealed record WorkingCandidate(WatchingCandidate Candidate, bool IsPlayerHit, bool BareNameUnambiguous);
 }

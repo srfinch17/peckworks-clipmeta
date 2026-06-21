@@ -41,13 +41,14 @@ public class WatchingResolverTests
         string clip = Touch("clip.mp4");
         Touch("other.mp4");
 
-        IReadOnlyList<WatchingCandidate> result =
-            Candidates(Resolver(new ProcessWindow("vlc", "clip.mp4 - VLC media player")), _tempDir, 5, true);
+        IReadOnlyList<WatchingCandidate> result = Candidates(
+            Resolver(new ProcessWindow("mpc-hc64", $"{clip} - MPC-HC")),
+            _tempDir, 5, true);
 
         Assert.AreEqual(clip, result[0].Path);
         Assert.AreEqual("high", result[0].Confidence);
         Assert.AreEqual(PlayerTitleSignal.SourceName, result[0].Source);
-        Assert.AreEqual("vlc", result[0].Player);
+        Assert.AreEqual("mpc-hc64", result[0].Player);
     }
 
     [TestMethod]
@@ -140,17 +141,112 @@ public class WatchingResolverTests
     public void Resolve_PlayerHitWithFallback_AccessOnlyClipsAppearAsLowRows()
     {
         string watched = Touch("watched.mp4");
-        string bystander = Touch("bystander.mp4");
+        Touch("bystander.mp4");
 
-        IReadOnlyList<WatchingCandidate> result =
-            Candidates(Resolver(new ProcessWindow("vlc", "watched.mp4 - VLC media player")), _tempDir, 10, true);
+        IReadOnlyList<WatchingCandidate> result = Candidates(
+            Resolver(new ProcessWindow("mpc-hc64", $"{watched} - MPC-HC")),
+            _tempDir, 5, true);
 
-        WatchingCandidate watchedCandidate = result.Single(c => c.Name == "watched.mp4");
-        Assert.AreEqual("high", watchedCandidate.Confidence);
-        Assert.AreEqual(PlayerTitleSignal.SourceName, watchedCandidate.Source);
+        WatchingCandidate high = result.Single(c => c.Name == "watched.mp4");
+        Assert.AreEqual("high", high.Confidence);
+        Assert.AreEqual(PlayerTitleSignal.SourceName, high.Source);
 
-        WatchingCandidate bystanderCandidate = result.Single(c => c.Name == "bystander.mp4");
-        Assert.AreEqual("low", bystanderCandidate.Confidence);
-        Assert.AreEqual(AccessTimeSignal.SourceName, bystanderCandidate.Source);
+        WatchingCandidate low = result.Single(c => c.Name == "bystander.mp4");
+        Assert.AreEqual("low", low.Confidence);
+        Assert.AreEqual(AccessTimeSignal.SourceName, low.Source);
+    }
+
+    [TestMethod]
+    public void Resolve_BareNameLocked_IsHigh()
+    {
+        string clip = Touch("clip.mp4");
+        using var hold = new FileStream(clip, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        WatchingCandidate c = Candidates(
+            Resolver(new ProcessWindow("vlc", "clip.mp4 - VLC media player")), _tempDir, 5, true)
+            .Single(x => x.Name == "clip.mp4");
+
+        Assert.AreEqual("high", c.Confidence);
+        Assert.IsNull(c.Note);
+    }
+
+    [TestMethod]
+    public void Resolve_BareNameNotLocked_DemotedToLowWithNote()
+    {
+        Touch("clip.mp4"); // free
+
+        WatchingCandidate c = Candidates(
+            Resolver(new ProcessWindow("vlc", "clip.mp4 - VLC media player")), _tempDir, 5, true)
+            .Single(x => x.Name == "clip.mp4");
+
+        Assert.AreEqual("low", c.Confidence);
+        Assert.IsNotNull(c.Note); // confirm-before-tagging caveat
+    }
+
+    [TestMethod]
+    public void Resolve_FullPathNotLocked_StaysHigh()
+    {
+        string clip = Touch("clip.mp4"); // free, but full-path match can't collide
+
+        WatchingCandidate c = Candidates(
+            Resolver(new ProcessWindow("mpc-hc64", $"{clip} - MPC-HC")), _tempDir, 5, true)
+            .Single(x => x.Name == "clip.mp4");
+
+        Assert.AreEqual("high", c.Confidence);
+        Assert.IsNull(c.Note);
+    }
+
+    [TestMethod]
+    public void Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback()
+    {
+        Touch("inlibrary.mp4"); // exists, but nobody is playing it
+
+        WatchingResult result = Resolver(new ProcessWindow("mpc-hc64", @"D:\elsewhere\foreign.mp4 - MPC-HC"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(0, result.Candidates.Count, "access-time guesses must be suppressed");
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count);
+        UnresolvedPlayer up = result.Diagnostics.UnresolvedPlayers[0];
+        Assert.AreEqual("mpc-hc64", up.Player);
+        Assert.AreEqual(@"D:\elsewhere", up.ForeignDirectory);
+    }
+
+    [TestMethod]
+    public void Resolve_BareNameForeignFile_HasNoForeignDirectory()
+    {
+        Touch("inlibrary.mp4");
+
+        WatchingResult result = Resolver(new ProcessWindow("vlc", "foreign.mp4 - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count);
+        Assert.IsNull(result.Diagnostics.UnresolvedPlayers[0].ForeignDirectory);
+        Assert.AreEqual(0, result.Candidates.Count);
+    }
+
+    [TestMethod]
+    public void Resolve_MixedResolvedAndForeign_KeepsCandidateAndReportsForeign()
+    {
+        string watched = Touch("watched.mp4");
+
+        WatchingResult result = Resolver(
+                new ProcessWindow("mpc-hc64", $"{watched} - MPC-HC"),
+                new ProcessWindow("vlc", "foreign.mp4 - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.IsTrue(result.Candidates.Any(c => c.Name == "watched.mp4"), "resolved candidate must remain");
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count, "foreign player still reported");
+    }
+
+    [TestMethod]
+    public void Resolve_PlayerWithNoFilenameInTitle_StaysQuiet()
+    {
+        Touch("clip.mp4");
+
+        WatchingResult result = Resolver(new ProcessWindow("vlc", "Some Metadata Title - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(0, result.Diagnostics.UnresolvedPlayers.Count, "no .mp4 in title is not a wrong-dir signal");
+        Assert.IsTrue(result.Candidates.Count >= 1, "normal access-time fallback still answers");
     }
 }
