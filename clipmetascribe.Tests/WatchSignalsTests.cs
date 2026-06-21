@@ -46,6 +46,7 @@ public class WatchSignalsTests
         Assert.AreEqual(PlayerTitleSignal.SourceName, hits[0].Source);
         Assert.AreEqual("vlc", hits[0].Player);
         Assert.IsFalse(hits[0].Ambiguous);
+        Assert.AreEqual(TitleExtractionKind.BareName, hits[0].MatchKind);
     }
 
     [TestMethod]

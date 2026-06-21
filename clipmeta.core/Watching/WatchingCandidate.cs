@@ -9,6 +9,10 @@ namespace ClipMetaCore.Watching;
 /// <param name="SecondsSinceAccess">Seconds between enumeration and the last access (≥ 0).</param>
 /// <param name="InUse">True when the file currently has an exclusive-denying open handle.</param>
 /// <param name="Confidence">"high" only for a single unambiguous player hit; otherwise "low".</param>
+/// <param name="Note">
+/// Optional human-readable caveat (e.g. a not-locked bare-name match the agent should confirm
+/// before tagging). Null when there is nothing to flag.
+/// </param>
 public sealed record WatchingCandidate(
     string Path,
     string Name,
@@ -17,4 +21,5 @@ public sealed record WatchingCandidate(
     DateTime LastAccessTimeUtc,
     double SecondsSinceAccess,
     bool InUse,
-    string Confidence);
+    string Confidence,
+    string? Note = null);

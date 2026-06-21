@@ -1,4 +1,6 @@
+using ClipMetaCore.Watching;
 using ClipMetaScribe.Commands;
+using ClipMetaScribe.Tests.Helpers;
 
 namespace ClipMetaScribe.Tests;
 
@@ -42,5 +44,36 @@ public class WatchingCommandTests
 
         Assert.AreEqual(0, code);
         StringAssert.Contains(sw.ToString(), "No watched-clip candidates");
+    }
+
+    [TestMethod]
+    public void Run_ForeignPlayer_PrintsWarningAndSuppressesCandidates()
+    {
+        File.WriteAllBytes(Path.Combine(_tempDir, "inlibrary.mp4"), Array.Empty<byte>());
+        var source = new FakeProcessWindowSource(
+            new ProcessWindow("mpc-hc64", @"D:\elsewhere\foreign.mp4 - MPC-HC"));
+        using var sw = new StringWriter();
+
+        int code = WatchingCommand.Run(_tempDir, 5, includeAccessFallback: true, output: sw, windowSource: source);
+
+        Assert.AreEqual(0, code);
+        string outp = sw.ToString();
+        StringAssert.Contains(outp, "WARNING");
+        StringAssert.Contains(outp, "mpc-hc64");
+        StringAssert.Contains(outp, @"D:\elsewhere");
+    }
+
+    [TestMethod]
+    public void Run_BareNameUnlockedClip_PrintsConfirmNote()
+    {
+        File.WriteAllBytes(Path.Combine(_tempDir, "clip.mp4"), Array.Empty<byte>()); // free / unlocked
+        var source = new FakeProcessWindowSource(
+            new ProcessWindow("vlc", "clip.mp4 - VLC media player"));
+        using var sw = new StringWriter();
+
+        int code = WatchingCommand.Run(_tempDir, 5, includeAccessFallback: true, output: sw, windowSource: source);
+
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(sw.ToString(), "note:");
     }
 }

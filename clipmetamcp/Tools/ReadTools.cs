@@ -117,7 +117,12 @@ public static class ReadTools
             "call the write tool with the chosen 'path'. Note: a clip cannot be written while a " +
             "player still holds it open ('inUse' true) — it frees when the player advances or closes. " +
             "Optional 'limit' (default " + DefaultWatchingLimit + ") and 'include_access_fallback' " +
-            "(default true). Requires a configured clips library.",
+            "(default true). " +
+            "If the response includes a 'warning' (type 'player_outside_library'), a player is showing a file " +
+            "that is not in the configured library — tell the user they may be playing from the wrong folder " +
+            "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
+            "has a 'note', mention it and confirm with the user before tagging. " +
+            "Requires a configured clips library.",
             WatchingSchema(),
             args => Watching(args, sandbox),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
@@ -502,12 +507,12 @@ public static class ReadTools
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
 
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
-        IReadOnlyList<WatchingCandidate> candidates = resolver.Resolve(root, limit, includeAccessFallback);
+        WatchingResult result = resolver.Resolve(root, limit, includeAccessFallback);
 
         var array = new JsonArray();
-        foreach (WatchingCandidate c in candidates)
+        foreach (WatchingCandidate c in result.Candidates)
         {
-            array.Add(new JsonObject
+            var entry = new JsonObject
             {
                 ["path"] = c.Path,
                 ["name"] = c.Name,
@@ -517,15 +522,39 @@ public static class ReadTools
                 ["secondsSinceAccess"] = Math.Round(c.SecondsSinceAccess, 1),
                 ["inUse"] = c.InUse,
                 ["confidence"] = c.Confidence,
-            });
+            };
+            if (c.Note is not null)
+                entry["note"] = c.Note;
+            array.Add(entry);
         }
 
-        return new JsonObject
+        var response = new JsonObject
         {
             ["libraryRoot"] = root,
-            ["candidateCount"] = candidates.Count,
+            ["candidateCount"] = result.Candidates.Count,
             ["candidates"] = array,
         };
+
+        if (result.Diagnostics.UnresolvedPlayers.Count > 0)
+        {
+            var players = new JsonArray();
+            foreach (UnresolvedPlayer up in result.Diagnostics.UnresolvedPlayers)
+                players.Add(new JsonObject
+                {
+                    ["player"] = up.Player,
+                    ["referencedName"] = up.ReferencedName,
+                    ["foreignDirectory"] = up.ForeignDirectory,
+                });
+            response["warning"] = new JsonObject
+            {
+                ["type"] = "player_outside_library",
+                ["message"] = "A media player is showing a file that is not in the configured clips " +
+                              "library. The user may be playing from the wrong folder. Do not tag.",
+                ["unresolvedPlayers"] = players,
+            };
+        }
+
+        return response;
     }
 
     /// <summary>Scans the library and persists the fresh index into the library root.</summary>

@@ -8,6 +8,23 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+### 2026-06-21 — Watched-clip resolution, pass 1.5 (wrong-directory honesty)
+
+- **VLC bare-name matches can collide.** VLC reports only the file name, so a library `clip001.mp4`
+  matches even when you're watching a *different* `clip001.mp4` elsewhere. Guard: a bare-name match
+  is `high` only when the library file is **locked** (`LockProbe.IsInUse`); otherwise it is demoted
+  to `low` with a confirm note. Full-path (MPC) matches are exact and stay `high` regardless of lock.
+- **Pause/stop releases the lock — accepted trade-off.** If a player releases the file handle while
+  paused, a *correct* bare-name match reads not-locked and is demoted to "confirm" (friction, not a
+  wrong tag). MPC (full path) is unaffected. Revisit the trust policy after dogfooding tells us how
+  MPC/VLC behave with the lock on stop vs. next vs. close.
+- **Never lock-probe an offline/placeholder file.** Opening a Dropbox/OneDrive online-only file
+  hydrates (downloads) it. `LockProbe` checks `FileAttributes.Offline` and reports not-locked WITHOUT
+  opening — so a bare-name match to an un-downloaded library file stays `low` (correct: it isn't the
+  file being played).
+- **A player open with no readable filename is NOT a wrong-directory signal.** Only a title that
+  names an `.mp4` absent from the library warns; a metadata-title/idle player stays quiet.
+
 ## 2026-06-21 — Watched-clip resolution
 
 - **Writing to a clip a player still holds open fails.** `File.Replace` deletes-and-swaps the
