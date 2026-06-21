@@ -72,4 +72,13 @@ public class LibraryWatchingToolTests
         JsonObject result = Call(new JsonObject(), root: null);
         Assert.IsTrue(result["isError"]?.GetValue<bool>() == true, "must refuse with no library configured");
     }
+
+    [TestMethod]
+    public void Watching_NormalCall_HasNoWarning()
+    {
+        JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
+        Assert.IsNull(result["isError"]);
+        // No player is playing our temp clips, so there is no wrong-directory warning.
+        Assert.IsNull(Structured(result)["warning"], "warning must be absent when no foreign player is detected");
+    }
 }
