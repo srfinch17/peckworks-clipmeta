@@ -119,6 +119,7 @@ public class Phase2ReadToolsTests
             {
                 "clip_get_metadata", "library_list", "library_find",
                 "library_vocab", "library_export", "library_search_index",
+                "library_watching",
                 "clip_set_fields", "clip_append_field", "clip_clear_fields", "clip_clear_all",
                 "library_list_backups", "clip_restore_backup", "clip_prune_backups",
             },

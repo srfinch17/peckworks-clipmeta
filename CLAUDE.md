@@ -16,11 +16,13 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
 | `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (9 commands, incl. `--copy-from`; write ops also batch over a directory). References Core. |
 | `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
-| `clipmetaview.Tests` | — | MSTest, 80 tests. |
-| `clipmetascribe.Tests` | — | MSTest, 239 tests (incl. real-clip integration and byte-level media-integrity tests). |
-| `clipmetamcp.Tests` | — | MSTest, 41 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
+| `clipmetaview.Tests` | — | MSTest, 101 tests. |
+| `clipmetascribe.Tests` | — | MSTest, 351 tests (incl. real-clip integration and byte-level media-integrity tests). |
+| `clipmetamcp.Tests` | — | MSTest, 106 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
 
-`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Schema/`, `Logging/`, `Exceptions/`.
+> `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag).
+
+`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Watching/` (watched-clip resolution: signals, process seam, resolver), `Schema/`, `Logging/`, `Exceptions/`.
 
 > Note: `clipmetascribe` is the tool the old brief called "clipmetaedit." There is no separate clipmetaedit.
 

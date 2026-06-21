@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
+using ClipMetaCore.Watching;
 
 namespace ClipMetaMcp.Tools;
 
@@ -24,6 +25,12 @@ public static class ReadTools
 
     /// <summary>Hard ceiling for the caller-supplied list limit.</summary>
     private const int MaxListLimit = 1000;
+
+    /// <summary>Default number of watched-clip candidates returned by library_watching.</summary>
+    private const int DefaultWatchingLimit = 5;
+
+    /// <summary>Hard ceiling for the caller-supplied watched-clip limit.</summary>
+    private const int MaxWatchingLimit = 50;
 
     /// <summary>Registers all read tools against the given sandbox.</summary>
     public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
@@ -99,6 +106,21 @@ public static class ReadTools
             SearchIndexSchema(),
             args => SearchIndex(args, sandbox),
             _ => new JsonObject { ["rebuild"] = true, ["field"] = "game", ["value"] = "TF2" }));
+
+        registry.Register(new ToolDefinition(
+            "library_watching",
+            "Resolves 'the clip I'm watching / just watched' by inspecting open media players. " +
+            "Returns ranked candidates, best first. A 'player_title' candidate resolved to a library " +
+            "path with confidence 'high' is the file an open player is showing — prefer it and you " +
+            "may tag it. If only 'access_time' candidates exist, or confidence is 'low' (multiple " +
+            "players open, or an ambiguous file name), confirm with the user before tagging. To tag, " +
+            "call the write tool with the chosen 'path'. Note: a clip cannot be written while a " +
+            "player still holds it open ('inUse' true) — it frees when the player advances or closes. " +
+            "Optional 'limit' (default " + DefaultWatchingLimit + ") and 'include_access_fallback' " +
+            "(default true). Requires a configured clips library.",
+            WatchingSchema(),
+            args => Watching(args, sandbox),
+            _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
     }
 
     /// <summary>
@@ -222,6 +244,26 @@ public static class ReadTools
                 ["type"] = "string",
                 ["description"] = "Substring the field value must contain (case-insensitive). " +
                                   "Omit or leave empty to match every clip that has the field.",
+            },
+        },
+    };
+
+    private static JsonObject WatchingSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["limit"] = new JsonObject
+            {
+                ["type"] = "integer",
+                ["description"] = $"Maximum candidates to return (default {DefaultWatchingLimit}, max {MaxWatchingLimit}).",
+            },
+            ["include_access_fallback"] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "When true (default), include most-recently-accessed clips as " +
+                                  "low-confidence candidates. When false, only open-player candidates " +
+                                  "are returned.",
             },
         },
     };
@@ -451,6 +493,39 @@ public static class ReadTools
         result["matchCount"] = matches.Count;
         result["matches"] = matches;
         return result;
+    }
+
+    private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
+        bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
+
+        var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
+        IReadOnlyList<WatchingCandidate> candidates = resolver.Resolve(root, limit, includeAccessFallback);
+
+        var array = new JsonArray();
+        foreach (WatchingCandidate c in candidates)
+        {
+            array.Add(new JsonObject
+            {
+                ["path"] = c.Path,
+                ["name"] = c.Name,
+                ["source"] = c.Source,
+                ["player"] = c.Player,
+                ["lastAccessTimeUtc"] = c.LastAccessTimeUtc.ToString("O"),
+                ["secondsSinceAccess"] = Math.Round(c.SecondsSinceAccess, 1),
+                ["inUse"] = c.InUse,
+                ["confidence"] = c.Confidence,
+            });
+        }
+
+        return new JsonObject
+        {
+            ["libraryRoot"] = root,
+            ["candidateCount"] = candidates.Count,
+            ["candidates"] = array,
+        };
     }
 
     /// <summary>Scans the library and persists the fresh index into the library root.</summary>
