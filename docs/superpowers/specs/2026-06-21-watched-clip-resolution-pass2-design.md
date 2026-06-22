@@ -146,7 +146,8 @@ No daemon, no polling, no `FileSystemWatcher`.
 
 - All three refuse cleanly (model-readable message) when no library is configured, like `library_watching`.
 - **Registration:** adding three tools means updating `clipmetamcp.Tests` `ToolsList_ContainsTheFullToolSurface` (exact set + order). **Per CLAUDE.md, run the FULL `clipmetamcp.Tests` project, not a `--filter`** — that surface-wide assertion lives outside the diff. (It bit us registering `library_watching`.)
-- Tool count goes 8 → 11. Update `MEMORY.md` / `reference_mcp_server` and note the `.mcpb` repack need.
+- Tool count goes **14 → 17** (the current surface test lists 14: 7 read + 4 write + 3 backup). The three new tools register **after** `library_watching` in the read-tools registrant (they belong to the watched-clip flow). Update `MEMORY.md` / `reference_mcp_server` (which currently says "8 tools" — stale) and note the `.mcpb` repack need.
+- **Shared single-flight gate.** `WriteTools` serializes every write behind a private `WriteGate` semaphore so two writes can't race `File.Replace` on one file. The drain *also* writes, so it must take the **same** gate — otherwise a drain racing a direct `clip_set_fields` on the same clip defeats the guarantee. Extract `WriteGate` into a small shared internal type (`ClipMetaMcp.Tools.WriteGate`) used by both `WriteTools` and the drain path. This is the only refactor of existing code in this pass.
 
 ### CLI (`clipmetascribe`)
 - `--flush-queue` (with the existing library-dir argument) → new `FlushQueueCommand` (thin shell → `TagQueue.Drain`). Prints landed / still-locked / dropped.
@@ -157,7 +158,7 @@ No daemon, no polling, no `FileSystemWatcher`.
 
 ## 7. Safety invariants
 
-- **Single-threaded drain** over the already per-file-safe write engine — no two writes race the same file; we simply never drain concurrently.
+- **Single-threaded drain** over the already per-file-safe write engine, taking the **same shared `WriteGate`** as the direct write tools — so a drain can never race a concurrent `clip_set_fields`/`clip_append_field` on the same file at `File.Replace`.
 - **Cloud-safe:** drain/status reuse the pass-1.5 `LockProbe`, which never opens an `Offline` placeholder, so probing can never force a Dropbox/OneDrive download; it never throws.
 - **Corruption-tolerant load:** a malformed `.clipmeta-queue` is treated as empty, never crashing a watched-clip call.
 - **Atomic persistence:** temp-then-swap, so a crash/disk-full mid-save leaves the prior queue intact.
@@ -236,7 +237,7 @@ tests/                               ← TagQueue tests in clipmetascribe.Tests;
 2. `dotnet test` — all pass, including the new `TagQueue` tests and the updated MCP tool-surface test (full project run).
 3. Zero NuGet packages added to production projects (`System.Text.Json` is BCL).
 4. Public types documented; any new gotcha (e.g. observed per-player lock-release behavior during dogfooding) recorded in `docs/PITFALLS.md`.
-5. `MEMORY.md` / `reference_mcp_server` updated for the 8 → 11 tool count and the `.mcpb` repack need.
+5. `MEMORY.md` / `reference_mcp_server` updated for the 14 → 17 tool count and the `.mcpb` repack need.
 
 ## Acceptance behaviors
 
