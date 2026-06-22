@@ -171,6 +171,24 @@ internal static class Program
             }
         }
 
+        if (ContainsFlag(args, "--flush-queue"))
+        {
+            if (filePath == null || !Directory.Exists(filePath))
+            {
+                Console.Error.WriteLine("Error: --flush-queue requires a valid clips directory as the first argument.");
+                return 1;
+            }
+            try
+            {
+                return FlushQueueCommand.Run(filePath);
+            }
+            catch (IOException ex)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                return 2;
+            }
+        }
+
         if (ContainsFlag(args, "--export"))
         {
             if (filePath == null)
@@ -359,6 +377,7 @@ internal static class Program
         "--format", "--output", "--dry-run", "--backup", "--verbose",
         "--log", "--yes", "--version",
         "--watching", "--limit", "--no-access-fallback",
+        "--flush-queue",
     };
 
     /// <summary>
@@ -576,6 +595,7 @@ internal static class Program
               clipmetascribe "C:\clips\" --index
               clipmetascribe "C:\clips\" --index-search <field> <value>
               clipmetascribe "C:\clips\" --watching [--limit <n>] [--no-access-fallback]
+              clipmetascribe "C:\clips\" --flush-queue
 
             Batch (a write op on a directory applies to every .mp4 in it, recursively):
               clipmetascribe "C:\clips\" --set <field> <value>
@@ -616,6 +636,8 @@ internal static class Program
               --output <path>   Write export to file instead of stdout. Use with --export.
               --limit <n>             Max watched-clip candidates (use with --watching; default 5).
               --no-access-fallback    Only open-player candidates (use with --watching).
+              --flush-queue           Write queued deferred tags whose clips are no longer in use
+                                      (use with a clips directory).
 
             Exit codes:  0=success  1=bad args / not found  2=write failure  3=verification failure
             """);
