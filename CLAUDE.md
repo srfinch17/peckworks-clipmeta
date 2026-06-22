@@ -14,15 +14,15 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 |---------|-----------|---------|
 | `clipmeta.core` | `ClipMetaCore` | All business logic: MP4 parse/read/write, schema, search/index, logging. Zero NuGet deps. |
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
-| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (9 commands, incl. `--copy-from`; write ops also batch over a directory). References Core. |
-| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
+| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (10 commands, incl. `--copy-from` and `--flush-queue`; write ops also batch over a directory). References Core. |
+| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
 | `clipmetaview.Tests` | — | MSTest, 101 tests. |
-| `clipmetascribe.Tests` | — | MSTest, 371 tests (incl. real-clip integration and byte-level media-integrity tests). |
-| `clipmetamcp.Tests` | — | MSTest, 107 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
+| `clipmetascribe.Tests` | — | MSTest, 386 tests (incl. real-clip integration and byte-level media-integrity tests). |
+| `clipmetamcp.Tests` | — | MSTest, 112 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
 
-> `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag).
+> `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag). A clip that is **playing is locked against writing** (`File.Replace`), so the **deferred-tag queue** (`clipmeta.core/Watching/TagQueue`, persisted as `.clipmeta-queue` in the library root) holds confirmed tags and writes them when the lock clears: MCP `library_queue_tag` / `library_flush_queue` / `library_queue_status`, CLI `--flush-queue`, and `library_watching` itself drains opportunistically. The queue only ever stores an already-resolved, in-library path — it never resolves or guesses.
 
-`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Watching/` (watched-clip resolution: signals, process seam, resolver), `Schema/`, `Logging/`, `Exceptions/`.
+`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Watching/` (watched-clip resolution: signals, process seam, resolver — plus the deferred-tag queue: `TagQueue`, `QueuedMutation`/`QueuedTag`/`TagQueueData`/`DrainReport`), `Schema/`, `Logging/`, `Exceptions/`.
 
 > Note: `clipmetascribe` is the tool the old brief called "clipmetaedit." There is no separate clipmetaedit.
 
