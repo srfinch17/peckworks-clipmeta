@@ -1,5 +1,7 @@
 // clipmeta.core/Watching/TagQueue.cs
 using System.Text.Json;
+using ClipMetaCore.Abstractions;
+using ClipMetaCore.Schema;
 using ClipMetaCore.Write;
 
 namespace ClipMetaCore.Watching;
@@ -122,5 +124,83 @@ public static class TagQueue
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Attempts to write every queued tag whose clip is not currently locked, through the supplied
+    /// write engine. Single-pass and single-threaded (the caller serializes drains with the write
+    /// tools' single-flight gate). Vanished clips are dropped; locked clips and write failures stay
+    /// queued for the next pass. The surviving queue is persisted once at the end.
+    /// </summary>
+    /// <param name="libraryDir">Library root holding the queue file.</param>
+    /// <param name="writer">Write engine (production: <c>new Mp4Writer()</c>).</param>
+    /// <param name="logger">Logger passed to the write engine.</param>
+    /// <param name="isInUse">Lock predicate (production: <c>LockProbe.IsInUse</c>).</param>
+    public static DrainReport Drain(
+        string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string, bool> isInUse)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(isInUse);
+
+        TagQueueData data = Load(libraryDir);
+        var written = new List<string>();
+        var stillQueued = new List<string>();
+        var dropped = new List<string>();
+        var survivors = new List<QueuedTag>();
+
+        foreach (QueuedTag entry in data.Entries)
+        {
+            if (!File.Exists(entry.ClipPath)) { dropped.Add(entry.ClipPath); continue; }
+            if (isInUse(entry.ClipPath)) { stillQueued.Add(entry.ClipPath); survivors.Add(entry); continue; }
+            try
+            {
+                writer.WriteMetadata(entry.ClipPath, entry.Mutation.ToMutation(), logger);
+                written.Add(entry.ClipPath);
+            }
+            catch (Exception ex) when (
+                ex is IOException or UnauthorizedAccessException or InvalidDataException
+                   or InvalidOperationException or ArgumentException)
+            {
+                // The write could not land this pass (still-held handle that beat the probe,
+                // verification failure, a bad value). Keep it queued rather than losing the tag.
+                stillQueued.Add(entry.ClipPath);
+                survivors.Add(entry);
+            }
+        }
+
+        if (survivors.Count != data.Entries.Count)
+            Save(new TagQueueData(CurrentVersion, survivors), libraryDir);
+
+        return new DrainReport(written, stillQueued, dropped);
+    }
+
+    /// <summary>Returns a read-only view of every pending entry, with its current lock state.</summary>
+    public static IReadOnlyList<QueueStatusEntry> Status(string libraryDir, Func<string, bool> isInUse)
+    {
+        ArgumentNullException.ThrowIfNull(isInUse);
+        TagQueueData data = Load(libraryDir);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        var rows = new List<QueueStatusEntry>(data.Entries.Count);
+        foreach (QueuedTag e in data.Entries)
+        {
+            var changed = new List<string>();
+            changed.AddRange(e.Mutation.SetFields.Keys.Select(DisplayField));
+            changed.AddRange(e.Mutation.AppendFields.Keys.Select(DisplayField));
+            changed.AddRange(e.Mutation.DeleteFields.Select(DisplayField));
+            rows.Add(new QueueStatusEntry(
+                e.ClipPath, changed, (now - e.EnqueuedAtUtc).TotalSeconds, isInUse(e.ClipPath)));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// Strips the clipmeta domain prefix from an atom key for display, so status shows the
+    /// user-facing field name (<c>tags</c>) rather than the qualified atom (<c>domain:tags</c>).
+    /// A key without the prefix (an unusual custom atom) is returned unchanged.
+    /// </summary>
+    private static string DisplayField(string atomKey)
+    {
+        string prefix = ClipMetaSchema.Domain + ":";
+        return atomKey.StartsWith(prefix, StringComparison.Ordinal) ? atomKey[prefix.Length..] : atomKey;
     }
 }

@@ -1,6 +1,11 @@
 // clipmetascribe.Tests/TagQueueTests.cs
+using ClipMetaCore.Logging;
+using ClipMetaCore.Mp4;
+using ClipMetaCore.Read;
+using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
 using ClipMetaCore.Write;
+using ClipMetaScribe.Tests.Helpers;
 
 namespace ClipMetaScribe.Tests;
 
@@ -85,5 +90,78 @@ public class TagQueueTests
         StringAssert.Contains(data.Entries[0].Mutation.AppendFields["tags"], "headshot");
         StringAssert.Contains(data.Entries[0].Mutation.AppendFields["tags"], "airshot");
         Assert.AreEqual("TF2", data.Entries[0].Mutation.SetFields["game"]);
+    }
+
+    // Builds a structurally valid, writable .mp4 inside _dir, seeded with one clipmeta atom so it
+    // parses as an existing-ilst clip (mirrors Mp4WriterTests). No pristine corpus needed.
+    private string MakeClip(string name, string seedField = "game", string seedValue = "TF2")
+    {
+        string path = Path.Combine(_dir, name);
+        using var ms = MinimalMp4Builder.BuildMp4WithStco(9999, ClipMetaSchema.Domain, seedField, seedValue);
+        File.WriteAllBytes(path, ms.ToArray());
+        return path;
+    }
+
+    [TestMethod]
+    public void Drain_UnlockedClip_WritesAndRemoves()
+    {
+        string clip = MakeClip("a.mp4");
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("tags")] = "headshot";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        DrainReport report = TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, isInUse: _ => false);
+
+        CollectionAssert.AreEqual(new[] { clip }, report.Written.ToList());
+        Assert.AreEqual(0, TagQueue.Load(_dir).Entries.Count, "written entry removed from queue");
+        var fields = ClipMetaReader.GetUserFields(Mp4Parser.ParseFile(clip));
+        Assert.IsTrue(fields.Any(f => f.Field == "tags" && f.Value.Contains("headshot")),
+            "the queued tag must have landed in the file");
+    }
+
+    [TestMethod]
+    public void Drain_LockedClip_LeavesQueued()
+    {
+        string clip = MakeClip("a.mp4");
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("tags")] = "headshot";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        DrainReport report = TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, isInUse: _ => true);
+
+        CollectionAssert.AreEqual(new[] { clip }, report.StillQueued.ToList());
+        Assert.AreEqual(1, TagQueue.Load(_dir).Entries.Count, "locked entry stays queued");
+    }
+
+    [TestMethod]
+    public void Drain_VanishedClip_DroppedNoCrash()
+    {
+        string clip = Path.Combine(_dir, "gone.mp4"); // never created
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("tags")] = "headshot";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        DrainReport report = TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, isInUse: _ => false);
+
+        CollectionAssert.AreEqual(new[] { clip }, report.Dropped.ToList());
+        Assert.AreEqual(0, TagQueue.Load(_dir).Entries.Count, "vanished entry dropped");
+    }
+
+    [TestMethod]
+    public void Status_ReportsPendingEntries()
+    {
+        string clip = Path.Combine(_dir, "a.mp4");
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("tags")] = "headshot";
+        m.SetFields[ClipMetaSchema.AtomName("game")] = "TF2";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        IReadOnlyList<QueueStatusEntry> status = TagQueue.Status(_dir, isInUse: _ => true);
+
+        Assert.AreEqual(1, status.Count);
+        Assert.AreEqual(clip, status[0].ClipPath);
+        Assert.IsTrue(status[0].Locked);
+        CollectionAssert.AreEquivalent(new[] { "tags", "game" }, status[0].ChangedFields.ToList(),
+            "ChangedFields are display names (domain prefix stripped)");
     }
 }
