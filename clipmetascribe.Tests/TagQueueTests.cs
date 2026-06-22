@@ -57,4 +57,33 @@ public class TagQueueTests
         TagQueueData data = TagQueue.Load(_dir);
         Assert.AreEqual(0, data.Entries.Count);
     }
+
+    [TestMethod]
+    public void Enqueue_NewClip_AddsOneEntry()
+    {
+        string clip = Path.Combine(_dir, "a.mp4");
+        var m = new MetadataMutation(); m.AppendFields["tags"] = "headshot";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        TagQueueData data = TagQueue.Load(_dir);
+        Assert.AreEqual(1, data.Entries.Count);
+        Assert.AreEqual("headshot", data.Entries[0].Mutation.AppendFields["tags"]);
+    }
+
+    [TestMethod]
+    public void Enqueue_SameClipTwice_MergesIntoOneEntry()
+    {
+        string clip = Path.Combine(_dir, "a.mp4");
+        var m1 = new MetadataMutation(); m1.AppendFields["tags"] = "headshot";
+        var m2 = new MetadataMutation(); m2.AppendFields["tags"] = "airshot"; m2.SetFields["game"] = "TF2";
+        TagQueue.Enqueue(_dir, clip, m1, "high");
+        TagQueue.Enqueue(_dir, clip, m2, "high");
+
+        TagQueueData data = TagQueue.Load(_dir);
+        Assert.AreEqual(1, data.Entries.Count, "same clip must merge, not duplicate");
+        // append accumulated both values (pipe-joined), set captured the new field
+        StringAssert.Contains(data.Entries[0].Mutation.AppendFields["tags"], "headshot");
+        StringAssert.Contains(data.Entries[0].Mutation.AppendFields["tags"], "airshot");
+        Assert.AreEqual("TF2", data.Entries[0].Mutation.SetFields["game"]);
+    }
 }

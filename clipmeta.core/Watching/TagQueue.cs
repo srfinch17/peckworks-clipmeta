@@ -46,6 +46,60 @@ public static class TagQueue
         }
     }
 
+    /// <summary>Case-insensitive path comparison matches Windows filesystem semantics.</summary>
+    private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+
+    /// <summary>
+    /// Enqueues a confirmed tag for <paramref name="clipPath"/>. If a tag for that path is already
+    /// pending, the new mutation MERGES onto it (set last-wins, append accumulates and pipe-dedups,
+    /// delete unions, ClearAll ORs) so a clip never has two competing queue entries. Persists.
+    /// </summary>
+    public static void Enqueue(string libraryDir, string clipPath, MetadataMutation mutation, string confidence)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        TagQueueData data = Load(libraryDir);
+        var entries = data.Entries.ToList();
+
+        int existing = entries.FindIndex(e => PathComparer.Equals(e.ClipPath, clipPath));
+        QueuedMutation merged = existing >= 0
+            ? Merge(entries[existing].Mutation, QueuedMutation.From(mutation))
+            : QueuedMutation.From(mutation);
+
+        var entry = new QueuedTag(clipPath, merged, DateTimeOffset.UtcNow, confidence);
+        if (existing >= 0) entries[existing] = entry;
+        else entries.Add(entry);
+
+        Save(new TagQueueData(CurrentVersion, entries), libraryDir);
+    }
+
+    /// <summary>Layers <paramref name="next"/> onto <paramref name="prior"/> using the field rules.</summary>
+    private static QueuedMutation Merge(QueuedMutation prior, QueuedMutation next)
+    {
+        var set = new Dictionary<string, string?>(prior.SetFields);
+        foreach (var (k, v) in next.SetFields) set[k] = v;                       // last-wins
+
+        var append = new Dictionary<string, string>(prior.AppendFields);
+        foreach (var (k, v) in next.AppendFields)
+            append[k] = append.TryGetValue(k, out string? existingVal) && existingVal.Length > 0
+                ? PipeMerge(existingVal, v)                                       // accumulate + dedup
+                : v;
+
+        var delete = new HashSet<string>(prior.DeleteFields);
+        foreach (string d in next.DeleteFields) delete.Add(d);                    // union
+
+        return new QueuedMutation(set, append, delete.ToList(), prior.ClearAll || next.ClearAll);
+    }
+
+    /// <summary>Joins two pipe-delimited lists, dropping duplicate items (first occurrence wins).</summary>
+    private static string PipeMerge(string a, string b)
+    {
+        var seen = new List<string>();
+        foreach (string item in (a + "|" + b).Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (!seen.Contains(item, StringComparer.OrdinalIgnoreCase))
+                seen.Add(item);
+        return string.Join('|', seen);
+    }
+
     /// <summary>
     /// Writes the queue atomically: serialize to a sibling temp file, then swap it into place with
     /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c> — a crash
