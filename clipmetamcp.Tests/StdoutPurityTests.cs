@@ -51,6 +51,7 @@ public class StdoutPurityTests
         var sandbox = new LibrarySandbox(_tempDir);
         ReadTools.RegisterAll(registry, sandbox);
         WriteTools.RegisterAll(registry, sandbox);
+        QueueTools.RegisterAll(registry, sandbox);
 
         // Each tool supplies its own runnable example arguments (a ToolDefinition member), so
         // this test covers every registered tool with no per-tool mapping to maintain here.

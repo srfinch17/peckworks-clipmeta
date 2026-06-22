@@ -122,9 +122,10 @@ public class Phase2ReadToolsTests
                 "library_watching",
                 "clip_set_fields", "clip_append_field", "clip_clear_fields", "clip_clear_all",
                 "library_list_backups", "clip_restore_backup", "clip_prune_backups",
+                "library_queue_tag", "library_flush_queue", "library_queue_status",
             },
             names,
-            "tools/list must expose the read + write + backup surface in registration order");
+            "tools/list must expose the read + write + backup + queue surface in registration order");
     }
 
     // ── clip_get_metadata enrichment (phase-3 field report: one call, whole picture) ──────
