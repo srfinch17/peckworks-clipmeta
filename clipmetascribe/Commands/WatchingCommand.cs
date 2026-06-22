@@ -59,6 +59,10 @@ internal static class WatchingCommand
             if (c.Note is not null)
                 output.WriteLine($"        note: {c.Note}");
         }
+
+        int pending = TagQueue.Status(libraryDir, LockProbe.IsInUse).Count;
+        if (pending > 0)
+            output.WriteLine($"\nQueued tags pending: {pending} (run --flush-queue after closing the player).");
         return 0;
     }
 }

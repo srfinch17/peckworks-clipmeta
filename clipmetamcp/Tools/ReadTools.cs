@@ -1,8 +1,10 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
+using ClipMetaCore.Write;
 
 namespace ClipMetaMcp.Tools;
 
@@ -122,7 +124,8 @@ public static class ReadTools
             "that is not in the configured library — tell the user they may be playing from the wrong folder " +
             "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
             "has a 'note', mention it and confirm with the user before tagging. " +
-            "Requires a configured clips library.",
+            "Requires a configured clips library. " +
+            "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
             args => Watching(args, sandbox),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
@@ -503,6 +506,26 @@ public static class ReadTools
     private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox)
     {
         string root = sandbox.RequireRoot();
+
+        // Opportunistic drain (pass 2): land any queued tags whose locks have cleared before
+        // resolving. The queue is opportunistic state, never a hard dependency — a persistence
+        // failure here (e.g. the queue file is momentarily locked) must NOT fail a watched-clip
+        // READ, so degrade to "nothing drained" and let resolution proceed; the next call retries.
+        DrainReport drained;
+        WriteGate.Enter();
+        try
+        {
+            drained = TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            drained = new DrainReport(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+        }
+        finally
+        {
+            WriteGate.Exit();
+        }
+
         int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
 
@@ -553,6 +576,15 @@ public static class ReadTools
                 ["unresolvedPlayers"] = players,
             };
         }
+
+        if (drained.Written.Count > 0 || drained.Dropped.Count > 0)
+            response["drainedFromQueue"] = new JsonObject
+            {
+                ["written"] = drained.Written.Count,
+                ["dropped"] = drained.Dropped.Count,
+            };
+        int pendingNow = TagQueue.Status(root, LockProbe.IsInUse).Count;
+        if (pendingNow > 0) response["queuePending"] = pendingNow;
 
         return response;
     }

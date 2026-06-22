@@ -1,0 +1,172 @@
+// clipmetamcp/Tools/QueueTools.cs
+using System.Text.Json.Nodes;
+using ClipMetaCore.Logging;
+using ClipMetaCore.Schema;
+using ClipMetaCore.Watching;
+using ClipMetaCore.Write;
+
+namespace ClipMetaMcp.Tools;
+
+/// <summary>
+/// Registers the deferred-tag queue tools. A clip that is playing is locked against our write, so
+/// these persist a CONFIRMED tag and drain the queue as locks clear. The queue never resolves or
+/// guesses — the caller passes an already-resolved path (from library_watching, confirmed with the
+/// user when confidence was low). Every drain runs under the shared <see cref="WriteGate"/> so it
+/// can never race a direct write at <c>File.Replace</c>.
+/// </summary>
+public static class QueueTools
+{
+    /// <summary>Registers the queue tools against the given sandbox.</summary>
+    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(sandbox);
+
+        registry.Register(new ToolDefinition(
+            "library_queue_tag",
+            "Queues a metadata tag for a clip that is currently being played (and therefore locked " +
+            "against writing). Pass the clip 'path' you already resolved with library_watching and " +
+            "confirmed — this tool does NOT resolve or guess. 'fields' maps field names to string " +
+            "values (empty string deletes), exactly like clip_set_fields. The tag is written " +
+            "automatically the next time you call a watched-clip tool after the player advances " +
+            "(the lock clears), or immediately via library_flush_queue. Requires a configured library.",
+            QueueTagSchema(),
+            args => QueueTag(args, sandbox),
+            clipPath => new JsonObject
+            {
+                ["path"] = clipPath,
+                ["fields"] = new JsonObject { ["tags"] = "headshot" },
+            }));
+
+        registry.Register(new ToolDefinition(
+            "library_flush_queue",
+            "Writes every queued deferred tag whose clip is no longer locked — use after you stop " +
+            "and close the player on the LAST clip, when there is no next watched-clip call to drain " +
+            "the queue. Returns what was written, what is still locked (will retry), and what was " +
+            "dropped because the clip is gone. Requires a configured library.",
+            NoArgsSchema(),
+            args => FlushQueue(args, sandbox),
+            _ => new JsonObject()));
+
+        registry.Register(new ToolDefinition(
+            "library_queue_status",
+            "Lists the deferred tags waiting to be written: the clip, which fields will change, how " +
+            "long it has waited, and whether it is still locked. Read-only. Requires a configured library.",
+            NoArgsSchema(),
+            args => QueueStatus(args, sandbox),
+            _ => new JsonObject()));
+    }
+
+    private static JsonObject QueueTagSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Path to the .mp4 you already resolved and confirmed. " +
+                                  "Absolute, or relative to the library root.",
+            },
+            ["fields"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["description"] = "Field name → string value. Empty string deletes the field.",
+                ["additionalProperties"] = new JsonObject { ["type"] = "string" },
+            },
+        },
+        ["required"] = new JsonArray("path", "fields"),
+    };
+
+    private static JsonObject NoArgsSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject(),
+    };
+
+    // ── Handlers ─────────────────────────────────────────────────────────────────────────
+
+    private static JsonObject QueueTag(JsonObject? args, LibrarySandbox sandbox)
+    {
+        // Library-sandbox check IS the "dumb queue" guard: the path must be a real .mp4 in-library.
+        string fullPath = sandbox.ResolveWritePath(ReadTools.GetRequiredString(args, "path"));
+
+        if (args?["fields"] is not JsonObject fieldArgs || fieldArgs.Count == 0)
+            throw new ToolException(
+                "The 'fields' argument is required: an object mapping field names to string values, " +
+                "e.g. { \"tags\": \"headshot\" }.");
+
+        var mutation = new MetadataMutation();
+        foreach (var pair in fieldArgs)
+        {
+            if (pair.Value is not JsonValue value || !value.TryGetValue(out string? text))
+                throw new ToolException($"Field '{pair.Key}' must have a string value (use \"\" to delete it).");
+            mutation.SetFields[ClipMetaSchema.AtomName(pair.Key)] = text;
+        }
+
+        string root = sandbox.RequireRoot();
+        DrainReport drain = DrainUnderGate(root);   // opportunistic: land anything already freed
+        TagQueue.Enqueue(root, fullPath, mutation, confidence: "high");
+
+        return new JsonObject
+        {
+            ["queued"] = fullPath,
+            ["pending"] = TagQueue.Status(root, LockProbe.IsInUse).Count,
+            ["drained"] = DrainJson(drain),
+        };
+    }
+
+    private static JsonObject FlushQueue(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        DrainReport drain = DrainUnderGate(root);
+        return DrainJson(drain);
+    }
+
+    private static JsonObject QueueStatus(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string root = sandbox.RequireRoot();
+        var entries = new JsonArray();
+        foreach (QueueStatusEntry e in TagQueue.Status(root, LockProbe.IsInUse))
+        {
+            var fields = new JsonArray();
+            foreach (string f in e.ChangedFields) fields.Add(f);
+            entries.Add(new JsonObject
+            {
+                ["path"] = e.ClipPath,
+                ["changedFields"] = fields,
+                ["ageSeconds"] = Math.Round(e.AgeSeconds, 1),
+                ["locked"] = e.Locked,
+            });
+        }
+        return new JsonObject { ["pending"] = entries.Count, ["entries"] = entries };
+    }
+
+    /// <summary>Drains the queue under the shared write single-flight, with the real probe/engine.</summary>
+    private static DrainReport DrainUnderGate(string root)
+    {
+        WriteGate.Enter();
+        try
+        {
+            return TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
+        }
+        finally
+        {
+            WriteGate.Exit();
+        }
+    }
+
+    private static JsonObject DrainJson(DrainReport drain) => new()
+    {
+        ["written"] = ToArray(drain.Written),
+        ["stillQueued"] = ToArray(drain.StillQueued),
+        ["dropped"] = ToArray(drain.Dropped),
+    };
+
+    private static JsonArray ToArray(IEnumerable<string> values)
+    {
+        var array = new JsonArray();
+        foreach (string v in values) array.Add(v);
+        return array;
+    }
+}

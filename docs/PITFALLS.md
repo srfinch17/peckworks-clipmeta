@@ -8,6 +8,14 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-21 — Deferred-tag queue: a playing clip is locked against File.Replace
+A clip a media player is showing cannot be written (File.Replace needs FILE_SHARE_DELETE, which
+players don't grant). Pass-2 queues the tag (.clipmeta-queue, JSON, library root) and drains it
+when the lock clears — on the next library_watching/library_queue_tag call, or library_flush_queue
+/ scribe --flush-queue for the last clip. Drains share the MCP WriteGate so they never race a
+direct write. Per-player lock-release on next/stop/close is still a dogfooding TODO — record
+observed behavior here when measured.
+
 ### 2026-06-21 — Watched-clip resolution, pass 1.5 (wrong-directory honesty)
 
 - **VLC bare-name matches can collide.** VLC reports only the file name, so a library `clip001.mp4`

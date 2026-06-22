@@ -23,13 +23,6 @@ namespace ClipMetaMcp.Tools;
 /// </summary>
 public static class WriteTools
 {
-    /// <summary>
-    /// Serializes all write-tool executions. The session loop is single-threaded today, so this
-    /// is insurance for tomorrow (a host that pipelines requests, a future parallel dispatcher)
-    /// rather than a fix for an observed race — but R8 is cheap to retire permanently now.
-    /// </summary>
-    private static readonly SemaphoreSlim WriteGate = new(1, 1);
-
     /// <summary>Registers all write tools against the given sandbox.</summary>
     public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
     {
@@ -441,7 +434,7 @@ public static class WriteTools
 
         // The derived clip is a sibling of the (contained) backup, so it is contained too;
         // single-flight with the write tools — restoring is a write.
-        WriteGate.Wait();
+        WriteGate.Enter();
         try
         {
             ClipBackup.Restore(backupPath, clipPath, NullLogger.Instance);
@@ -456,7 +449,7 @@ public static class WriteTools
         }
         finally
         {
-            WriteGate.Release();
+            WriteGate.Exit();
         }
 
         // Read the restored clip back so the model reports its actual post-restore state.
@@ -488,7 +481,7 @@ public static class WriteTools
         IReadOnlyList<BackupInfo> all = ClipBackup.ListBackups(root, clipPath);
         var deleted = new JsonArray();
         var kept = new JsonArray();
-        WriteGate.Wait();
+        WriteGate.Enter();
         try
         {
             for (int i = 0; i < all.Count; i++)
@@ -509,7 +502,7 @@ public static class WriteTools
         }
         finally
         {
-            WriteGate.Release();
+            WriteGate.Exit();
         }
 
         return new JsonObject
@@ -547,7 +540,7 @@ public static class WriteTools
         // the backup-management tools recognize exactly what the writer produces.
         mutation.BackupPath = backup && !dryRun ? ClipBackup.MakeBackupPath(fullPath) : null;
 
-        WriteGate.Wait();
+        WriteGate.Enter();
         try
         {
             new Mp4Writer().WriteMetadata(fullPath, mutation, NullLogger.Instance);
@@ -579,7 +572,7 @@ public static class WriteTools
         }
         finally
         {
-            WriteGate.Release();
+            WriteGate.Exit();
         }
 
         // Ground truth read-back (see doc comment). GetMetadata re-resolves the path through
