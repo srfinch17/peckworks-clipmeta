@@ -8,6 +8,32 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-21 — `Mp4Writer.WriteMetadata`'s full throw surface (a never-crash wrapper must catch all)
+Building the deferred-tag queue's `Drain` (which must never crash on one bad clip), the first catch
+set omitted `UnsupportedFormatException` — so a single fragmented/unsupported clip in the queue threw
+straight out of the drain and skipped the persist, stranding already-written entries. The **complete**
+exception surface of `Mp4Writer.WriteMetadata` is: `IOException`, `InvalidOperationException`,
+`InvalidDataException`, `UnsupportedFormatException` (fragmented `moof` / unsupported format gates),
+plus `ArgumentException` / `UnauthorizedAccessException` from the BCL + normalizer. Any "never-throw"
+caller of the writer must catch **every** one of these. (Same class of miss as pass-1.5's `LockProbe`
+dropping `NotSupportedException` — when a contract says never-throw, enumerate every documented throw.)
+
+## 2026-06-21 — Mutation keys are domain-qualified; strip the prefix for display
+`MetadataMutation.SetFields`/`AppendFields`/`DeleteFields` are keyed by the **qualified atom name**
+`ClipMetaSchema.AtomName(field)` = `com.peckworkslab.clipmeta:<field>` (see `WriteTools`). Building a
+mutation with a **bare** field name (`"tags"`) writes the WRONG atom. Any code that constructs a
+mutation directly (Core tests, the queue) must qualify keys via `AtomName`. Conversely, anything that
+displays the keys (e.g. `library_queue_status` `changedFields`) must **strip** the `Domain + ":"`
+prefix back to the user-facing name. Read back the user-facing name with `ClipMetaReader.GetUserFields`.
+
+## 2026-06-21 — `System.Text.Json` round-trips get-only record collection props by ctor-param name
+The queue persists `QueuedMutation` (positional record with get-only `IReadOnlyDictionary<,>` /
+`IReadOnlyList<>` properties) with **no custom converter**: STJ binds records by matching JSON
+property names to **constructor parameters** (case-insensitive), so get-only collection props
+deserialize correctly as long as the property names match the JSON. This is why the queue could reuse
+plain records instead of mutable DTOs. (The `Save→Load` round-trip test is the proof — keep it: it's
+the canary if a future record shape change breaks binding.)
+
 ## 2026-06-21 — Deferred-tag queue: a playing clip is locked against File.Replace
 A clip a media player is showing cannot be written (File.Replace needs FILE_SHARE_DELETE, which
 players don't grant). Pass-2 queues the tag (.clipmeta-queue, JSON, library root) and drains it
