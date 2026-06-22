@@ -507,12 +507,24 @@ public static class ReadTools
     {
         string root = sandbox.RequireRoot();
 
-        // Opportunistic drain (pass 2): your previous clip's lock cleared when you advanced, so
-        // land any queued tags before resolving the current one. Shares the write single-flight.
+        // Opportunistic drain (pass 2): land any queued tags whose locks have cleared before
+        // resolving. The queue is opportunistic state, never a hard dependency — a persistence
+        // failure here (e.g. the queue file is momentarily locked) must NOT fail a watched-clip
+        // READ, so degrade to "nothing drained" and let resolution proceed; the next call retries.
         DrainReport drained;
         WriteGate.Enter();
-        try { drained = TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse); }
-        finally { WriteGate.Exit(); }
+        try
+        {
+            drained = TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            drained = new DrainReport(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+        }
+        finally
+        {
+            WriteGate.Exit();
+        }
 
         int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
