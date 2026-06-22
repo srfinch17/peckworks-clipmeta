@@ -1,4 +1,6 @@
 // clipmetascribe.Tests/TagQueueTests.cs
+using ClipMetaCore;
+using ClipMetaCore.Abstractions;
 using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
@@ -163,5 +165,29 @@ public class TagQueueTests
         Assert.IsTrue(status[0].Locked);
         CollectionAssert.AreEquivalent(new[] { "tags", "game" }, status[0].ChangedFields.ToList(),
             "ChangedFields are display names (domain prefix stripped)");
+    }
+
+    private sealed class ThrowingWriter(Exception toThrow) : IMediaWriter
+    {
+        public bool CanWrite(string filePath) => true;
+        public void WriteMetadata(string filePath, MetadataMutation mutation, IClipMetaLogger logger)
+            => throw toThrow;
+    }
+
+    [TestMethod]
+    public void Drain_WriterThrowsUnsupportedFormat_LeavesQueuedNoCrash()
+    {
+        string clip = MakeClip("a.mp4");
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("tags")] = "headshot";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        DrainReport report = TagQueue.Drain(
+            _dir, new ThrowingWriter(new UnsupportedFormatException("fragmented")),
+            NullLogger.Instance, isInUse: _ => false);
+
+        CollectionAssert.AreEqual(new[] { clip }, report.StillQueued.ToList(),
+            "an unsupported-format write failure must keep the entry queued, not crash the drain");
+        Assert.AreEqual(1, TagQueue.Load(_dir).Entries.Count, "entry persisted after the failed write");
     }
 }

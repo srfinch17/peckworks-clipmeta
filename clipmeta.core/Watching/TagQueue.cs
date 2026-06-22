@@ -159,10 +159,12 @@ public static class TagQueue
             }
             catch (Exception ex) when (
                 ex is IOException or UnauthorizedAccessException or InvalidDataException
-                   or InvalidOperationException or ArgumentException)
+                   or InvalidOperationException or ArgumentException
+                   or UnsupportedFormatException)
             {
                 // The write could not land this pass (still-held handle that beat the probe,
-                // verification failure, a bad value). Keep it queued rather than losing the tag.
+                // verification failure, a bad value, or an unsupported/fragmented format).
+                // Keep it queued rather than losing the tag.
                 stillQueued.Add(entry.ClipPath);
                 survivors.Add(entry);
             }
