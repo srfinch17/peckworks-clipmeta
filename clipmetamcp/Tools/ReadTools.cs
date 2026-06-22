@@ -1,8 +1,10 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
+using ClipMetaCore.Write;
 
 namespace ClipMetaMcp.Tools;
 
@@ -122,7 +124,8 @@ public static class ReadTools
             "that is not in the configured library — tell the user they may be playing from the wrong folder " +
             "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
             "has a 'note', mention it and confirm with the user before tagging. " +
-            "Requires a configured clips library.",
+            "Requires a configured clips library. " +
+            "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
             args => Watching(args, sandbox),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
@@ -503,6 +506,14 @@ public static class ReadTools
     private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox)
     {
         string root = sandbox.RequireRoot();
+
+        // Opportunistic drain (pass 2): your previous clip's lock cleared when you advanced, so
+        // land any queued tags before resolving the current one. Shares the write single-flight.
+        DrainReport drained;
+        WriteGate.Enter();
+        try { drained = TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse); }
+        finally { WriteGate.Exit(); }
+
         int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
 
@@ -553,6 +564,15 @@ public static class ReadTools
                 ["unresolvedPlayers"] = players,
             };
         }
+
+        if (drained.Written.Count > 0 || drained.Dropped.Count > 0)
+            response["drainedFromQueue"] = new JsonObject
+            {
+                ["written"] = drained.Written.Count,
+                ["dropped"] = drained.Dropped.Count,
+            };
+        int pendingNow = TagQueue.Status(root, LockProbe.IsInUse).Count;
+        if (pendingNow > 0) response["queuePending"] = pendingNow;
 
         return response;
     }
