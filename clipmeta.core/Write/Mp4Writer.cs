@@ -90,7 +90,15 @@ public sealed class Mp4Writer : IMediaWriter
         // metadata" has to mean exactly that. (Normalizer runs first, so a --set with an empty
         // value has already been converted into a delete and won't trigger the stamp.)
         if (mutation.SetFields.Count > 0 || mutation.AppendFields.Count > 0)
+        {
             mutation.SetFields.TryAdd(ClipMetaSchema.AtomName(ClipMetaSchema.Schema), ClipMetaSchema.SchemaVersion);
+
+            // Provenance: stamp "who tagged this" under the same gate as the schema version (only
+            // when real user data is written). TryAdd so a caller-supplied tagged_by value wins.
+            if (mutation.StampProvenance)
+                mutation.SetFields.TryAdd(
+                    ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy), ClipMetaSchema.ProvenanceValue);
+        }
 
         // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with —
         // and FileMode.Create-overwrite — a file the user actually owns, or with a second write
@@ -280,15 +288,20 @@ public sealed class Mp4Writer : IMediaWriter
     private static void RemoveOrphanedSchemaStamp(BoxNode root, MetadataMutation mutation)
     {
         string schemaKey = ClipMetaSchema.AtomName(ClipMetaSchema.Schema);
+        string taggedByKey = ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy);
         string domainPrefix = ClipMetaSchema.Domain + ":";
 
-        // Is this write storing any user field? Then the stamp is earning its keep.
-        // (The stamp itself may sit in SetFields — added by the conditional stamp above —
-        // so it must not count as a "user" field here.)
+        // Neither bookkeeping stamp (schema, tagged_by) counts as a "user" field — both may sit in
+        // SetFields, added by the conditional stamps above.
+        bool IsBookkeeping(string key) =>
+            key.Equals(schemaKey, StringComparison.Ordinal) ||
+            key.Equals(taggedByKey, StringComparison.Ordinal);
+
+        // Is this write storing any user field? Then the stamps are earning their keep.
         bool storesUserField = mutation.SetFields.Any(kv =>
             !string.IsNullOrEmpty(kv.Value) &&
             kv.Key.StartsWith(domainPrefix, StringComparison.Ordinal) &&
-            !kv.Key.Equals(schemaKey, StringComparison.Ordinal));
+            !IsBookkeeping(kv.Key));
         if (storesUserField)
             return;
 
@@ -300,16 +313,17 @@ public sealed class Mp4Writer : IMediaWriter
         bool anySurvives = ilst.Children.Any(c =>
             c.EditableKey is { } key &&
             key.StartsWith(domainPrefix, StringComparison.Ordinal) &&
-            !key.Equals(schemaKey, StringComparison.Ordinal) &&
+            !IsBookkeeping(key) &&
             !mutation.DeleteFields.Contains(key) &&
             !mutation.ClearAll);
         if (anySurvives)
             return;
 
-        // No user fields after this write: the stamp is orphaned. ClearAll already sweeps it;
-        // delete-only mutations need it added explicitly. (Harmless if the atom is absent —
+        // No user fields after this write: the bookkeeping stamps are orphaned. ClearAll already
+        // sweeps them; delete-only mutations need them added explicitly. (Harmless if absent —
         // deleting a nonexistent field is a no-op.)
         mutation.DeleteFields.Add(schemaKey);
+        mutation.DeleteFields.Add(taggedByKey);
     }
 
     /// <summary>

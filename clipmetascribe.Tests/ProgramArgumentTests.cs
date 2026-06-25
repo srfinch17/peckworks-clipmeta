@@ -17,6 +17,16 @@ public class ProgramArgumentTests
     private static ClipMetaCore.Write.MetadataMutation Build(params string[] args)
         => Program.BuildMutation(args, File, dryRun: false, backup: false);
 
+    // ── Provenance opt-out ─────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void BuildMutation_Default_StampsProvenance()
+        => Assert.IsTrue(Build("--set", "game", "TF2").StampProvenance);
+
+    [TestMethod]
+    public void BuildMutation_NoProvenanceFlag_DisablesStamp()
+        => Assert.IsFalse(Build("--set", "game", "TF2", "--no-provenance").StampProvenance);
+
     // ── Swallowed-flag detection ───────────────────────────────────────────────
 
     [TestMethod]

@@ -27,7 +27,11 @@ public static class QueueTools
             "Queues a metadata tag for a clip that is currently being played (and therefore locked " +
             "against writing). Pass the clip 'path' you already resolved with library_watching and " +
             "confirmed — this tool does NOT resolve or guess. 'fields' maps field names to string " +
-            "values (empty string deletes), exactly like clip_set_fields. The tag is written " +
+            "values (empty string deletes), exactly like clip_set_fields. For searchability, put " +
+            "people in 'players' and searchable nouns/moments (objects, places, events) in 'tags' " +
+            "rather than burying them in free-text 'notes' — those three fields ACCUMULATE across " +
+            "re-tags of the same clip (notes join as prose; tags/players merge), while game/rating " +
+            "replace. The tag is written " +
             "automatically the next time you call a watched-clip tool after the player advances " +
             "(the lock clears), or immediately via library_flush_queue. Requires a configured library.",
             QueueTagSchema(),

@@ -59,11 +59,13 @@ public static class ClipMetaSchema
 
     /// <summary>
     /// True for write-engine bookkeeping fields that live in the file but are not user metadata
-    /// (currently only <see cref="Schema"/>). User-facing read paths (stats, export, index, MCP
-    /// tools) exclude these; the raw <c>--list</c> view deliberately does not.
+    /// (<see cref="Schema"/> and the <see cref="TaggedBy"/> provenance stamp). User-facing read
+    /// paths (stats, export, index, MCP tools) exclude these; the raw <c>--list</c> / tree view
+    /// deliberately does not, so provenance is still discoverable on inspection.
     /// </summary>
     public static bool IsInternal(string field) =>
-        Schema.Equals(field, StringComparison.Ordinal);
+        Schema.Equals(field, StringComparison.Ordinal) ||
+        TaggedBy.Equals(field, StringComparison.Ordinal);
 
     /// <summary>Returns the full atom name for a field: "com.peckworkslab.clipmeta:fieldname".</summary>
     public static string AtomName(string field) => $"{Domain}:{field}";
