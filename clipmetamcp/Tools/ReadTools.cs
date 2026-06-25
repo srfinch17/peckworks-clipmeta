@@ -115,7 +115,11 @@ public static class ReadTools
             "Returns ranked candidates, best first. A 'player_title' candidate resolved to a library " +
             "path with confidence 'high' is the file an open player is showing — prefer it and you " +
             "may tag it. If only 'access_time' candidates exist, or confidence is 'low' (multiple " +
-            "players open, or an ambiguous file name), confirm with the user before tagging. To tag, " +
+            "players open, or an ambiguous file name), confirm with the user before tagging. " +
+            "IMPORTANT: when 'anyLiveTarget' is false, NOTHING is actually open or locked — every " +
+            "candidate is just an unverified most-recently-touched guess (and 'access_time' is only " +
+            "an advisory recency hint, easily skewed by other apps), so do NOT tag without the user " +
+            "confirming the exact path. To tag, " +
             "call the write tool with the chosen 'path'. Note: a clip cannot be written while a " +
             "player still holds it open ('inUse' true) — it frees when the player advances or closes. " +
             "Optional 'limit' (default " + DefaultWatchingLimit + ") and 'include_access_fallback' " +
@@ -555,6 +559,7 @@ public static class ReadTools
         {
             ["libraryRoot"] = root,
             ["candidateCount"] = result.Candidates.Count,
+            ["anyLiveTarget"] = result.AnyLiveTarget,
             ["candidates"] = array,
         };
 

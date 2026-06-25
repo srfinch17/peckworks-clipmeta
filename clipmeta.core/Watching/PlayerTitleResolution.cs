@@ -26,19 +26,37 @@ public static class PlayerTitleResolution
         foreach (ProcessWindow window in context.PlayerWindows)
         {
             TitleExtraction? extraction = PlayerTitleParser.Extract(window.WindowTitle);
-            if (extraction is null)
+
+            // 1. Full-path title (MPC config): an exact, folder-disambiguating reference. A full
+            //    path that is NOT in the library is a genuine wrong-directory case — we do NOT fall
+            //    back to basename containment, which could match a same-named file in a different
+            //    library folder and mislead. It stays unresolved (feeds the wrong-directory warning).
+            if (extraction is { Kind: TitleExtractionKind.FullPath } fullPath)
+            {
+                IReadOnlyList<LibraryClip> exact =
+                    context.ByFullPath.TryGetValue(fullPath.Value, out LibraryClip? clip)
+                        ? new[] { clip }
+                        : Array.Empty<LibraryClip>();
+                result.Add(new PlayerMatch(window, TitleExtractionKind.FullPath, fullPath.Value, exact));
                 continue;
+            }
 
-            TitleExtraction value = extraction.Value;
-            IReadOnlyList<LibraryClip> matches = value.Kind == TitleExtractionKind.FullPath
-                ? (context.ByFullPath.TryGetValue(value.Value, out LibraryClip? clip)
-                    ? new[] { clip }
-                    : Array.Empty<LibraryClip>())
-                : (context.ByFileName.TryGetValue(value.Value, out IReadOnlyList<LibraryClip>? list)
-                    ? list
-                    : Array.Empty<LibraryClip>());
+            // 2. Otherwise, library-aware containment: which KNOWN library basename appears in the
+            //    title? Immune to title-format quirks (timecode prefixes, OSD text, paused state)
+            //    that defeated the old extract-then-exact-match path for MPC-HC.
+            string? matchedName = LibraryTitleMatcher.FindBestMatch(window.WindowTitle, context.ByFileName.Keys);
+            if (matchedName is not null)
+            {
+                result.Add(new PlayerMatch(
+                    window, TitleExtractionKind.BareName, matchedName, context.ByFileName[matchedName]));
+                continue;
+            }
 
-            result.Add(new PlayerMatch(window, value.Kind, value.Value, matches));
+            // 3. Unresolved. If the title named some .mp4 token, surface it (no library match) so the
+            //    wrong-directory diagnostics can describe what the player is on; a title naming no
+            //    .mp4 at all is omitted entirely.
+            if (extraction is { } ext)
+                result.Add(new PlayerMatch(window, ext.Kind, ext.Value, Array.Empty<LibraryClip>()));
         }
         return result;
     }

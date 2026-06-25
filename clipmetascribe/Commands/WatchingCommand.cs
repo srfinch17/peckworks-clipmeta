@@ -50,6 +50,10 @@ internal static class WatchingCommand
         }
 
         output.WriteLine("Watched-clip candidates (most likely first):");
+        if (!result.AnyLiveTarget)
+            output.WriteLine(
+                "  (nothing is currently open or locked — these are most-recently-touched guesses; " +
+                "confirm the file before tagging.)");
         foreach (WatchingCandidate c in candidates)
         {
             string via = c.Player is null ? "" : $" via {c.Player}";

@@ -8,6 +8,32 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-25 — Player-title detection: extract-then-exact-match is brittle (MPC-HC intermittency)
+Dogfooding (2026-06-25) showed MPC-HC's player-title detection firing intermittently (`✓✗✗✓✓`)
+while VLC was reliable. **Root cause:** the old bare-name path extracted an `.mp4` token from the
+title with a regex (`PlayerTitleParser.BareNameRegex`) that excludes `:` but **not** the ` - `
+MPC-HC inserts after a playback-position prefix. So `"00:01:23 - clip.mp4"` extracted as
+`"23 - clip.mp4"` — which equalled no `ByFileName` key — and resolution silently went quiet exactly
+when MPC-HC showed the time. **Fix:** invert it — `LibraryTitleMatcher.FindBestMatch` asks which
+KNOWN library basename appears in the title (boundary-checked, longest-match, case-insensitive
+containment), so any title-format quirk (timecode/OSD/paused/custom) is immune. Full-path titles
+still resolve exactly first (folder disambiguation); a full path NOT in the library is still a
+wrong-directory case and does NOT fall back to containment. **Lesson:** when matching external,
+format-unstable text (a window title) against a known set, match the title *against the known set*,
+don't extract-a-token-and-hope-it-equals-a-key.
+
+## 2026-06-25 — Access-time is advisory only; ClipMeta's own IO pollutes it, and Windows often disables it
+The access-time fallback ranks clips by `LastAccessTimeUtc`, but that signal is doubly unreliable:
+(1) **self-pollution** — ClipMeta's own reads (`library_list`, `clip_get_metadata`, `library_vocab`)
+AND its flush **writes** bump last-access, freshening already-handled clips to `secondsSinceAccess≈0`
+(a just-flushed clip can float to the top looking "live"); (2) **OS disablement** — Windows commonly
+ships with last-access updates off (`NtfsDisableLastAccessUpdate`), so the signal may be uniformly
+stale. **Decision: do not fight it** (no snapshot/restore of atime — fragile and useless when the OS
+disables it). Instead the lock probe outranks atime, a high-confidence player hit suppresses stale
+access-time rows entirely, and `WatchingResult.AnyLiveTarget` tells callers when NOTHING is actually
+open/locked so they refuse to auto-tag a recency guess. **Lesson:** treat last-access time as a weak
+hint, never as proof a file is being watched.
+
 ## 2026-06-25 — Re-tagging clobbered notes; the queue merge only protected entries that COEXISTED
 Dogfooding showed a second narration of the same clip overwriting the first note. Two bugs in one:
 `library_queue_tag` mapped EVERY field to `SetFields` (last-wins), and the queue's merge only runs
