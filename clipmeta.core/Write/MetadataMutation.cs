@@ -15,6 +15,13 @@ public sealed class MetadataMutation
     /// <summary>When true, remove ALL com.peckworkslab.clipmeta atoms from the file.</summary>
     public bool ClearAll { get; set; }
 
+    /// <summary>
+    /// When true (the default), a write that stores a user field also stamps
+    /// <c>tagged_by: Peckworks ClipMeta</c>. Opt-out for users who don't want provenance written
+    /// into their files. A caller that supplies its own <c>tagged_by</c> value keeps it regardless.
+    /// </summary>
+    public bool StampProvenance { get; set; } = true;
+
     /// <summary>When true, log what would change without writing anything.</summary>
     public bool DryRun { get; set; }
 

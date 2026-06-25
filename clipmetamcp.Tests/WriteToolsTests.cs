@@ -1,5 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using ClipMetaCore.Mp4;
+using ClipMetaCore.Read;
+using ClipMetaCore.Schema;
 using ClipMetaMcp.Tests.Helpers;
 using ClipMetaScribe.Tests.Helpers;
 
@@ -75,7 +78,35 @@ public class WriteToolsTests
 
     private string[] BackupFiles() => Directory.GetFiles(_lib, "*.bak-*");
 
+    private static IReadOnlyList<(string Field, string Value)> RawFields(string clip) =>
+        ClipMetaReader.GetFields(Mp4Parser.ParseFile(clip));
+
     // ── clip_set_fields ──────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void SetFields_StampsProvenanceByDefault_OptOutSuppresses()
+    {
+        string clip = PrepareClip();
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["game"] = "Team Fortress 2" },
+            ["backup"] = false,
+        }));
+        Assert.IsTrue(RawFields(clip).Any(f => f.Field == ClipMetaSchema.TaggedBy),
+            "provenance is stamped by default");
+
+        string optOut = PrepareClip("optout.mp4");
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = optOut,
+            ["fields"] = new JsonObject { ["game"] = "Team Fortress 2" },
+            ["backup"] = false,
+            ["stamp_provenance"] = false,
+        }));
+        Assert.IsFalse(RawFields(optOut).Any(f => f.Field == ClipMetaSchema.TaggedBy),
+            "stamp_provenance:false suppresses the provenance stamp");
+    }
 
     [TestMethod]
     public void SetFields_WritesValues_VerifiedByIndependentReRead()

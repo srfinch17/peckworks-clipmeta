@@ -162,6 +162,12 @@ public static class WriteTools
             ["type"] = "boolean",
             ["description"] = "Report what would change without modifying the file (default false).",
         },
+        ["stamp_provenance"] = new JsonObject
+        {
+            ["type"] = "boolean",
+            ["description"] = "Write a 'tagged_by: Peckworks ClipMeta' provenance marker into the " +
+                              "file alongside the metadata (default true). Set false to opt out.",
+        },
     };
 
     private static JsonObject SetFieldsSchema()
@@ -535,6 +541,7 @@ public static class WriteTools
         bool backup = ReadTools.GetOptionalBool(args, "backup", defaultValue: true);
         bool dryRun = ReadTools.GetOptionalBool(args, "dry_run", defaultValue: false);
         mutation.DryRun = dryRun;
+        mutation.StampProvenance = ReadTools.GetOptionalBool(args, "stamp_provenance", defaultValue: true);
         // Timestamped sibling (clip.mp4.bak-20260612-153000): never silently overwrites a
         // previous backup the user might still want. The naming lives in Core (ClipBackup) so
         // the backup-management tools recognize exactly what the writer produces.

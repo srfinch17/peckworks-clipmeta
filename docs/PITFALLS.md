@@ -34,6 +34,42 @@ access-time rows entirely, and `WatchingResult.AnyLiveTarget` tells callers when
 open/locked so they refuse to auto-tag a recency guess. **Lesson:** treat last-access time as a weak
 hint, never as proof a file is being watched.
 
+## 2026-06-25 — Re-tagging clobbered notes; the queue merge only protected entries that COEXISTED
+Dogfooding showed a second narration of the same clip overwriting the first note. Two bugs in one:
+`library_queue_tag` mapped EVERY field to `SetFields` (last-wins), and the queue's merge only runs
+while two entries coexist IN the queue — once the first note drained to disk, a later set clobbered
+the on-disk value. Fix is per-field semantics: notes/tags/players route to `AppendFields`
+(`ClipMetaSchema.QueueAppendFields`); the write engine's append fold reads the CURRENT on-disk value
+and merges, so it survives the drain-then-retag path too. **Notes append as PROSE, not a pipe list** —
+`Normalizer.AppendValue` (and `TagQueue.Merge`) join `ProseFields` with a space, case preserved, no
+dedup; running notes through `AppendToPipeList` would lowercase and pipe-mangle prose. **Lesson:** an
+in-memory merge that only fires while two items coexist is not durable — fold the merge into the
+operation that touches persistent state (here, the disk write).
+
+## 2026-06-25 — The background drain pump makes WriteGate load-bearing, not just insurance
+The zero-touch flush pump (`QueueDrainPump`) is a genuine SECOND writer thread inside the MCP server
+(the session loop was single-threaded before). Every pump drain MUST run inside the same
+process-wide `WriteGate` single-flight as the direct write tools, or two rewrites could race at
+`File.Replace`. The pump is decoupled from the gate via an injected `runExclusive` seam (Core has no
+dependency on the MCP `WriteGate`); `Program.Serve` supplies the WriteGate-backed wrapper and
+disposes the pump in a `finally` after the session loop. Note: a player RELEASING a file handle is
+NOT a FileSystemWatcher event and process-exit hooks are racy — the pump POLLS the small queued set's
+lock state while non-empty, idle on an event otherwise. Durability stays the queue's job: a host kill
+before a lock clears leaves the tag in `.clipmeta-queue` for the next session. **Lesson:** when you
+add a background worker that writes, the write-serialization primitive that was "future insurance"
+becomes a correctness requirement — wire it through, don't skip it because the gate "isn't needed yet."
+
+## 2026-06-25 — Provenance stamp: treat `tagged_by` like `schema` (internal) to avoid read-surface ripple
+`Mp4Writer` now stamps `tagged_by: Peckworks ClipMeta` on every write that stores a user field. Making
+it a normal user field would have rippled across every test/surface that enumerates user fields. Fix:
+`ClipMetaSchema.IsInternal` covers `tagged_by` too, so all curated surfaces (get_metadata, stats,
+vocab, export, index, copy — everything through `ClipMetaReader.GetUserFields`) auto-exclude it; it's
+still written to the file and shown in the raw `--list`/tree. Two gotchas: the stamp sits in
+`SetFields`, so `RemoveOrphanedSchemaStamp`'s "does this write store a user field?" check must exclude
+BOTH `schema` and `tagged_by` (else provenance keeps the schema alive), and a delete-last-field write
+must sweep `tagged_by` alongside `schema`. **Lesson:** a field written on every mutation should be
+modeled on the existing internal stamp (`schema`), not as user data.
+
 ## 2026-06-21 — `Mp4Writer.WriteMetadata`'s full throw surface (a never-crash wrapper must catch all)
 Building the deferred-tag queue's `Drain` (which must never crash on one bad clip), the first catch
 set omitted `UnsupportedFormatException` — so a single fragmented/unsupported clip in the queue threw

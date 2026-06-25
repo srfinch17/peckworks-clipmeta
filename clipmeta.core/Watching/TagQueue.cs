@@ -83,7 +83,7 @@ public static class TagQueue
         var append = new Dictionary<string, string>(prior.AppendFields);
         foreach (var (k, v) in next.AppendFields)
             append[k] = append.TryGetValue(k, out string? existingVal) && existingVal.Length > 0
-                ? PipeMerge(existingVal, v)                                       // accumulate + dedup
+                ? MergeAppend(k, existingVal, v)                                  // prose-join or pipe-merge
                 : v;
 
         var delete = new HashSet<string>(prior.DeleteFields);
@@ -91,6 +91,14 @@ public static class TagQueue
 
         return new QueuedMutation(set, append, delete.ToList(), prior.ClearAll || next.ClearAll);
     }
+
+    /// <summary>
+    /// Accumulates a queued append for <paramref name="field"/>: a prose field (notes) joins with a
+    /// space (case preserved, no dedup), every other field pipe-merges. Mirrors the write engine's
+    /// <c>Normalizer.AppendValue</c> so the in-queue merge matches what eventually lands on disk.
+    /// </summary>
+    private static string MergeAppend(string field, string a, string b) =>
+        ClipMetaSchema.ProseFields.Contains(DisplayField(field)) ? $"{a.TrimEnd()} {b}" : PipeMerge(a, b);
 
     /// <summary>Joins two pipe-delimited lists, dropping duplicate items (first occurrence wins).</summary>
     private static string PipeMerge(string a, string b)

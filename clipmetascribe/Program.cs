@@ -375,7 +375,7 @@ internal static class Program
         "--set", "--append", "--clear", "--clear-all", "--copy-from", "--list", "--stats",
         "--find", "--vocab", "--index", "--index-search", "--export",
         "--format", "--output", "--dry-run", "--backup", "--verbose",
-        "--log", "--yes", "--version",
+        "--log", "--yes", "--version", "--no-provenance",
         "--watching", "--limit", "--no-access-fallback",
         "--flush-queue",
     };
@@ -427,6 +427,8 @@ internal static class Program
         {
             DryRun = dryRun,
             BackupPath = backup ? filePath + ".bak" : null,
+            // Provenance is stamped by default; --no-provenance opts out (see MetadataMutation).
+            StampProvenance = !ContainsFlag(args, "--no-provenance"),
         };
 
         for (int i = 0; i < args.Length; i++)

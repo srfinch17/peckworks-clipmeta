@@ -1,6 +1,8 @@
 using System.Text;
 using ClipMetaCore.Abstractions;
 using ClipMetaCore.Logging;
+using ClipMetaCore.Watching;
+using ClipMetaCore.Write;
 using ClipMetaMcp.Protocol;
 using ClipMetaMcp.Tools;
 
@@ -93,15 +95,42 @@ internal static class Program
 
             var sandbox = LibrarySandbox.FromEnvironment();
             var registry = new ToolRegistry();
+
+            // Zero-touch flush: a background pump drains the queue as locks clear, so the last clip
+            // of a session lands when its player closes without an explicit library_flush_queue.
+            // Only meaningful with a configured library; drains run under the same WriteGate as every
+            // other write, so the pump can never race a direct write at File.Replace.
+            QueueDrainPump? pump = null;
+            if (sandbox.Root is { } libraryRoot)
+            {
+                pump = new QueueDrainPump(
+                    libraryRoot, new Mp4Writer(), logger, LockProbe.IsInUse,
+                    runExclusive: action =>
+                    {
+                        WriteGate.Enter();
+                        try { action(); }
+                        finally { WriteGate.Exit(); }
+                    },
+                    pollInterval: TimeSpan.FromSeconds(3));
+                pump.Start();
+            }
+
             ReadTools.RegisterAll(registry, sandbox);
             WriteTools.RegisterAll(registry, sandbox);
-            QueueTools.RegisterAll(registry, sandbox);
+            QueueTools.RegisterAll(registry, sandbox, pump);
 
             logger.Log(
                 $"clipmetamcp {McpSession.ServerVersion} serving; protocol {McpSession.LatestProtocolVersion}; " +
                 $"library root: {sandbox.Root ?? "(not configured)"}");
 
-            new McpSession(protocolInput, protocolOutput, registry, logger).Run();
+            try
+            {
+                new McpSession(protocolInput, protocolOutput, registry, logger).Run();
+            }
+            finally
+            {
+                pump?.Dispose(); // stop and join the background loop before exit
+            }
 
             logger.Log("stdin closed by host; exiting cleanly");
             return 0;

@@ -40,6 +40,26 @@ public static class Normalizer
     }
 
     /// <summary>
+    /// Appends <paramref name="incoming"/> onto <paramref name="existing"/> using the rule for
+    /// <paramref name="field"/>: a prose field (notes) joins with a space, preserving case and never
+    /// deduplicating; every other field is treated as a pipe list (merge + dedup + lowercase). The
+    /// field key may be bare ("notes") or domain-qualified ("com.peckworkslab.clipmeta:notes").
+    /// </summary>
+    public static string AppendValue(string field, string existing, string incoming)
+    {
+        if (ClipMetaSchema.ProseFields.Contains(BareName(field)))
+            return existing.Length == 0 ? incoming : $"{existing.TrimEnd()} {incoming}";
+        return AppendToPipeList(existing, incoming);
+    }
+
+    /// <summary>Strips the domain prefix from a possibly-qualified atom key to the bare field name.</summary>
+    private static string BareName(string field)
+    {
+        int colonIdx = field.IndexOf(':');
+        return colonIdx >= 0 ? field[(colonIdx + 1)..] : field;
+    }
+
+    /// <summary>
     /// Normalizes a timecode string to HH:MM:SS.
     /// Accepts: "45", "0:45", "00:00:45", "1:23:45".
     /// </summary>

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
 using ClipMetaMcp.Tests.Helpers;
 using ClipMetaScribe.Tests.Helpers;
@@ -95,8 +96,36 @@ public class QueueToolsTests
         Assert.AreEqual(1, data.Entries.Count, "queue must have exactly one entry");
         Assert.AreEqual(clip, data.Entries[0].ClipPath, StringComparer.OrdinalIgnoreCase,
             "the queued clip path must match the resolved path");
-        Assert.IsTrue(data.Entries[0].Mutation.SetFields.Values.Contains("headshot"),
-            "the queued mutation must include the 'tags' value");
+        // 'tags' is an accumulate field, so it routes to AppendFields (not SetFields) — re-tagging
+        // the same clip merges instead of overwriting.
+        Assert.IsTrue(data.Entries[0].Mutation.AppendFields.Values.Contains("headshot"),
+            "the queued mutation must append the 'tags' value");
+    }
+
+    [TestMethod]
+    public void QueueTag_RoutesNotesTagsPlayersToAppend_RestToSet()
+    {
+        // The P0 fix at the tool layer: free-text/list fields accumulate (AppendFields), scalar
+        // fields replace (SetFields). An empty .mp4 is enough — queue_tag stores the path, never parses.
+        string clip = Path.Combine(_lib, "clip.mp4");
+        File.WriteAllBytes(clip, Array.Empty<byte>());
+
+        JsonObject result = Call("library_queue_tag", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject
+            {
+                ["notes"] = "creepy demon lady",
+                ["players"] = "chuck|chicken",
+                ["game"] = "Sons of the Forest",
+            },
+        });
+        Assert.IsNull(result["isError"], "expected success");
+
+        QueuedMutation m = TagQueue.Load(_lib).Entries.Single().Mutation;
+        Assert.IsTrue(m.AppendFields.ContainsKey(ClipMetaSchema.AtomName("notes")), "notes → append");
+        Assert.IsTrue(m.AppendFields.ContainsKey(ClipMetaSchema.AtomName("players")), "players → append");
+        Assert.IsTrue(m.SetFields.ContainsKey(ClipMetaSchema.AtomName("game")), "game → set");
     }
 
     // ── library_queue_status ──────────────────────────────────────────────────────────────

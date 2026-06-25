@@ -16,8 +16,13 @@ namespace ClipMetaMcp.Tools;
 /// </summary>
 public static class QueueTools
 {
-    /// <summary>Registers the queue tools against the given sandbox.</summary>
-    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
+    /// <summary>
+    /// Registers the queue tools against the given sandbox. When <paramref name="pump"/> is supplied,
+    /// each enqueue wakes it so the background drain lands the tag the moment the player's lock clears
+    /// (zero-touch flush for the last clip); null disables that — the queue still drains
+    /// opportunistically on the next watched-clip call and via library_flush_queue.
+    /// </summary>
+    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox, QueueDrainPump? pump = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -27,11 +32,15 @@ public static class QueueTools
             "Queues a metadata tag for a clip that is currently being played (and therefore locked " +
             "against writing). Pass the clip 'path' you already resolved with library_watching and " +
             "confirmed — this tool does NOT resolve or guess. 'fields' maps field names to string " +
-            "values (empty string deletes), exactly like clip_set_fields. The tag is written " +
+            "values (empty string deletes), exactly like clip_set_fields. For searchability, put " +
+            "people in 'players' and searchable nouns/moments (objects, places, events) in 'tags' " +
+            "rather than burying them in free-text 'notes' — those three fields ACCUMULATE across " +
+            "re-tags of the same clip (notes join as prose; tags/players merge), while game/rating " +
+            "replace. The tag is written " +
             "automatically the next time you call a watched-clip tool after the player advances " +
             "(the lock clears), or immediately via library_flush_queue. Requires a configured library.",
             QueueTagSchema(),
-            args => QueueTag(args, sandbox),
+            args => QueueTag(args, sandbox, pump),
             clipPath => new JsonObject
             {
                 ["path"] = clipPath,
@@ -86,7 +95,7 @@ public static class QueueTools
 
     // ── Handlers ─────────────────────────────────────────────────────────────────────────
 
-    private static JsonObject QueueTag(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject QueueTag(JsonObject? args, LibrarySandbox sandbox, QueueDrainPump? pump = null)
     {
         // Library-sandbox check IS the "dumb queue" guard: the path must be a real .mp4 in-library.
         string fullPath = sandbox.ResolveWritePath(ReadTools.GetRequiredString(args, "path"));
@@ -101,12 +110,24 @@ public static class QueueTools
         {
             if (pair.Value is not JsonValue value || !value.TryGetValue(out string? text))
                 throw new ToolException($"Field '{pair.Key}' must have a string value (use \"\" to delete it).");
-            mutation.SetFields[ClipMetaSchema.AtomName(pair.Key)] = text;
+
+            string atom = ClipMetaSchema.AtomName(pair.Key);
+            // Per-field semantics so re-tagging a clip ACCUMULATES instead of overwriting: notes
+            // (prose), tags and players (lists) append; game/rating/timecode/custom replace. An
+            // empty value is always the delete idiom (a set that Normalizer turns into a delete).
+            if (text.Length > 0 && ClipMetaSchema.QueueAppendFields.Contains(pair.Key))
+                mutation.AppendFields[atom] = text;
+            else
+                mutation.SetFields[atom] = text;
         }
 
         string root = sandbox.RequireRoot();
         DrainReport drain = DrainUnderGate(root);   // opportunistic: land anything already freed
         TagQueue.Enqueue(root, fullPath, mutation, confidence: "high");
+
+        // Wake the background pump so it lands THIS tag the instant the player's lock clears — the
+        // zero-touch flush for the last clip, where no further watched-clip call will drain it.
+        pump?.Wake();
 
         return new JsonObject
         {
