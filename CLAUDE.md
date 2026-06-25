@@ -15,14 +15,14 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 | `clipmeta.core` | `ClipMetaCore` | All business logic: MP4 parse/read/write, schema, search/index, logging. Zero NuGet deps. |
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
 | `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (10 commands, incl. `--copy-from` and `--flush-queue`; write ops also batch over a directory). References Core. |
-| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. |
+| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. **v1.2.0** (pass-3). |
 | `clipmetaview.Tests` | — | MSTest, 101 tests. |
-| `clipmetascribe.Tests` | — | MSTest, 386 tests (incl. real-clip integration and byte-level media-integrity tests). |
-| `clipmetamcp.Tests` | — | MSTest, 112 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
+| `clipmetascribe.Tests` | — | MSTest, 418 tests (incl. real-clip integration and byte-level media-integrity tests). |
+| `clipmetamcp.Tests` | — | MSTest, 115 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
 
-> `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag). A clip that is **playing is locked against writing** (`File.Replace`), so the **deferred-tag queue** (`clipmeta.core/Watching/TagQueue`, persisted as `.clipmeta-queue` in the library root) holds confirmed tags and writes them when the lock clears: MCP `library_queue_tag` / `library_flush_queue` / `library_queue_status`, CLI `--flush-queue`, and `library_watching` itself drains opportunistically. The queue only ever stores an already-resolved, in-library path — it never resolves or guesses.
+> `clipmetascribe` `--watching` and the MCP tool `library_watching` resolve the currently/just-watched clip from open media players (resolve-only — no write; call a write tool with the returned path to tag). Resolution is **library-aware**: a player title is matched against KNOWN library basenames (`LibraryTitleMatcher`, pass-3) rather than extract-then-exact-match, which fixed intermittent MPC-HC detection. `library_watching` returns `anyLiveTarget` — when false, NOTHING is open/locked and callers must not auto-tag a recency guess. A clip that is **playing is locked against writing** (`File.Replace`), so the **deferred-tag queue** (`clipmeta.core/Watching/TagQueue`, persisted as `.clipmeta-queue` in the library root) holds confirmed tags and writes them when the lock clears: MCP `library_queue_tag` / `library_flush_queue` / `library_queue_status`, CLI `--flush-queue`, `library_watching` drains opportunistically, **and a background `QueueDrainPump` (pass-3) auto-flushes the last clip the moment its player closes** (zero-touch). The queue only ever stores an already-resolved, in-library path — it never resolves or guesses. Re-tagging the same clip **accumulates**: `notes`/`tags`/`players` append (notes as prose, tags/players pipe-merge), the rest replace.
 
-`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Watching/` (watched-clip resolution: signals, process seam, resolver — plus the deferred-tag queue: `TagQueue`, `QueuedMutation`/`QueuedTag`/`TagQueueData`/`DrainReport`), `Schema/`, `Logging/`, `Exceptions/`.
+`clipmeta.core` layout: `Abstractions/` (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`, `MediaHandlerRegistry`), `Mp4/`, `Write/`, `Read/`, `Watching/` (watched-clip resolution: signals, process seam, `LibraryTitleMatcher`, resolver — plus the deferred-tag queue: `TagQueue`, `QueueDrainPump`, `QueuedMutation`/`QueuedTag`/`TagQueueData`/`DrainReport`), `Schema/`, `Logging/`, `Exceptions/`.
 
 > Note: `clipmetascribe` is the tool the old brief called "clipmetaedit." There is no separate clipmetaedit.
 
@@ -42,6 +42,9 @@ When we hit and fix a real bug or a non-obvious gotcha, append it to **`docs/PIT
 
 ### Memory
 Persistent project memory lives in the Claude memory store (indexed in `MEMORY.md` there). Capture durable, non-obvious facts; don't duplicate what the code or these docs already say.
+
+### Public landing page (`docs/index.html`) — built, NOT yet published
+A self-contained GitHub Pages info/landing page lives at `docs/index.html` (build record + decisions in `docs/BUILD-LOG.md`). It is **deliberately not live**: do **not** enable GitHub Pages, publish, or announce it until the tool has been dogfooded on a real clip library and the owner clears it. It still has fill-in placeholders (owner name, logo, real screenshots). Treat it as a curated artifact — don't clobber or regenerate it casually.
 
 ---
 
@@ -78,7 +81,7 @@ dotnet test   --nologo --no-build -v q
 
 ## Metadata model
 
-Custom fields use the reverse-domain namespace `com.peckworkslab.clipmeta`, stored in MP4 `----` freeform atoms, multi-values pipe-delimited. Well-known fields: `game`, `players`, `tags`, `timecode`, `rating`, `notes` (plus arbitrary custom names). Full schema and write semantics are in the write-engine design spec.
+Custom fields use the reverse-domain namespace `com.peckworkslab.clipmeta`, stored in MP4 `----` freeform atoms, multi-values pipe-delimited. Well-known fields: `game`, `players`, `tags`, `timecode`, `rating`, `notes` (plus arbitrary custom names). Two **internal** stamps (excluded from curated read surfaces via `ClipMetaSchema.IsInternal`, but written to the file and shown in raw `--list`/tree): `schema` (version) and `tagged_by` (provenance — auto-stamped `Peckworks ClipMeta` on every user-field write; opt out with MCP `stamp_provenance:false` / CLI `--no-provenance`). Full schema and write semantics are in the write-engine design spec.
 
 ## Definition of Done (every change)
 
