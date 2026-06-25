@@ -77,4 +77,19 @@ public class PlayerTitleResolutionTests
 
         Assert.AreEqual(0, matches.Count);
     }
+
+    [TestMethod]
+    public void For_MpcHcTitleWithTimecodePrefix_ResolvesViaContainment()
+    {
+        // The dogfooding bug: MPC-HC shows a playback-position prefix, whose colons made the old
+        // bare-name token extraction capture "23 - Sons...mp4" — not a library key — so resolution
+        // silently failed. Library-aware containment must resolve it to the real clip.
+        string clip = Touch("Sons of the Forest 2025.03.17 - 23.27.30.27.DVR.mp4");
+        IReadOnlyList<PlayerMatch> matches = PlayerTitleResolution.For(Build(new ProcessWindow(
+            "mpc-hc64", "00:01:23 - Sons of the Forest 2025.03.17 - 23.27.30.27.DVR.mp4")));
+
+        Assert.AreEqual(1, matches.Count);
+        Assert.AreEqual(TitleExtractionKind.BareName, matches[0].Kind);
+        Assert.AreEqual(clip, matches[0].Matches.Single().FullPath);
+    }
 }

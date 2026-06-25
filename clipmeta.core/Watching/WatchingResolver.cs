@@ -144,7 +144,54 @@ public sealed class WatchingResolver
             .ThenByDescending(c => c.LastAccessTimeUtc)
             .ToList();
 
-        return new WatchingResult(finalCandidates, diagnostics);
+        // #6 — attribute the player for a locked clip whose title we could not resolve. When exactly
+        // one open recognized player produced no resolved candidate, it is almost certainly the one
+        // holding the lock, so name it rather than returning player:null on a live clip. Two such
+        // players is genuinely ambiguous — never guess between them.
+        string? soleHolder = SoleUnresolvedPlayer(context, playerMatches);
+        if (soleHolder is not null)
+            for (int i = 0; i < finalCandidates.Count; i++)
+                if (finalCandidates[i].InUse && finalCandidates[i].Player is null)
+                    finalCandidates[i] = finalCandidates[i] with { Player = soleHolder, Note = PlayerAttributedNote };
+
+        // #8a — once a clip is positively identified by a high-confidence player hit, the leftover
+        // access-time guesses are noise; drop them. With no high winner the fallback is all we have,
+        // so keep it.
+        if (finalCandidates.Any(c => c.Confidence == HighConfidence))
+            finalCandidates = finalCandidates
+                .Where(c => c.Source != AccessTimeSignal.SourceName)
+                .ToList();
+
+        // #3 — a live target is one a player named OR one currently locked. When false, every
+        // candidate is an unverified recency guess and the caller must confirm before tagging.
+        bool anyLiveTarget = finalCandidates.Any(
+            c => c.Source == PlayerTitleSignal.SourceName || c.InUse);
+
+        return new WatchingResult(finalCandidates, diagnostics, anyLiveTarget);
+    }
+
+    /// <summary>The caveat attached to a lock attributed to a player by the open-window heuristic.</summary>
+    private const string PlayerAttributedNote =
+        "player title not recognized — player attributed from the single open player window";
+
+    /// <summary>
+    /// The process name of the one open recognized player that resolved no candidate, or null when
+    /// none — or more than one — such player is open (ambiguous, so we attribute nothing).
+    /// </summary>
+    private static string? SoleUnresolvedPlayer(
+        WatchContext context, IReadOnlyList<PlayerMatch> playerMatches)
+    {
+        var resolvedProcesses = new HashSet<string>(
+            playerMatches.Where(m => m.Matches.Count > 0).Select(m => m.Window.ProcessName),
+            StringComparer.OrdinalIgnoreCase);
+
+        List<string> openUnresolved = context.PlayerWindows
+            .Select(w => w.ProcessName)
+            .Where(p => !resolvedProcesses.Contains(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return openUnresolved.Count == 1 ? openUnresolved[0] : null;
     }
 
     /// <summary>A candidate plus the per-path facts the collision guard needs before finalizing.</summary>

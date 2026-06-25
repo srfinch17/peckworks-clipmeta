@@ -81,4 +81,18 @@ public class LibraryWatchingToolTests
         // No player is playing our temp clips, so there is no wrong-directory warning.
         Assert.IsNull(Structured(result)["warning"], "warning must be absent when no foreign player is detected");
     }
+
+    [TestMethod]
+    public void Watching_NothingLive_ReportsAnyLiveTargetFalse()
+    {
+        // No player open and the temp clips aren't locked: access-time candidates may surface, but
+        // none is actually live, so the caller must be told not to auto-tag.
+        JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
+        Assert.IsNull(result["isError"]);
+
+        JsonObject structured = Structured(result);
+        Assert.IsTrue(structured.ContainsKey("anyLiveTarget"), "library_watching must report anyLiveTarget");
+        Assert.IsFalse(structured["anyLiveTarget"]!.GetValue<bool>(),
+            "nothing open or locked → anyLiveTarget false");
+    }
 }

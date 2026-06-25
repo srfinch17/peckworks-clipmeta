@@ -20,6 +20,12 @@ public readonly record struct TitleExtraction(TitleExtractionKind Kind, string V
 /// drive-rooted full path first (MPC-HC style), then a bare file name (VLC style). A title with no
 /// <c>.mp4</c> (an embedded metadata title, a stopped player, a custom format) yields null. This
 /// type only parses text; resolving a reference to a real library clip is the signal's job.
+/// <para>
+/// Note: bare-name <em>resolution</em> no longer relies on this extractor — title-format quirks
+/// (a timecode prefix, OSD text) make token extraction brittle, so <see cref="PlayerTitleResolution"/>
+/// matches the title against known library basenames via <see cref="LibraryTitleMatcher"/> instead.
+/// Extraction here still drives full-path resolution and the wrong-directory diagnostics.
+/// </para>
 /// </summary>
 public static partial class PlayerTitleParser
 {

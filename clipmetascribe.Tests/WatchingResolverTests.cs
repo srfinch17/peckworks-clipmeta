@@ -138,8 +138,11 @@ public class WatchingResolverTests
     }
 
     [TestMethod]
-    public void Resolve_PlayerHitWithFallback_AccessOnlyClipsAppearAsLowRows()
+    public void Resolve_HighWinnerPresent_SuppressesStaleAccessTimeRows()
     {
+        // Spec A §6a (behavior CHANGE from pass-2): once a clip is positively identified by a
+        // high-confidence player hit, the leftover access-time guesses are pure noise — the session
+        // flagged them as such — so they are dropped from the result.
         string watched = Touch("watched.mp4");
         Touch("bystander.mp4");
 
@@ -150,10 +153,87 @@ public class WatchingResolverTests
         WatchingCandidate high = result.Single(c => c.Name == "watched.mp4");
         Assert.AreEqual("high", high.Confidence);
         Assert.AreEqual(PlayerTitleSignal.SourceName, high.Source);
+        Assert.IsFalse(result.Any(c => c.Source == AccessTimeSignal.SourceName),
+            "stale access-time candidates are dropped beneath a high-confidence winner");
+    }
 
-        WatchingCandidate low = result.Single(c => c.Name == "bystander.mp4");
-        Assert.AreEqual("low", low.Confidence);
-        Assert.AreEqual(AccessTimeSignal.SourceName, low.Source);
+    [TestMethod]
+    public void Resolve_NoHighWinner_KeepsAccessTimeRows()
+    {
+        // No player hit → the access-time fallback is all we have, so it must still answer.
+        Touch("a.mp4");
+        Touch("b.mp4");
+
+        IReadOnlyList<WatchingCandidate> result = Candidates(Resolver(), _tempDir, 5, true);
+
+        Assert.IsTrue(result.All(c => c.Source == AccessTimeSignal.SourceName));
+        Assert.IsTrue(result.Count >= 2);
+    }
+
+    [TestMethod]
+    public void Resolve_PlayerHit_AnyLiveTargetIsTrue()
+    {
+        string clip = Touch("clip.mp4");
+
+        WatchingResult result = Resolver(new ProcessWindow("mpc-hc64", $"{clip} - MPC-HC"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.IsTrue(result.AnyLiveTarget);
+    }
+
+    [TestMethod]
+    public void Resolve_LockedClipNoPlayer_AnyLiveTargetIsTrue()
+    {
+        string clip = Touch("clip.mp4");
+        using var hold = new FileStream(clip, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        WatchingResult result = Resolver().Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.IsTrue(result.AnyLiveTarget, "a locked clip is a live target even with no player title");
+    }
+
+    [TestMethod]
+    public void Resolve_NoPlayerNoLock_AnyLiveTargetIsFalse()
+    {
+        // Access-time candidates are still returned (a useful recency hint), but nothing is actually
+        // open/locked — the caller must not auto-tag. AnyLiveTarget makes that an explicit contract.
+        Touch("a.mp4");
+
+        WatchingResult result = Resolver().Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.IsTrue(result.Candidates.Count >= 1);
+        Assert.IsFalse(result.AnyLiveTarget);
+    }
+
+    [TestMethod]
+    public void Resolve_LockedClipSingleUnresolvedPlayer_AttributesThatPlayer()
+    {
+        // Spec A §6: a locked clip resolved only via access-time has no player from a title hit.
+        // With exactly one open player whose title didn't resolve, attribute the lock to it.
+        string clip = Touch("clip.mp4");
+        using var hold = new FileStream(clip, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        WatchingCandidate c = Resolver(new ProcessWindow("vlc", "Some Embedded Metadata Title"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true)
+            .Candidates.Single(x => x.Name == "clip.mp4");
+
+        Assert.IsTrue(c.InUse);
+        Assert.AreEqual("vlc", c.Player);
+    }
+
+    [TestMethod]
+    public void Resolve_LockedClipTwoUnresolvedPlayers_LeavesPlayerNull()
+    {
+        string clip = Touch("clip.mp4");
+        using var hold = new FileStream(clip, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        WatchingCandidate c = Resolver(
+                new ProcessWindow("vlc", "Title A"),
+                new ProcessWindow("mpc-hc64", "Title B"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true)
+            .Candidates.Single(x => x.Name == "clip.mp4");
+
+        Assert.IsNull(c.Player, "two open players is ambiguous — never guess which holds the lock");
     }
 
     [TestMethod]

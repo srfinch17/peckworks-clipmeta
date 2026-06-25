@@ -64,6 +64,19 @@ public class WatchingCommandTests
     }
 
     [TestMethod]
+    public void Run_NothingLive_PrintsRecencyCaution()
+    {
+        // No player open and the clip isn't locked: candidates are recency guesses only.
+        File.WriteAllBytes(Path.Combine(_tempDir, "clip.mp4"), Array.Empty<byte>());
+        using var sw = new StringWriter();
+
+        int code = WatchingCommand.Run(_tempDir, 5, includeAccessFallback: true, output: sw);
+
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(sw.ToString(), "nothing is currently open or locked");
+    }
+
+    [TestMethod]
     public void Run_BareNameUnlockedClip_PrintsConfirmNote()
     {
         File.WriteAllBytes(Path.Combine(_tempDir, "clip.mp4"), Array.Empty<byte>()); // free / unlocked
