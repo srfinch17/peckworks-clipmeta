@@ -30,9 +30,28 @@ public static class ClipMetaSchema
     /// <summary>Freeform notes field.</summary>
     public const string Notes = "notes";
 
+    /// <summary>Provenance field stamped by the write engine: "who tagged this".</summary>
+    public const string TaggedBy = "tagged_by";
+
+    /// <summary>The value written into <see cref="TaggedBy"/> by ClipMeta's own writes.</summary>
+    public const string ProvenanceValue = "Peckworks ClipMeta";
+
     /// <summary>Pipe-separated fields (values are lists of items).</summary>
     public static readonly IReadOnlySet<string> PipeFields =
         new HashSet<string> { Players, Tags, Timecode };
+
+    /// <summary>
+    /// Free-text fields appended as prose — joined with a space, case preserved, no dedup — rather
+    /// than as deduplicated pipe lists. Drives the append join in <c>Normalizer.AppendValue</c>.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ProseFields = new HashSet<string> { Notes };
+
+    /// <summary>
+    /// Fields the deferred-tag queue ACCUMULATES on a re-tag instead of overwriting, so two spoken
+    /// narrations of the same clip both survive (notes append as prose; tags/players pipe-merge).
+    /// Every other field (game, rating, timecode, custom) is last-wins / replace.
+    /// </summary>
+    public static readonly IReadOnlySet<string> QueueAppendFields = new HashSet<string> { Notes, Tags, Players };
 
     /// <summary>All well-known user-facing fields, in canonical display order.</summary>
     public static readonly IReadOnlyList<string> KnownFields =

@@ -122,6 +122,39 @@ public class TagQueueTests
     }
 
     [TestMethod]
+    public void Enqueue_NotesTwice_MergesAsProse()
+    {
+        // The P0 fix (in-queue half): two notes narrations on the same locked clip must accumulate
+        // as prose, not pipe-join or overwrite.
+        string clip = Path.Combine(_dir, "a.mp4");
+        var m1 = new MetadataMutation(); m1.AppendFields[ClipMetaSchema.AtomName("notes")] = "first note";
+        var m2 = new MetadataMutation(); m2.AppendFields[ClipMetaSchema.AtomName("notes")] = "second note";
+        TagQueue.Enqueue(_dir, clip, m1, "high");
+        TagQueue.Enqueue(_dir, clip, m2, "high");
+
+        TagQueueData data = TagQueue.Load(_dir);
+        Assert.AreEqual(1, data.Entries.Count, "same clip merges");
+        Assert.AreEqual("first note second note",
+            data.Entries[0].Mutation.AppendFields[ClipMetaSchema.AtomName("notes")]);
+    }
+
+    [TestMethod]
+    public void Drain_NotesAppend_AccumulatesOntoDiskAsProse()
+    {
+        // The P0 fix (disk half): appending to a clip whose notes already exist on disk joins as
+        // prose, case preserved — never clobbers (the original dogfooding data-loss bug).
+        string clip = MakeClip("a.mp4", seedField: "notes", seedValue: "Chuck wins");
+        var m = new MetadataMutation();
+        m.AppendFields[ClipMetaSchema.AtomName("notes")] = "raccoon appears";
+        TagQueue.Enqueue(_dir, clip, m, "high");
+
+        TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, isInUse: _ => false);
+
+        var fields = ClipMetaReader.GetUserFields(Mp4Parser.ParseFile(clip));
+        Assert.AreEqual("Chuck wins raccoon appears", fields.Single(f => f.Field == "notes").Value);
+    }
+
+    [TestMethod]
     public void Drain_LockedClip_LeavesQueued()
     {
         string clip = MakeClip("a.mp4");

@@ -1,3 +1,4 @@
+using ClipMetaCore.Schema;
 using ClipMetaCore.Write;
 
 namespace ClipMetaScribe.Tests;
@@ -5,6 +6,29 @@ namespace ClipMetaScribe.Tests;
 [TestClass]
 public class NormalizationTests
 {
+    private static string Atom(string field) => ClipMetaSchema.AtomName(field);
+
+    [TestMethod]
+    public void AppendValue_Notes_JoinsAsProse_CasePreserved_NoDedup()
+    {
+        // Free-text notes must accumulate as prose: space-joined, original case kept, never
+        // pipe-mangled or lowercased the way a tag list would be.
+        Assert.AreEqual("Chuck wins the round", Normalizer.AppendValue(Atom(ClipMetaSchema.Notes),
+            "Chuck wins", "the round"));
+    }
+
+    [TestMethod]
+    public void AppendValue_Notes_EmptyExisting_ReturnsIncoming()
+        => Assert.AreEqual("first note", Normalizer.AppendValue(Atom(ClipMetaSchema.Notes), "", "first note"));
+
+    [TestMethod]
+    public void AppendValue_Tags_PipeMergesAndDedups()
+        => Assert.AreEqual("win|comeback", Normalizer.AppendValue(Atom(ClipMetaSchema.Tags), "win", "comeback"));
+
+    [TestMethod]
+    public void AppendValue_Tags_DuplicateNotAdded()
+        => Assert.AreEqual("win", Normalizer.AppendValue(Atom(ClipMetaSchema.Tags), "win", "win"));
+
     [TestMethod]
     public void NormalizeTag_Lowercase()
         => Assert.AreEqual("market garden", Normalizer.NormalizeTag("Market Garden"));

@@ -163,10 +163,9 @@ public sealed class Mp4Writer : IMediaWriter
                             $"Cannot append to '{key}': its existing value is not text " +
                             $"({dv}). Use --set to replace it instead.");
                     }
-                    string combined = string.IsNullOrEmpty(current)
-                        ? appendValue
-                        : Normalizer.AppendToPipeList(current, appendValue);
-                    mutation.SetFields[key] = combined;
+                    // Field-aware merge: prose (notes) joins as text, case preserved; list fields
+                    // (tags/players/timecode) pipe-merge + dedup. AppendValue handles empty current.
+                    mutation.SetFields[key] = Normalizer.AppendValue(key, current, appendValue);
                 }
                 mutation.AppendFields.Clear();
 

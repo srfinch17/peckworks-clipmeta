@@ -101,7 +101,15 @@ public static class QueueTools
         {
             if (pair.Value is not JsonValue value || !value.TryGetValue(out string? text))
                 throw new ToolException($"Field '{pair.Key}' must have a string value (use \"\" to delete it).");
-            mutation.SetFields[ClipMetaSchema.AtomName(pair.Key)] = text;
+
+            string atom = ClipMetaSchema.AtomName(pair.Key);
+            // Per-field semantics so re-tagging a clip ACCUMULATES instead of overwriting: notes
+            // (prose), tags and players (lists) append; game/rating/timecode/custom replace. An
+            // empty value is always the delete idiom (a set that Normalizer turns into a delete).
+            if (text.Length > 0 && ClipMetaSchema.QueueAppendFields.Contains(pair.Key))
+                mutation.AppendFields[atom] = text;
+            else
+                mutation.SetFields[atom] = text;
         }
 
         string root = sandbox.RequireRoot();
