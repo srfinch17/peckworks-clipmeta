@@ -74,6 +74,24 @@ public class LibraryWatchingToolTests
     }
 
     [TestMethod]
+    public void Watching_StillReturnsAnyLiveTarget_WithNoWatcherWired()
+    {
+        // The harness wires no ReviewWatcher, so library_watching uses the live-poll fallback — the
+        // existing contract (incl. anyLiveTarget) must stay intact.
+        JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
+        Assert.IsNull(result["isError"]);
+        Assert.IsTrue(Structured(result).ContainsKey("anyLiveTarget"));
+    }
+
+    [TestMethod]
+    public void Watching_ReviewArray_AbsentWhenNoFlags()
+    {
+        // No watcher, no segments → no review flags → the 'review' key is omitted (additive, opt-in).
+        JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
+        Assert.IsNull(Structured(result)["review"]);
+    }
+
+    [TestMethod]
     public void Watching_NormalCall_HasNoWarning()
     {
         JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);

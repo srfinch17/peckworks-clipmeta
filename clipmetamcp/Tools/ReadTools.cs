@@ -34,8 +34,12 @@ public static class ReadTools
     /// <summary>Hard ceiling for the caller-supplied watched-clip limit.</summary>
     private const int MaxWatchingLimit = 50;
 
-    /// <summary>Registers all read tools against the given sandbox.</summary>
-    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
+    /// <summary>
+    /// Registers all read tools against the given sandbox. When <paramref name="watcher"/> is supplied,
+    /// library_watching resolves the watched clip from the watcher's title-segment history (the
+    /// previous-stable heuristic) instead of a one-shot poll; null keeps today's live-poll behavior.
+    /// </summary>
+    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox, ReviewWatcher? watcher = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -129,9 +133,13 @@ public static class ReadTools
             "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
             "has a 'note', mention it and confirm with the user before tagging. " +
             "Requires a configured clips library. " +
+            "In review mode the recommended top candidate reflects the clip you were watching when you " +
+            "spoke, even if the player has since advanced (it may be unlocked and directly writable). A " +
+            "'review' array may list non-blocking advisories (autoCorrected, sameClipTwice, sequenceSkip, " +
+            "multiplePlayersActive) to mention to the user and reconcile later — never block the run to ask. " +
             "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
-            args => Watching(args, sandbox),
+            args => Watching(args, sandbox, watcher),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
     }
 
@@ -507,7 +515,7 @@ public static class ReadTools
         return result;
     }
 
-    private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox, ReviewWatcher? watcher = null)
     {
         string root = sandbox.RequireRoot();
 
@@ -534,7 +542,14 @@ public static class ReadTools
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
 
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
-        WatchingResult result = resolver.Resolve(root, limit, includeAccessFallback);
+        WatchingResult result = watcher is null
+            ? resolver.Resolve(root, limit, includeAccessFallback)
+            : resolver.ResolveReview(root, watcher.Snapshot(), watcher.LastBoundId,
+                                     DateTimeOffset.UtcNow, limit, includeAccessFallback);
+
+        // Remember the recommended bind so the next call can flag a repeat or a skipped clip.
+        if (watcher is not null && result.RecommendationConfident && result.BoundSegmentId is { } boundId)
+            watcher.MarkBound(boundId);
 
         var array = new JsonArray();
         foreach (WatchingCandidate c in result.Candidates)
@@ -563,7 +578,31 @@ public static class ReadTools
             ["candidates"] = array,
         };
 
-        if (result.Diagnostics.UnresolvedPlayers.Count > 0)
+        // Review-mode advisories (non-blocking): the model mentions these to the user and reconciles
+        // later. A multi-player flag also raises the existing inline warning channel.
+        if (result.Review is { Count: > 0 })
+        {
+            var review = new JsonArray();
+            foreach (ReviewFlag f in result.Review)
+            {
+                var clips = new JsonArray();
+                foreach (string clipName in f.Clips) clips.Add(clipName);
+                var entry = new JsonObject { ["type"] = f.Type, ["clips"] = clips };
+                if (f.StableSeconds > 0) entry["stableSeconds"] = Math.Round(f.StableSeconds, 1);
+                review.Add(entry);
+            }
+            response["review"] = review;
+
+            if (result.Review.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive))
+                response["warning"] = new JsonObject
+                {
+                    ["type"] = "multiple_players_active",
+                    ["message"] = "More than one media player is active — too ambiguous to bind a clip " +
+                                  "safely. Confirm the exact path with the user before tagging.",
+                };
+        }
+
+        if (response["warning"] is null && result.Diagnostics.UnresolvedPlayers.Count > 0)
         {
             var players = new JsonArray();
             foreach (UnresolvedPlayer up in result.Diagnostics.UnresolvedPlayers)
