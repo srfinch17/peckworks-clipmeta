@@ -114,6 +114,30 @@ public class LibraryWatchingToolTests
     }
 
     [TestMethod]
+    public void Watching_AcceptsSpokenAtArgument_NoError()
+    {
+        // AC2: an ISO-8601 spoken_at is accepted; with no watcher wired it degrades to the live poll,
+        // but the call must still succeed and keep its shape.
+        JsonObject result = Call(
+            new JsonObject { ["include_access_fallback"] = true, ["spoken_at"] = "2026-06-26T06:00:15Z" },
+            _lib);
+
+        Assert.IsNull(result["isError"]);
+        Assert.IsTrue(Structured(result).ContainsKey("anyLiveTarget"));
+    }
+
+    [TestMethod]
+    public void Watching_BadSpokenAt_DegradesToHeuristic_NoError()
+    {
+        // A malformed spoken_at must never fail a watched-clip read — it is parsed leniently to null.
+        JsonObject result = Call(
+            new JsonObject { ["include_access_fallback"] = true, ["spoken_at"] = "not-a-date" },
+            _lib);
+
+        Assert.IsNull(result["isError"], "a bad spoken_at degrades silently, never errors");
+    }
+
+    [TestMethod]
     public void Watching_NothingLive_ReportsAnyLiveTargetFalse()
     {
         // No player open and the temp clips aren't locked: access-time candidates may surface, but

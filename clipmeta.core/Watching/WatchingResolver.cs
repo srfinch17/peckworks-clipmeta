@@ -65,11 +65,17 @@ public sealed class WatchingResolver
     /// <param name="now">Current time (injected for testability).</param>
     /// <param name="limit">Maximum candidates to return.</param>
     /// <param name="includeAccessFallback">Whether to include the access-time fallback.</param>
+    /// <param name="spokenAt">
+    /// AC2: the moment the user actually dictated, if the caller knows it. When supplied, the clip
+    /// whose play window covers this instant is bound exactly (closing the latency/backlog gap the
+    /// timing heuristic cannot); absent or unmatched, resolution falls back to the heuristic.
+    /// </param>
     public WatchingResult ResolveReview(
         string libraryRoot, IReadOnlyList<TitleSegment> segments, long lastBoundId,
-        DateTimeOffset now, int limit, bool includeAccessFallback)
+        DateTimeOffset now, int limit, bool includeAccessFallback, DateTimeOffset? spokenAt = null)
     {
-        ReviewBinding binding = ReviewBindingResolver.Resolve(segments, lastBoundId, now);
+        ReviewBinding binding = ReviewBindingResolver.Resolve(
+            segments, lastBoundId, now, stableThreshold: null, spokenAt: spokenAt);
 
         // Which windows to resolve: the single chosen title, else the live windows (cold start /
         // ambiguous) so the existing pipeline produces its normal candidates + diagnostics.
