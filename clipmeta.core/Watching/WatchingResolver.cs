@@ -48,6 +48,68 @@ public sealed class WatchingResolver
         return ResolveCore(context, limit, includeAccessFallback);
     }
 
+    /// <summary>The note attached to a clip bound by the previous-stable correction.</summary>
+    private const string CorrectedBindNote =
+        "bound the clip you were watching; the player has since advanced (so it is now writable)";
+
+    /// <summary>
+    /// Review-mode resolution: pick which recorded title the user is describing (the previous-stable
+    /// heuristic over the watcher's segment history), resolve it through the normal pipeline, and
+    /// promote that bind. Falls back to a live cold-start poll when there is no segment history or the
+    /// situation is ambiguous (two players active). This is what closes the poll-at-call-time binding
+    /// race: the bound clip is chosen by WHEN each title played, not by when this method was called.
+    /// </summary>
+    /// <param name="libraryRoot">Library root to resolve against.</param>
+    /// <param name="segments">The watcher's title-segment snapshot.</param>
+    /// <param name="lastBoundId">Segment id of the previous recommendation (-1 if none).</param>
+    /// <param name="now">Current time (injected for testability).</param>
+    /// <param name="limit">Maximum candidates to return.</param>
+    /// <param name="includeAccessFallback">Whether to include the access-time fallback.</param>
+    public WatchingResult ResolveReview(
+        string libraryRoot, IReadOnlyList<TitleSegment> segments, long lastBoundId,
+        DateTimeOffset now, int limit, bool includeAccessFallback)
+    {
+        ReviewBinding binding = ReviewBindingResolver.Resolve(segments, lastBoundId, now);
+
+        // Which windows to resolve: the single chosen title, else the live windows (cold start /
+        // ambiguous) so the existing pipeline produces its normal candidates + diagnostics.
+        IReadOnlyList<ProcessWindow> windows = binding.Chosen is { } chosen
+            ? new[] { new ProcessWindow(chosen.ProcessName, chosen.RawTitle) }
+            : _windowSource.GetPlayerWindows(_playerNames);
+
+        WatchContext context = WatchContext.Build(libraryRoot, windows);
+        WatchingResult core = ResolveCore(context, limit, includeAccessFallback);
+
+        List<WatchingCandidate> candidates = core.Candidates.ToList();
+        bool confident = false;
+        long? boundId = null;
+
+        if (binding.Chosen is { } sel)
+        {
+            // The chosen title resolves to exactly the candidates the pipeline produced for that
+            // window. Promote a single player-title match past the not-locked demotion (it is
+            // expected to be unlocked — the user advanced away from it), keeping its true lock state.
+            int idx = candidates.FindIndex(c => c.Source == PlayerTitleSignal.SourceName);
+            bool singleMatch = candidates.Count(c => c.Source == PlayerTitleSignal.SourceName) == 1;
+            if (idx >= 0 && singleMatch)
+            {
+                candidates[idx] = candidates[idx] with
+                {
+                    Confidence = HighConfidence,
+                    Note = binding.CorrectedFrom is null ? candidates[idx].Note : CorrectedBindNote,
+                };
+                confident = true;
+                boundId = sel.Id;
+            }
+        }
+
+        // A corrected/confident bind is a live target even when unlocked.
+        bool anyLive = core.AnyLiveTarget || confident;
+
+        return new WatchingResult(
+            candidates, core.Diagnostics, anyLive, binding.Flags, boundId, confident);
+    }
+
     /// <summary>
     /// Resolves over an already-built context — a live snapshot (<see cref="Resolve"/>) or a single
     /// review-chosen title (<see cref="ResolveReview"/>). Holds the entire scoring/ranking pipeline.
