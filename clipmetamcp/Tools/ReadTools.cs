@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
@@ -134,9 +135,11 @@ public static class ReadTools
             "has a 'note', mention it and confirm with the user before tagging. " +
             "Requires a configured clips library. " +
             "In review mode the recommended top candidate reflects the clip you were watching when you " +
-            "spoke, even if the player has since advanced (it may be unlocked and directly writable). A " +
+            "spoke, even if the player has since advanced (it may be unlocked and directly writable). " +
+            "For an EXACT bind — and to clear a backlog of several dictations — pass 'spoken_at' (the time " +
+            "the user dictated); see that argument. A " +
             "'review' array may list non-blocking advisories (autoCorrected, sameClipTwice, sequenceSkip, " +
-            "multiplePlayersActive) to mention to the user and reconcile later — never block the run to ask. " +
+            "multiplePlayersActive, timestampUnmatched) to mention to the user and reconcile later — never block the run to ask. " +
             "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
             args => Watching(args, sandbox, watcher),
@@ -284,6 +287,17 @@ public static class ReadTools
                 ["description"] = "When true (default), include most-recently-accessed clips as " +
                                   "low-confidence candidates. When false, only open-player candidates " +
                                   "are returned.",
+            },
+            ["spoken_at"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "ISO-8601/RFC-3339 timestamp of WHEN THE USER ACTUALLY DICTATED this " +
+                                  "tag (e.g. '2026-06-26T18:25:03Z'). Pass it whenever you know it — the " +
+                                  "clip whose playback covered that instant is bound exactly, instead of " +
+                                  "guessing from when this call happens to run. Essential for clearing a " +
+                                  "backlog: issue one call per pending dictation, OLDEST FIRST, each with " +
+                                  "its own spoken_at, and each resolves its own clip. A malformed or " +
+                                  "absent value simply falls back to the live heuristic.",
             },
         },
     };
@@ -540,12 +554,13 @@ public static class ReadTools
 
         int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
+        DateTimeOffset? spokenAt = ParseSpokenAt(args);
 
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
         WatchingResult result = watcher is null
             ? resolver.Resolve(root, limit, includeAccessFallback)
             : resolver.ResolveReview(root, watcher.Snapshot(), watcher.LastBoundId,
-                                     DateTimeOffset.UtcNow, limit, includeAccessFallback);
+                                     DateTimeOffset.UtcNow, limit, includeAccessFallback, spokenAt);
 
         // Remember the recommended bind so the next call can flag a repeat or a skipped clip.
         if (watcher is not null && result.RecommendationConfident && result.BoundSegmentId is { } boundId)
@@ -720,6 +735,23 @@ public static class ReadTools
     /// Extracts an optional string argument. Absent, JSON null, or blank all mean "not given"
     /// (null); a present non-string value is a refusal, not a silent coercion.
     /// </summary>
+    /// <summary>
+    /// Parses the optional 'spoken_at' timestamp leniently: a missing, wrong-typed, or unparseable
+    /// value yields null so a watched-clip READ never fails on this convenience argument — it simply
+    /// falls back to the live heuristic.
+    /// </summary>
+    private static DateTimeOffset? ParseSpokenAt(JsonObject? args)
+    {
+        if (args?["spoken_at"] is not JsonValue value || !value.TryGetValue(out string? text) ||
+            string.IsNullOrWhiteSpace(text))
+            return null;
+        return DateTimeOffset.TryParse(
+            text, CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind | DateTimeStyles.AssumeUniversal, out DateTimeOffset dto)
+            ? dto
+            : null;
+    }
+
     internal static string? GetOptionalString(JsonObject? args, string name)
     {
         JsonNode? node = args?[name];

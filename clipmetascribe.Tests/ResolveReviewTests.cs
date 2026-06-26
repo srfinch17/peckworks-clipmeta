@@ -86,4 +86,65 @@ public class ResolveReviewTests
         Assert.IsTrue(r.Review!.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive));
         Assert.IsFalse(r.RecommendationConfident, "no confident single bind when two players are active");
     }
+
+    // ── AC2: spoken-at exact-timestamp binding ───────────────────────────────────────────
+
+    [TestMethod]
+    public void ResolveReview_SpokenAt_BindsHistoricalClip_PromotedHighConfident()
+    {
+        string one = Touch("_1.mp4");
+        string two = Touch("_2.mp4");
+        Touch("_3.mp4");
+        var segs = new[]
+        {
+            Seg(1, $"{one} - VLC media player", 0, 10),
+            Seg(2, $"{two} - VLC media player", 10, 25),
+            Seg(3, $"{Path.Combine(_dir, "_3.mp4")} - VLC media player", 25, null),
+        };
+        DateTimeOffset spokenAt = T0.AddSeconds(15); // during _2
+        DateTimeOffset now = T0.AddSeconds(40);      // player parked on _3
+
+        WatchingResult r = Resolver().ResolveReview(
+            _dir, segs, lastBoundId: -1, now, limit: 5, includeAccessFallback: true, spokenAt: spokenAt);
+
+        Assert.AreEqual(two, r.Candidates[0].Path, "binds the clip the user was watching when they spoke");
+        Assert.AreEqual("high", r.Candidates[0].Confidence);
+        Assert.IsTrue(r.RecommendationConfident);
+        Assert.AreEqual(2, r.BoundSegmentId);
+        Assert.IsFalse(r.Review?.Any(f => f.Type == ReviewFlag.TypeAutoCorrected) ?? false,
+            "an exact-timestamp bind is not an auto-correction");
+    }
+
+    [TestMethod]
+    public void ResolveReview_FireNAhead_OldestFirst_BindsEachInTurn()
+    {
+        string one = Touch("_1.mp4");
+        string two = Touch("_2.mp4");
+        string three = Touch("_3.mp4");
+        var segs = new[]
+        {
+            Seg(1, $"{one} - VLC media player", 0, 10),
+            Seg(2, $"{two} - VLC media player", 10, 25),
+            Seg(3, $"{three} - VLC media player", 25, null),
+        };
+        DateTimeOffset now = T0.AddSeconds(40);
+        WatchingResolver resolver = Resolver();
+
+        // Three backlogged dictations, oldest first; thread lastBoundId via the prior bind.
+        long bound = -1;
+        var resolved = new List<string>();
+        foreach (double at in new[] { 5.0, 15.0, 30.0 })
+        {
+            WatchingResult r = resolver.ResolveReview(
+                _dir, segs, bound, now, limit: 5, includeAccessFallback: true,
+                spokenAt: T0.AddSeconds(at));
+            resolved.Add(r.Candidates[0].Path);
+            Assert.IsFalse(r.Review?.Any(f => f.Type == ReviewFlag.TypeSequenceSkip) ?? false,
+                "oldest-first fire-N-ahead must not trip a spurious sequence-skip");
+            bound = r.BoundSegmentId ?? bound;
+        }
+
+        CollectionAssert.AreEqual(new[] { one, two, three }, resolved,
+            "each call resolves its own clip from its timestamp");
+    }
 }

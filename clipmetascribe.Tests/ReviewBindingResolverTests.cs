@@ -92,4 +92,82 @@ public class ReviewBindingResolverTests
         ReviewFlag skip = b.Flags.Single(f => f.Type == ReviewFlag.TypeSequenceSkip);
         Assert.IsTrue(skip.Clips.Any(c => c.Contains("_2")));
     }
+
+    // ── AC2: spoken-at exact-timestamp binding ───────────────────────────────────────────
+
+    private static TitleSegment[] ThreeClipHistory() => new[]
+    {
+        Seg(1, "_1.mp4 - VLC media player", 0, 10),
+        Seg(2, "_2.mp4 - VLC media player", 10, 25),
+        Seg(3, "_3.mp4 - VLC media player", 25, null), // open
+    };
+
+    [TestMethod]
+    public void Resolve_SpokenAtInPastSegment_BindsThatSegment_NotCurrent()
+    {
+        // The user spoke 15s in — during _2 — even though the player is now parked on _3.
+        DateTimeOffset spokenAt = T0.AddSeconds(15);
+        DateTimeOffset now = T0.AddSeconds(40);
+
+        ReviewBinding b = ReviewBindingResolver.Resolve(
+            ThreeClipHistory(), NoBind, now, stableThreshold: null, spokenAt: spokenAt);
+
+        Assert.AreEqual(2, b.Chosen!.Id, "binds the segment covering the spoken instant");
+        Assert.IsNull(b.CorrectedFrom, "an exact-timestamp hit is not a previous-stable correction");
+        Assert.IsFalse(b.Flags.Any(f => f.Type == ReviewFlag.TypeAutoCorrected));
+        Assert.IsFalse(b.Flags.Any(f => f.Type == ReviewFlag.TypeTimestampUnmatched));
+    }
+
+    [TestMethod]
+    public void Resolve_SpokenAtInOpenSegment_BindsCurrent()
+    {
+        DateTimeOffset spokenAt = T0.AddSeconds(30); // inside the open _3 window
+        DateTimeOffset now = T0.AddSeconds(40);
+
+        ReviewBinding b = ReviewBindingResolver.Resolve(
+            ThreeClipHistory(), NoBind, now, stableThreshold: null, spokenAt: spokenAt);
+
+        Assert.AreEqual(3, b.Chosen!.Id);
+        Assert.IsNull(b.CorrectedFrom);
+    }
+
+    [TestMethod]
+    public void Resolve_SpokenAtOutsideHistory_FallsBackToHeuristic_FlagsTimestampUnmatched()
+    {
+        DateTimeOffset spokenAt = T0.AddSeconds(-30); // before the earliest segment
+        DateTimeOffset now = T0.AddSeconds(40);
+
+        ReviewBinding b = ReviewBindingResolver.Resolve(
+            ThreeClipHistory(), NoBind, now, stableThreshold: null, spokenAt: spokenAt);
+
+        Assert.AreEqual(3, b.Chosen!.Id, "no exact match → heuristic binds the current stable clip");
+        Assert.IsTrue(b.Flags.Any(f => f.Type == ReviewFlag.TypeTimestampUnmatched),
+            "the caller must learn the exact lookup missed and a guess was used");
+    }
+
+    [TestMethod]
+    public void Resolve_SpokenAtCoveredByTwoPlayers_Ambiguous()
+    {
+        var segs = new[]
+        {
+            Seg(1, "a.mp4 - VLC media player", 0, null, proc: "vlc"),
+            Seg(2, "b.mp4 - MPC-HC", 0, null, proc: "mpc-hc64"),
+        };
+        DateTimeOffset spokenAt = T0.AddSeconds(3); // both players open and covering it
+
+        ReviewBinding b = ReviewBindingResolver.Resolve(
+            segs, NoBind, T0.AddSeconds(5), stableThreshold: null, spokenAt: spokenAt);
+
+        Assert.IsTrue(b.AmbiguousMultiPlayer);
+        Assert.IsNull(b.Chosen);
+        Assert.IsTrue(b.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive));
+    }
+
+    [TestMethod]
+    public void Resolve_SpokenAtAbsent_NoTimestampUnmatchedFlag()
+    {
+        ReviewBinding b = ReviewBindingResolver.Resolve(ThreeClipHistory(), NoBind, T0.AddSeconds(40));
+        Assert.IsFalse(b.Flags.Any(f => f.Type == ReviewFlag.TypeTimestampUnmatched),
+            "omitting spoken_at never attempts an exact lookup, so never flags a miss");
+    }
 }
