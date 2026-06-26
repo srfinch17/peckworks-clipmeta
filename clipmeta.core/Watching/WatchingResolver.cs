@@ -45,7 +45,15 @@ public sealed class WatchingResolver
     public WatchingResult Resolve(string libraryRoot, int limit, bool includeAccessFallback)
     {
         WatchContext context = WatchContext.Build(libraryRoot, _windowSource, _playerNames);
+        return ResolveCore(context, limit, includeAccessFallback);
+    }
 
+    /// <summary>
+    /// Resolves over an already-built context — a live snapshot (<see cref="Resolve"/>) or a single
+    /// review-chosen title (<see cref="ResolveReview"/>). Holds the entire scoring/ranking pipeline.
+    /// </summary>
+    private WatchingResult ResolveCore(WatchContext context, int limit, bool includeAccessFallback)
+    {
         // One source of truth for player→library resolution: feeds both the hit grouping (below)
         // and the wrong-directory diagnostics (here).
         IReadOnlyList<PlayerMatch> playerMatches = PlayerTitleResolution.For(context);
