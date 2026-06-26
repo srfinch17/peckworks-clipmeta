@@ -1,6 +1,8 @@
 using System.Text.Json.Nodes;
 using ClipMetaCore;
 using ClipMetaCore.Logging;
+using ClipMetaCore.Mp4;
+using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Write;
 
@@ -538,14 +540,20 @@ public static class WriteTools
     {
         string fullPath = sandbox.ResolveWritePath(ReadTools.GetRequiredString(args, "path"));
 
+        // Dry-run: report the PREDICTED post-write fields without touching the file. Computed via
+        // Core's MetadataPreview (which reuses the writer's Normalizer), so the preview matches an
+        // actual write's read-back. (The prior dry-run read the UNCHANGED file back and so showed
+        // current — not predicted — state.)
+        if (ReadTools.GetOptionalBool(args, "dry_run", defaultValue: false))
+            return PreviewWrite(fullPath, mutation, describeChange);
+
         bool backup = ReadTools.GetOptionalBool(args, "backup", defaultValue: true);
-        bool dryRun = ReadTools.GetOptionalBool(args, "dry_run", defaultValue: false);
-        mutation.DryRun = dryRun;
+        mutation.DryRun = false;
         mutation.StampProvenance = ReadTools.GetOptionalBool(args, "stamp_provenance", defaultValue: true);
         // Timestamped sibling (clip.mp4.bak-20260612-153000): never silently overwrites a
         // previous backup the user might still want. The naming lives in Core (ClipBackup) so
         // the backup-management tools recognize exactly what the writer produces.
-        mutation.BackupPath = backup && !dryRun ? ClipBackup.MakeBackupPath(fullPath) : null;
+        mutation.BackupPath = backup ? ClipBackup.MakeBackupPath(fullPath) : null;
 
         WriteGate.Enter();
         try
@@ -586,10 +594,47 @@ public static class WriteTools
         // the read sandbox — harmless, it just passed the stricter write check.
         JsonObject result = ReadTools.GetMetadata(
             new JsonObject { ["path"] = fullPath }, sandbox);
-        result["dryRun"] = dryRun;
+        result["dryRun"] = false;
         result["backupPath"] = mutation.BackupPath is not null && File.Exists(mutation.BackupPath)
             ? mutation.BackupPath
             : null;
+        describeChange(result);
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the dry-run response: the PREDICTED post-write user fields, computed without touching
+    /// the file via Core's <see cref="MetadataPreview"/> (which reuses the writer's
+    /// <see cref="Normalizer"/>), so the preview matches an actual write's read-back. Same result
+    /// shape as a real write, with <c>dryRun:true</c> and no backup.
+    /// </summary>
+    private static JsonObject PreviewWrite(
+        string fullPath, MetadataMutation mutation, Action<JsonObject> describeChange)
+    {
+        BoxNode root = ReadTools.ParseClip(fullPath);
+        IReadOnlyList<(string Field, string Value)> predicted =
+            MetadataPreview.Predict(ClipMetaReader.GetUserFields(root), mutation);
+        ClipMetaFieldStats stats = ClipMetaStats.Categorize(predicted);
+
+        var fields = new JsonObject();
+        foreach (var (field, value) in predicted)
+            fields[field] = value;
+
+        var knownUnset = new JsonArray();
+        foreach (string f in stats.KnownUnset) knownUnset.Add(f);
+        var customFields = new JsonArray();
+        foreach (string f in stats.CustomFields) customFields.Add(f);
+
+        var result = new JsonObject
+        {
+            ["path"] = fullPath,
+            ["sizeBytes"] = new FileInfo(fullPath).Length,
+            ["fields"] = fields,
+            ["knownUnset"] = knownUnset,
+            ["customFields"] = customFields,
+            ["dryRun"] = true,
+            ["backupPath"] = null,
+        };
         describeChange(result);
         return result;
     }
