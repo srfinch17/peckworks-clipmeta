@@ -1,7 +1,7 @@
 # Gaming Mode — Recent-Write Clip Resolution — Design Spec
 
 **Date:** 2026-06-26
-**Status:** Design drafted — **one owner decision open** (see §3.1) before implementation.
+**Status:** Approved-for-build. The §3.1 decision is **resolved: Policy A** (owner, 2026-06-26) — a single freshly-written clip with no player open is an auto-taggable live target.
 **Pass:** pass-4, final deferred slice (follows leftovers PR #37 and AC2 PR #38).
 
 ---
@@ -43,9 +43,11 @@ A clip the game just saved has a **`LastWriteTimeUtc` of ~now**. Unlike access t
 - Access-time-only paths are unchanged, and are dropped beneath a recent-write winner the same way they are dropped beneath a player winner (existing §8a rule, extended).
 - Recent-write hits survive `include_access_fallback:false` (they are the gaming signal, not the recency hint) but are still suppressed by the wrong-directory rule (a player showing a foreign file means the user is *not* gaming).
 
-### 3.1 OPEN DECISION — does a just-saved clip become an auto-taggable "live target"?
+### 3.1 DECISION (RESOLVED — Policy A) — does a just-saved clip become an auto-taggable "live target"?
 
-This is the one call I will not make unilaterally, because it **reverses an explicit owner-approved contract.** `WatchingResolverTests.Resolve_NoPlayerNoLock_AnyLiveTargetIsFalse` deliberately asserts: *no player open + file not locked ⇒ `anyLiveTarget=false` ⇒ the model must confirm before tagging.* A clip saved while gaming has no player and (once the save completes) no lock — so gaming mode's value depends on flipping exactly that case to "confident / taggable."
+**Resolved 2026-06-26: Policy A.** A single freshly-written clip (no player open, no lock) is treated as a high-confidence live target (`anyLiveTarget=true`); multiple fresh writes stay `low`/confirm. This intentionally reverses the §196 contract for the single-fresh-write case.
+
+This was the one call deferred to the owner, because it **reverses an explicit owner-approved contract.** `WatchingResolverTests.Resolve_NoPlayerNoLock_AnyLiveTargetIsFalse` deliberately asserts: *no player open + file not locked ⇒ `anyLiveTarget=false` ⇒ the model must confirm before tagging.* A clip saved while gaming has no player and (once the save completes) no lock — so gaming mode's value depends on flipping exactly that case to "confident / taggable."
 
 The three viable policies:
 
