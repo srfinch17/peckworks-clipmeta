@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore.Watching;
 using ClipMetaMcp.Tests.Helpers;
 
 namespace ClipMetaMcp.Tests;
@@ -149,5 +150,41 @@ public class LibraryWatchingToolTests
         Assert.IsTrue(structured.ContainsKey("anyLiveTarget"), "library_watching must report anyLiveTarget");
         Assert.IsFalse(structured["anyLiveTarget"]!.GetValue<bool>(),
             "nothing open or locked → anyLiveTarget false");
+    }
+
+    [TestMethod]
+    public void Watching_SurfacesAutoFlushed_FromJournal()
+    {
+        // Arrange: seed the journal with one pre-recorded auto-flush (simulating what the pump does).
+        var journal = new DrainJournal();
+        journal.Record(new DrainedTag(
+            Path.Combine(_lib, "a.mp4"), new[] { "tags" }, DateTimeOffset.UtcNow));
+
+        // Act: first call — must surface the one journal entry.
+        var responses = McpHarness.RunWithJournal(_lib, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_watching", new JsonObject { ["include_access_fallback"] = true }));
+        JsonObject result = (JsonObject)responses[1]["result"]!;
+
+        Assert.IsNull(result["isError"], "library_watching must succeed: " + result.ToJsonString());
+        JsonObject s = Structured(result);
+        Assert.IsTrue(s.ContainsKey("autoFlushed"), "autoFlushed key must always be present");
+
+        var autoFlushed = s["autoFlushed"]!.AsArray();
+        Assert.AreEqual(1, autoFlushed.Count, "autoFlushed must surface the one journal entry");
+
+        JsonObject entry = (JsonObject)autoFlushed[0]!;
+        StringAssert.Contains(entry["path"]!.GetValue<string>(), "a.mp4",
+            "autoFlushed path must match the recorded clip");
+        Assert.IsTrue(entry.ContainsKey("fields"), "autoFlushed entry must include changed fields");
+        Assert.IsTrue(entry.ContainsKey("agoSeconds"), "autoFlushed entry must include agoSeconds");
+
+        // Assert report-once: journal was cleared by TakePending; a second call sees an empty array.
+        var responses2 = McpHarness.RunWithJournal(_lib, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_watching", new JsonObject { ["include_access_fallback"] = true }));
+        JsonObject result2 = (JsonObject)responses2[1]["result"]!;
+        var autoFlushed2 = Structured(result2)["autoFlushed"]!.AsArray();
+        Assert.AreEqual(0, autoFlushed2.Count, "report-once: second call must find autoFlushed empty");
     }
 }

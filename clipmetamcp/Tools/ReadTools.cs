@@ -42,12 +42,15 @@ public static class ReadTools
     /// When <paramref name="ledger"/> is supplied, <c>clip_get_metadata</c> and <c>library_export</c>
     /// mark each content-read path in the ledger (so access-time signals can subtract self-reads), and
     /// <c>library_watching</c> threads it into <see cref="WatchingResolver.CreateDefault"/> so
-    /// gaming-mode detection excludes clips ClipMeta itself tagged. Task 8 appends a
-    /// <c>DrainJournal?</c> trailing parameter after <paramref name="ledger"/>.
+    /// gaming-mode detection excludes clips ClipMeta itself tagged. When <paramref name="journal"/> is
+    /// supplied, <c>library_watching</c> surfaces any tags the background <see cref="QueueDrainPump"/>
+    /// auto-flushed since the last call as <c>autoFlushed</c> (report-once: <see cref="DrainJournal.TakePending"/>
+    /// clears the buffer).
     /// </summary>
     public static void RegisterAll(
         ToolRegistry registry, LibrarySandbox sandbox,
-        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null)
+        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null,
+        DrainJournal? journal = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -152,7 +155,7 @@ public static class ReadTools
             "multiplePlayersActive, timestampUnmatched) to mention to the user and reconcile later — never block the run to ask. " +
             "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
-            args => Watching(args, sandbox, watcher, ledger),
+            args => Watching(args, sandbox, watcher, ledger, journal),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
     }
 
@@ -551,11 +554,14 @@ public static class ReadTools
     /// <summary>
     /// Resolves the watched clip and returns ranked candidates. When <paramref name="ledger"/> is
     /// non-null it is threaded into <see cref="WatchingResolver.CreateDefault"/> so
-    /// gaming-mode (<c>recent_write</c>) detection excludes paths ClipMeta itself tagged.
+    /// gaming-mode (<c>recent_write</c>) detection excludes paths ClipMeta itself tagged. When
+    /// <paramref name="journal"/> is non-null, tags the background pump auto-flushed since the
+    /// last call are surfaced as <c>autoFlushed</c> (report-once via <see cref="DrainJournal.TakePending"/>).
     /// </summary>
     private static JsonObject Watching(
         JsonObject? args, LibrarySandbox sandbox,
-        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null)
+        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null,
+        DrainJournal? journal = null)
     {
         string root = sandbox.RequireRoot();
 
@@ -672,6 +678,22 @@ public static class ReadTools
             ["stillQueued"] = drained.StillQueued.Count,
         };
         response["queuePending"] = TagQueue.Status(root, LockProbe.IsInUse).Count;
+
+        // P0-1: surface tags the BACKGROUND pump auto-flushed since the last call (it writes the
+        // last clip when its player closes but reports to no one). Report-once: TakePending clears.
+        var autoFlushed = new JsonArray();
+        foreach (DrainedTag t in journal?.TakePending() ?? Array.Empty<DrainedTag>())
+        {
+            var fields = new JsonArray();
+            foreach (string f in t.Fields) fields.Add(f);
+            autoFlushed.Add(new JsonObject
+            {
+                ["path"] = t.Path,
+                ["fields"] = fields,
+                ["agoSeconds"] = Math.Round((DateTimeOffset.UtcNow - t.WhenUtc).TotalSeconds, 1),
+            });
+        }
+        response["autoFlushed"] = autoFlushed;
 
         return response;
     }

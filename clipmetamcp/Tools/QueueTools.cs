@@ -20,9 +20,14 @@ public static class QueueTools
     /// Registers the queue tools against the given sandbox. When <paramref name="pump"/> is supplied,
     /// each enqueue wakes it so the background drain lands the tag the moment the player's lock clears
     /// (zero-touch flush for the last clip); null disables that — the queue still drains
-    /// opportunistically on the next watched-clip call and via library_flush_queue.
+    /// opportunistically on the next watched-clip call and via library_flush_queue. When
+    /// <paramref name="journal"/> is supplied, <c>library_flush_queue</c> and <c>library_queue_status</c>
+    /// surface any tags the background pump auto-flushed since the last call as <c>autoFlushed</c>
+    /// (report-once: <see cref="DrainJournal.TakePending"/> clears the buffer).
     /// </summary>
-    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox, QueueDrainPump? pump = null)
+    public static void RegisterAll(
+        ToolRegistry registry, LibrarySandbox sandbox,
+        QueueDrainPump? pump = null, DrainJournal? journal = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -54,7 +59,7 @@ public static class QueueTools
             "the queue. Returns what was written, what is still locked (will retry), and what was " +
             "dropped because the clip is gone. Requires a configured library.",
             NoArgsSchema(),
-            args => FlushQueue(args, sandbox),
+            args => FlushQueue(args, sandbox, journal),
             _ => new JsonObject()));
 
         registry.Register(new ToolDefinition(
@@ -62,7 +67,7 @@ public static class QueueTools
             "Lists the deferred tags waiting to be written: the clip, which fields will change, how " +
             "long it has waited, and whether it is still locked. Read-only. Requires a configured library.",
             NoArgsSchema(),
-            args => QueueStatus(args, sandbox),
+            args => QueueStatus(args, sandbox, journal),
             _ => new JsonObject()));
     }
 
@@ -137,14 +142,16 @@ public static class QueueTools
         };
     }
 
-    private static JsonObject FlushQueue(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject FlushQueue(JsonObject? args, LibrarySandbox sandbox, DrainJournal? journal = null)
     {
         string root = sandbox.RequireRoot();
         DrainReport drain = DrainUnderGate(root);
-        return DrainJson(drain);
+        var result = DrainJson(drain);
+        result["autoFlushed"] = AutoFlushedJson(journal);
+        return result;
     }
 
-    private static JsonObject QueueStatus(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject QueueStatus(JsonObject? args, LibrarySandbox sandbox, DrainJournal? journal = null)
     {
         string root = sandbox.RequireRoot();
         var entries = new JsonArray();
@@ -160,7 +167,35 @@ public static class QueueTools
                 ["locked"] = e.Locked,
             });
         }
-        return new JsonObject { ["pending"] = entries.Count, ["entries"] = entries };
+        return new JsonObject
+        {
+            ["pending"] = entries.Count,
+            ["entries"] = entries,
+            ["autoFlushed"] = AutoFlushedJson(journal),
+        };
+    }
+
+    /// <summary>
+    /// Builds the <c>autoFlushed</c> array from the journal: tags the background pump wrote
+    /// since the last foreground call. Report-once — <see cref="DrainJournal.TakePending"/> clears.
+    /// Only the pump feeds the journal; synchronous drains pass <see langword="null"/> and are
+    /// already reflected in the caller's own response, so they are never double-reported here.
+    /// </summary>
+    private static JsonArray AutoFlushedJson(DrainJournal? journal)
+    {
+        var arr = new JsonArray();
+        foreach (DrainedTag t in journal?.TakePending() ?? Array.Empty<DrainedTag>())
+        {
+            var fields = new JsonArray();
+            foreach (string f in t.Fields) fields.Add(f);
+            arr.Add(new JsonObject
+            {
+                ["path"] = t.Path,
+                ["fields"] = fields,
+                ["agoSeconds"] = Math.Round((DateTimeOffset.UtcNow - t.WhenUtc).TotalSeconds, 1),
+            });
+        }
+        return arr;
     }
 
     /// <summary>Drains the queue under the shared write single-flight, with the real probe/engine.</summary>

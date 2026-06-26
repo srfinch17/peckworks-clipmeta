@@ -28,6 +28,7 @@ public sealed class QueueDrainPump : IDisposable
     private readonly Func<string, bool> _isInUse;
     private readonly Action<Action> _runExclusive;
     private readonly TimeSpan _pollInterval;
+    private readonly DrainJournal? _journal;
 
     private readonly AutoResetEvent _wake = new(false);
     private readonly CancellationTokenSource _cts = new();
@@ -43,9 +44,15 @@ public sealed class QueueDrainPump : IDisposable
     /// Runs a drain inside the process-wide write single-flight (production: wraps the MCP WriteGate).
     /// </param>
     /// <param name="pollInterval">How long to wait between drains while a queued clip stays locked.</param>
+    /// <param name="journal">
+    /// Optional journal that receives a <see cref="DrainedTag"/> for each clip the background loop
+    /// auto-flushes. Synchronous callers must pass <see langword="null"/> — only the pump feeds the
+    /// journal, so results are reported exactly once when the next foreground tool call checks it.
+    /// </param>
     public QueueDrainPump(
         string libraryRoot, IMediaWriter writer, IClipMetaLogger logger,
-        Func<string, bool> isInUse, Action<Action> runExclusive, TimeSpan pollInterval)
+        Func<string, bool> isInUse, Action<Action> runExclusive, TimeSpan pollInterval,
+        DrainJournal? journal = null)
     {
         _libraryRoot = libraryRoot ?? throw new ArgumentNullException(nameof(libraryRoot));
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
@@ -53,6 +60,7 @@ public sealed class QueueDrainPump : IDisposable
         _isInUse = isInUse ?? throw new ArgumentNullException(nameof(isInUse));
         _runExclusive = runExclusive ?? throw new ArgumentNullException(nameof(runExclusive));
         _pollInterval = pollInterval;
+        _journal = journal;
     }
 
     /// <summary>Starts the background loop (idle until <see cref="Wake"/>). Idempotent.</summary>
@@ -109,7 +117,9 @@ public sealed class QueueDrainPump : IDisposable
     private DrainReport DrainOnce()
     {
         DrainReport result = new(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
-        _runExclusive(() => result = TagQueue.Drain(_libraryRoot, _writer, _logger, _isInUse));
+        _runExclusive(() => result = TagQueue.Drain(
+            _libraryRoot, _writer, _logger, _isInUse,
+            onWritten: tag => _journal?.Record(tag)));
         return result;
     }
 

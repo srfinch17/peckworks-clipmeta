@@ -77,6 +77,32 @@ internal static class McpHarness
             .ToList();
     }
 
+    /// <summary>
+    /// Like <see cref="Run"/>, but wires a shared <paramref name="journal"/> into
+    /// <see cref="ReadTools"/> so <c>library_watching</c> surfaces pump auto-flushes as
+    /// <c>autoFlushed</c> (report-once). Use this to verify drain-visibility behaviour —
+    /// the same journal instance must back both the pump and the tool registration, mirroring
+    /// <c>Program.cs</c> production wiring.
+    /// </summary>
+    public static IReadOnlyList<JsonObject> RunWithJournal(
+        string? libraryRoot, DrainJournal journal, params string[] requestLines)
+    {
+        var registry = new ToolRegistry();
+        var sandbox = new LibrarySandbox(libraryRoot);
+        ReadTools.RegisterAll(registry, sandbox, watcher: null, ledger: null, journal: journal);
+        WriteTools.RegisterAll(registry, sandbox);
+        QueueTools.RegisterAll(registry, sandbox);
+
+        using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
+        using var output = new StringWriter();
+        new McpSession(input, output, registry, NullLogger.Instance).Run();
+
+        return output.ToString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => (JsonObject)JsonNode.Parse(line)!)
+            .ToList();
+    }
+
     /// <summary>Builds a tools/call request line for <paramref name="tool"/>.</summary>
     public static string ToolCall(int id, string tool, JsonObject arguments) =>
         new JsonObject
