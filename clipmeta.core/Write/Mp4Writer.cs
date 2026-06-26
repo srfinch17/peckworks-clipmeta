@@ -70,6 +70,34 @@ public sealed class Mp4Writer : IMediaWriter
         }
     }
 
+    /// <summary>
+    /// Opens the source for reading (deny-writers), riding out a transient sharing violation with the
+    /// same bounded backoff the final swap uses. A media player that just "closed" can leave a handle
+    /// lingering for a moment (or the Search indexer / AV grabs a just-finished file); without this a
+    /// write of such a clip failed outright where a brief retry succeeds. A clip that is genuinely
+    /// still held fails after the retries with the same friendly message as before.
+    /// </summary>
+    private static FileStream OpenSourceWithRetry(string filePath, IClipMetaLogger logger)
+    {
+        FileStream? src = null;
+        try
+        {
+            RetryOnTransientLock(
+                () => src = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read),
+                MaxReplaceAttempts, ReplaceBackoffMs,
+                (attempt, ex) => logger.LogVerbose(
+                    $"source open attempt {attempt} hit a transient lock ({ex.GetType().Name}: {ex.Message}); retrying"));
+        }
+        catch (IOException ex)
+        {
+            throw new IOException(
+                $"'{Path.GetFileName(filePath)}' cannot be opened for tagging. Another " +
+                $"program has it open for writing — if it is still being recorded or " +
+                $"exported, wait for that to finish and try again.", ex);
+        }
+        return src!;
+    }
+
     /// <inheritdoc/>
     public bool CanWrite(string filePath) =>
         Path.GetExtension(filePath).Equals(".mp4", StringComparison.OrdinalIgnoreCase);
@@ -118,18 +146,7 @@ public sealed class Mp4Writer : IMediaWriter
             // Holding one deny-writers handle makes parse + copy see a single frozen snapshot;
             // if a recorder already has the file open for writing, this open fails up front
             // (sharing violation) and we refuse cleanly instead of producing a torn file.
-            FileStream src;
-            try
-            {
-                src = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            }
-            catch (IOException ex)
-            {
-                throw new IOException(
-                    $"'{Path.GetFileName(filePath)}' cannot be opened for tagging. Another " +
-                    $"program has it open for writing — if it is still being recorded or " +
-                    $"exported, wait for that to finish and try again.", ex);
-            }
+            FileStream src = OpenSourceWithRetry(filePath, logger);
 
             using (src)
             {
