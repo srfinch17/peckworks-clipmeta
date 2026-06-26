@@ -1,11 +1,13 @@
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// Gaming-mode signal: surfaces clips the game JUST SAVED to the library, identified by a
-/// <see cref="LibraryClip.LastWriteTimeUtc"/> within a freshness window of now. Write time (unlike
-/// access time) is not bumped by merely watching an old clip, so this cleanly answers "tag the clip
-/// I just made" when no media player is open. Exactly one clip in the window is the unambiguous
-/// just-saved case; two or more is ambiguous (the resolver demotes those to confirm-first).
+/// Gaming-mode signal: surfaces clips the game JUST SAVED to the library, identified by a fresh
+/// <see cref="LibraryClip.CreationTimeUtc"/> within the freshness window, excluding paths already
+/// indexed (baseline) and paths ClipMeta itself just wrote (self-ledger). Creation time — not write
+/// time — is the right key: copying a clip into the library preserves the source's old write time
+/// (fresh clip looks old) while always stamping a new creation time; and ClipMeta's tag-write bumps
+/// write time (self-write looks fresh). Exactly one clip in the window is the unambiguous just-saved
+/// case; two or more is ambiguous (the resolver demotes those to confirm-first).
 /// </summary>
 public sealed class RecentWriteSignal : IWatchSignal
 {
@@ -34,9 +36,17 @@ public sealed class RecentWriteSignal : IWatchSignal
     public IEnumerable<SignalHit> Detect(WatchContext context)
     {
         DateTime now = _clock();
+        DateTimeOffset nowOffset = new(now, TimeSpan.Zero);
+
         List<LibraryClip> fresh = context.LibraryClips
-            .Where(c => now - c.LastWriteTimeUtc <= _window && now - c.LastWriteTimeUtc >= TimeSpan.Zero)
-            .OrderByDescending(c => c.LastWriteTimeUtc)
+            .Where(c =>
+                // (a) genuinely new to the library — not already in the persisted index
+                !context.KnownBaselinePaths.Contains(c.FullPath) &&
+                // (b) created within the freshness window (creation time, not write time)
+                now - c.CreationTimeUtc <= _window && now - c.CreationTimeUtc >= TimeSpan.Zero &&
+                // (c) not a clip ClipMeta itself just wrote (self-write bumps write time, not creation)
+                context.Ledger?.WasWrittenWithin(c.FullPath, _window, nowOffset) != true)
+            .OrderByDescending(c => c.CreationTimeUtc)
             .ToList();
 
         // One fresh clip is the unambiguous "just saved" case; several saved at once is ambiguous.

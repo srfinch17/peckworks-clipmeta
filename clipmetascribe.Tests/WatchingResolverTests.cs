@@ -30,14 +30,17 @@ public class WatchingResolverTests
     }
 
     /// <summary>
-    /// Touch, then back-date the write time well outside the recent-write window, so the file is a
-    /// pure access-time fallback candidate (not a gaming-mode "just saved" clip). Used by the tests
-    /// that specifically pin the access-time fallback contract.
+    /// Touch, then back-date BOTH write time AND creation time well outside the recent-write window,
+    /// so the file is a pure access-time fallback candidate (not a gaming-mode "just saved" clip).
+    /// The predicate now keys on <see cref="LibraryClip.CreationTimeUtc"/>, so back-dating write time
+    /// alone was no longer sufficient — the file's real creation time would still look fresh.
     /// </summary>
     private string TouchStale(string name)
     {
         string path = Touch(name);
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-1));
+        DateTime old = DateTime.UtcNow.AddDays(-1);
+        File.SetLastWriteTimeUtc(path, old);
+        File.SetCreationTimeUtc(path, old);
         return path;
     }
 
