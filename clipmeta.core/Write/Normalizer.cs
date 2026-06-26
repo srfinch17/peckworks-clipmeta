@@ -122,7 +122,7 @@ public static class Normalizer
                 toDelete.Add(field);
                 continue;
             }
-            toUpdate[field] = NormalizeValue(field, value);
+            toUpdate[field] = NormalizeFieldValue(field, value);
         }
 
         foreach (string field in toDelete)
@@ -135,10 +135,16 @@ public static class Normalizer
 
         var appendKeys = mutation.AppendFields.Keys.ToList();
         foreach (string field in appendKeys)
-            mutation.AppendFields[field] = NormalizeValue(field, mutation.AppendFields[field]);
+            mutation.AppendFields[field] = NormalizeFieldValue(field, mutation.AppendFields[field]);
     }
 
-    private static string NormalizeValue(string field, string value)
+    /// <summary>
+    /// Canonicalizes one field's value by its kind: pipe-list (tags/players), timecode list, rating
+    /// clamp, or a plain trim. The field key may be bare ("tags") or domain-qualified. Public so the
+    /// dry-run preview (<c>MetadataPreview</c>) applies the exact same rule as the writer, guaranteeing
+    /// the preview matches the real write's read-back.
+    /// </summary>
+    public static string NormalizeFieldValue(string field, string value)
     {
         // Keys in mutation.SetFields are domain-qualified ("com.peckworkslab.clipmeta:tags").
         // PipeFields contains bare names ("tags"). Strip the domain prefix before comparing.

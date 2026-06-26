@@ -1,4 +1,9 @@
+using ClipMetaCore.Logging;
+using ClipMetaCore.Mp4;
+using ClipMetaCore.Read;
+using ClipMetaCore.Schema;
 using ClipMetaCore.Write;
+using ClipMetaScribe.Tests.Helpers;
 
 namespace ClipMetaScribe.Tests;
 
@@ -65,6 +70,42 @@ public class Mp4WriterRetryTests
             maxAttempts: 5, baseDelayMs: 0);
 
         Assert.AreEqual(2, calls);
+    }
+
+    [TestMethod]
+    public void WriteMetadata_TransientSourceLock_RidesItOutAndWrites()
+    {
+        // The source open now retries a transient sharing violation (a player's lingering handle,
+        // the Search indexer, AV) the same way the final swap does. Hold a deny-all handle briefly,
+        // release it, and the in-flight write must ride out the lock and complete.
+        string dir = Path.Combine(Path.GetTempPath(), "cmlock-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string clip = Path.Combine(dir, "clip.mp4");
+            using (var ms = MinimalMp4Builder.BuildMp4WithStco(9999, ClipMetaSchema.Domain, "game", "TF2"))
+                File.WriteAllBytes(clip, ms.ToArray());
+
+            var holder = new FileStream(clip, FileMode.Open, FileAccess.Read, FileShare.None);
+            var write = Task.Run(() =>
+            {
+                var m = new MetadataMutation();
+                m.SetFields[ClipMetaSchema.AtomName("tags")] = "rode-it-out";
+                new Mp4Writer().WriteMetadata(clip, m, NullLogger.Instance);
+            });
+
+            Thread.Sleep(150);   // first open attempt(s) fail while the file is held...
+            holder.Dispose();    // ...then the lock clears and a retry wins
+            write.GetAwaiter().GetResult();   // must complete without throwing
+
+            var fields = ClipMetaReader.GetFields(Mp4Parser.ParseFile(clip));
+            Assert.IsTrue(fields.Any(f => f.Field == "tags" && f.Value == "rode-it-out"),
+                "the write should have ridden out the transient lock and stored the tag");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
     }
 
     [TestMethod]

@@ -8,6 +8,24 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-26 — `dry_run` previewed the UNCHANGED file, not the predicted result
+**Symptom:** A dogfood run saw `clip_set_fields` with `dry_run:true` "preview a merged result" that the
+real write (which replaces) didn't perform. The model concluded dry-run and the real write disagreed.
+**Cause:** `WriteTools.ExecuteWrite` set `mutation.DryRun=true`, the writer returned without touching the
+file, and the handler then **read the unchanged file back** and reported *that*. So `dry_run` always
+showed the file's *current* fields, never the *predicted* post-write fields — and with a field that
+already had data, "current" looked like a merge.
+**Fix:** New pure `MetadataPreview.Predict(current, mutation)` computes the predicted curated fields,
+**reusing the writer's `Normalizer`** (exposed `NormalizeFieldValue`) so the preview cannot drift from
+an actual write. `ExecuteWrite` serves the dry-run branch from it. A gold test pins it: `dry_run` fields
+must equal a real write's read-back, for set/append/delete.
+**Lesson:** A dry-run must compute the *predicted* state, never echo the unmodified input. When a
+preview and the real operation share a normalization/merge rule, have them call the *same* code — a
+re-implemented preview is exactly how preview-vs-actual drift (the original bug) creeps back. (Spec:
+`docs/superpowers/specs/2026-06-26-pass4-dogfood-followups-design.md`.)
+**Related:** the initial source-open in `Mp4Writer` now uses the same `RetryOnTransientLock` as the final
+swap — a player's lingering post-close handle (or the indexer/AV) no longer fails an otherwise-good write.
+
 ## 2026-06-26 — Watched-clip tag bound to the WRONG clip (poll-at-call-time race)
 **Symptom:** In a watch-and-tag run, a spoken tag landed on the *next* clip: the user watched clip
 N, dictated, advanced to N+1, and the tag bound to N+1. Silent and intermittent (1 of 5 in a live

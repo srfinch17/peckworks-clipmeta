@@ -109,6 +109,43 @@ public class WriteToolsTests
     }
 
     [TestMethod]
+    public void DryRun_PreviewMatchesRealWrite_OnAFieldThatAlreadyHasData()
+    {
+        string clip = PrepareClip();
+        // Seed existing data so preview-vs-actual matters — the bug only showed when the field
+        // already had a value (dry_run read the UNCHANGED file back, so it showed current state).
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["tags"] = "alpha|beta", ["notes"] = "first moment" },
+            ["backup"] = false,
+        }));
+
+        var change = new JsonObject { ["tags"] = "gamma", ["game"] = "Team Fortress 2" };
+
+        JsonObject dry = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip, ["fields"] = change.DeepClone(), ["dry_run"] = true,
+        });
+        AssertOk(dry);
+        Assert.IsTrue(Structured(dry)["dryRun"]!.GetValue<bool>());
+        var dryFields = (JsonObject)Structured(dry)["fields"]!;
+
+        JsonObject real = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip, ["fields"] = change.DeepClone(), ["backup"] = false,
+        });
+        AssertOk(real);
+        var realFields = (JsonObject)Structured(real)["fields"]!;
+
+        Assert.AreEqual(realFields.Count, dryFields.Count,
+            "dry-run preview must list the same fields a real write produces");
+        foreach (var kv in realFields)
+            Assert.AreEqual(kv.Value!.GetValue<string>(), dryFields[kv.Key]?.GetValue<string>(),
+                $"field '{kv.Key}': dry-run preview must equal the real write's value");
+    }
+
+    [TestMethod]
     public void SetFields_WritesValues_VerifiedByIndependentReRead()
     {
         string clip = PrepareClip();
