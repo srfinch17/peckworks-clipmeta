@@ -29,9 +29,14 @@ public sealed class WatchingResolver
         _playerNames = playerNames ?? MediaPlayers.KnownProcessNames;
     }
 
-    /// <summary>The pass-1 resolver: player-title then access-time signals.</summary>
+    /// <summary>
+    /// The default resolver: player-title, then recent-write (gaming mode), then access-time signals.
+    /// Order is informational only — the scorer ranks by source, not registration order.
+    /// </summary>
     public static WatchingResolver CreateDefault(IProcessWindowSource windowSource) =>
-        new(new IWatchSignal[] { new PlayerTitleSignal(), new AccessTimeSignal() }, windowSource);
+        new(
+            new IWatchSignal[] { new PlayerTitleSignal(), new RecentWriteSignal(), new AccessTimeSignal() },
+            windowSource);
 
     /// <summary>The caveat attached to a bare-name match whose file is not currently locked.</summary>
     private const string NotLockedNote =
@@ -92,6 +97,11 @@ public sealed class WatchingResolver
 
         if (binding.Chosen is { } sel)
         {
+            // A review bind is about WHAT YOU WATCHED; a background save (recent_write) is noise here,
+            // so drop those rows before promoting. (Recent-write still answers the cold-start branch
+            // below — that IS the gaming case: no player history, what did you just save.)
+            candidates = candidates.Where(c => c.Source != RecentWriteSignal.SourceName).ToList();
+
             // The chosen title resolves to exactly the candidates the pipeline produced for that
             // window. Promote a single player-title match past the not-locked demotion (it is
             // expected to be unlocked — the user advanced away from it), keeping its true lock state.
@@ -154,9 +164,14 @@ public sealed class WatchingResolver
         foreach ((string path, List<SignalHit> hits) in hitsByPath)
         {
             bool hasPlayer = hits.Any(h => h.Source == PlayerTitleSignal.SourceName);
+            bool hasRecentWrite = hits.Any(h => h.Source == RecentWriteSignal.SourceName);
 
+            // includeAccessFallback gates every non-player signal (its contract is "only open-player
+            // candidates when false") — recent-write included, since it is also a no-player fallback.
             if (!hasPlayer && !includeAccessFallback)
                 continue;
+            // The wrong-directory suppression (a player on a foreign file) means the user is NOT
+            // gaming, so it suppresses every non-player guess, recent-write included.
             if (!hasPlayer && suppressAccessFallback)
                 continue;
 
@@ -167,7 +182,12 @@ public sealed class WatchingResolver
             bool bareNameUnambiguous = hits.Any(h =>
                 h.Source == PlayerTitleSignal.SourceName && !h.Ambiguous &&
                 h.MatchKind == TitleExtractionKind.BareName);
-            string source = hasPlayer ? PlayerTitleSignal.SourceName : AccessTimeSignal.SourceName;
+            // A single just-saved clip (no player) is the unambiguous gaming bind.
+            bool recentWriteUnambiguous = !hasPlayer &&
+                hits.Any(h => h.Source == RecentWriteSignal.SourceName && !h.Ambiguous);
+            string source = hasPlayer
+                ? PlayerTitleSignal.SourceName
+                : hasRecentWrite ? RecentWriteSignal.SourceName : AccessTimeSignal.SourceName;
             string? player = hits.FirstOrDefault(h => h.Player is not null)?.Player;
 
             var candidate = new WatchingCandidate(
@@ -178,7 +198,7 @@ public sealed class WatchingResolver
                 LastAccessTimeUtc: clip.LastAccessTimeUtc,
                 SecondsSinceAccess: Math.Max(0, (now - clip.LastAccessTimeUtc).TotalSeconds),
                 InUse: false,
-                Confidence: playerUnambiguous ? HighConfidence : LowConfidence,
+                Confidence: playerUnambiguous || recentWriteUnambiguous ? HighConfidence : LowConfidence,
                 Note: null);
 
             working.Add(new WorkingCandidate(candidate, hasPlayer, bareNameUnambiguous));
@@ -230,18 +250,29 @@ public sealed class WatchingResolver
                 if (finalCandidates[i].InUse && finalCandidates[i].Player is null)
                     finalCandidates[i] = finalCandidates[i] with { Player = soleHolder, Note = PlayerAttributedNote };
 
-        // #8a — once a clip is positively identified by a high-confidence player hit, the leftover
-        // access-time guesses are noise; drop them. With no high winner the fallback is all we have,
-        // so keep it.
-        if (finalCandidates.Any(c => c.Confidence == HighConfidence))
+        // #8a — once a clip is positively identified, the weaker guesses below it are noise; drop them.
+        // A high-confidence PLAYER hit wins outright (it drops recent-write saves too — a background
+        // capture must never dilute the clip you were actually watching). Otherwise, when a recent-write
+        // (gaming) candidate is present, it supersedes the access-time recency guesses. With neither,
+        // the access-time fallback is all we have, so it stays.
+        bool playerHighWinner = finalCandidates.Any(
+            c => c.Confidence == HighConfidence && c.Source == PlayerTitleSignal.SourceName);
+        if (playerHighWinner)
+            finalCandidates = finalCandidates
+                .Where(c => c.Source == PlayerTitleSignal.SourceName)
+                .ToList();
+        else if (finalCandidates.Any(c => c.Source == RecentWriteSignal.SourceName))
             finalCandidates = finalCandidates
                 .Where(c => c.Source != AccessTimeSignal.SourceName)
                 .ToList();
 
-        // #3 — a live target is one a player named OR one currently locked. When false, every
-        // candidate is an unverified recency guess and the caller must confirm before tagging.
-        bool anyLiveTarget = finalCandidates.Any(
-            c => c.Source == PlayerTitleSignal.SourceName || c.InUse);
+        // #3 — a live target is one a player named, one currently locked, OR a confidently just-saved
+        // clip (gaming mode, Policy A). When false, every candidate is an unverified recency guess and
+        // the caller must confirm before tagging.
+        bool anyLiveTarget = finalCandidates.Any(c =>
+            c.Source == PlayerTitleSignal.SourceName ||
+            c.InUse ||
+            (c.Source == RecentWriteSignal.SourceName && c.Confidence == HighConfidence));
 
         return new WatchingResult(finalCandidates, diagnostics, anyLiveTarget);
     }

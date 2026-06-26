@@ -3,7 +3,10 @@ namespace ClipMetaCore.Watching;
 /// <summary>One ranked watched-clip candidate.</summary>
 /// <param name="Path">Absolute path to the candidate clip (always a library clip).</param>
 /// <param name="Name">File name only.</param>
-/// <param name="Source">Dominant evidence source: "player_title" or "access_time".</param>
+/// <param name="Source">
+/// Dominant evidence source: "player_title" (an open player named it), "recent_write" (a clip just
+/// saved to the library while no player was open — gaming mode), or "access_time" (recency fallback).
+/// </param>
 /// <param name="Player">Process name when a player named it; otherwise null.</param>
 /// <param name="LastAccessTimeUtc">Last-access time at enumeration.</param>
 /// <param name="SecondsSinceAccess">Seconds between enumeration and the last access (≥ 0).</param>

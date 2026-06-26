@@ -66,8 +66,12 @@ public class WatchingCommandTests
     [TestMethod]
     public void Run_NothingLive_PrintsRecencyCaution()
     {
-        // No player open and the clip isn't locked: candidates are recency guesses only.
-        File.WriteAllBytes(Path.Combine(_tempDir, "clip.mp4"), Array.Empty<byte>());
+        // No player open and the clip isn't locked: candidates are recency guesses only. The clip's
+        // write time is back-dated so it is an access-time fallback, not a gaming-mode fresh save
+        // (which Policy A would treat as a live target).
+        string clip = Path.Combine(_tempDir, "clip.mp4");
+        File.WriteAllBytes(clip, Array.Empty<byte>());
+        File.SetLastWriteTimeUtc(clip, DateTime.UtcNow.AddDays(-1));
         using var sw = new StringWriter();
 
         int code = WatchingCommand.Run(_tempDir, 5, includeAccessFallback: true, output: sw);

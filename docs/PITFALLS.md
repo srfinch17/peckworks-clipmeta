@@ -8,6 +8,24 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-26 — Gaming mode: a freshly-`Touch()`ed test clip is a "recent write", which silently changed access-time tests
+**Symptom:** Adding `RecentWriteSignal` (gaming mode — resolve a clip just saved to disk when no player
+is open) flipped several long-standing watching tests: candidates that asserted `Source == "access_time"`
+became `"recent_write"`, and `Resolve_NoPlayerNoLock_AnyLiveTargetIsFalse` (plus the CLI's
+`Run_NothingLive_PrintsRecencyCaution`) inverted to a live target.
+**Cause:** Every test helper that creates a clip (`File.WriteAllBytes` / `Touch`) stamps `LastWriteTimeUtc`
+= *now*, so under gaming mode each one is a "just saved" clip within the freshness window. Policy A makes
+a *single* fresh write a high-confidence live target — exactly the case those tests assumed was "nothing
+live."
+**Fix:** Tests that pin the **access-time fallback** (or "nothing live") now back-date the write time
+(`File.SetLastWriteTimeUtc(path, UtcNow.AddDays(-1))`, via a `TouchStale` helper) so the file is a pure
+recency candidate again; gaming-mode behavior gets its own tests with fresh writes.
+**Lesson:** When a new signal keys off a file timestamp that test fixtures set implicitly, the fixtures
+become part of the signal's input. Make the timestamp **explicit** in any test whose outcome depends on
+it — don't let "freshly created" silently mean "freshly captured." (Spec:
+`docs/superpowers/specs/2026-06-26-gaming-mode-recent-write-design.md`. Policy decision: a single fresh
+write with no player is auto-taggable — owner, 2026-06-26.)
+
 ## 2026-06-26 — `dry_run` previewed the UNCHANGED file, not the predicted result
 **Symptom:** A dogfood run saw `clip_set_fields` with `dry_run:true` "preview a merged result" that the
 real write (which replaces) didn't perform. The model concluded dry-run and the real write disagreed.

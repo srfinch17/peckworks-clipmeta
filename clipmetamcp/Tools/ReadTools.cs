@@ -121,6 +121,9 @@ public static class ReadTools
             "path with confidence 'high' is the file an open player is showing — prefer it and you " +
             "may tag it. If only 'access_time' candidates exist, or confidence is 'low' (multiple " +
             "players open, or an ambiguous file name), confirm with the user before tagging. " +
+            "A 'recent_write' candidate with confidence 'high' is a clip just SAVED to the library while no " +
+            "player was open (gaming mode — the user clipped a moment from a game); it is a live target you " +
+            "may tag. 'recent_write' 'low' means several clips were saved at once, so confirm which one. " +
             "IMPORTANT: when 'anyLiveTarget' is false, NOTHING is actually open or locked — every " +
             "candidate is just an unverified most-recently-touched guess (and 'access_time' is only " +
             "an advisory recency hint, easily skewed by other apps), so do NOT tag without the user " +
