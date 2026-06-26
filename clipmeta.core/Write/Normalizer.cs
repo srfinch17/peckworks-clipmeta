@@ -9,6 +9,13 @@ namespace ClipMetaCore.Write;
 /// </summary>
 public static class Normalizer
 {
+    /// <summary>
+    /// Separator between accumulated prose-field (notes) fragments. A sentence separator reads better
+    /// than a bare space for multi-narration ("driving the cart. almost crashed"). One place so the
+    /// queue's in-memory merge and the writer's disk fold always agree; change here to e.g. "; ".
+    /// </summary>
+    public const string ProseSeparator = ". ";
+
     /// <summary>Lowercases and trims a single tag value.</summary>
     public static string NormalizeTag(string value) => value.Trim().ToLowerInvariant();
 
@@ -48,7 +55,7 @@ public static class Normalizer
     public static string AppendValue(string field, string existing, string incoming)
     {
         if (ClipMetaSchema.ProseFields.Contains(BareName(field)))
-            return existing.Length == 0 ? incoming : $"{existing.TrimEnd()} {incoming}";
+            return existing.Length == 0 ? incoming : $"{existing.TrimEnd()}{ProseSeparator}{incoming}";
         return AppendToPipeList(existing, incoming);
     }
 

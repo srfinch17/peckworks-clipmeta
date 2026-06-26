@@ -134,7 +134,7 @@ public class TagQueueTests
 
         TagQueueData data = TagQueue.Load(_dir);
         Assert.AreEqual(1, data.Entries.Count, "same clip merges");
-        Assert.AreEqual("first note second note",
+        Assert.AreEqual("first note. second note",
             data.Entries[0].Mutation.AppendFields[ClipMetaSchema.AtomName("notes")]);
     }
 
@@ -151,7 +151,7 @@ public class TagQueueTests
         TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, isInUse: _ => false);
 
         var fields = ClipMetaReader.GetUserFields(Mp4Parser.ParseFile(clip));
-        Assert.AreEqual("Chuck wins raccoon appears", fields.Single(f => f.Field == "notes").Value);
+        Assert.AreEqual("Chuck wins. raccoon appears", fields.Single(f => f.Field == "notes").Value);
     }
 
     [TestMethod]

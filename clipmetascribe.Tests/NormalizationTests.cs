@@ -11,9 +11,9 @@ public class NormalizationTests
     [TestMethod]
     public void AppendValue_Notes_JoinsAsProse_CasePreserved_NoDedup()
     {
-        // Free-text notes must accumulate as prose: space-joined, original case kept, never
+        // Free-text notes must accumulate as prose: sentence-separated, original case kept, never
         // pipe-mangled or lowercased the way a tag list would be.
-        Assert.AreEqual("Chuck wins the round", Normalizer.AppendValue(Atom(ClipMetaSchema.Notes),
+        Assert.AreEqual("Chuck wins. the round", Normalizer.AppendValue(Atom(ClipMetaSchema.Notes),
             "Chuck wins", "the round"));
     }
 

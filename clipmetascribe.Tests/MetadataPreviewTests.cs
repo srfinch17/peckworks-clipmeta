@@ -68,7 +68,7 @@ public class MetadataPreviewTests
             new[] { ("notes", "Chuck wins") },
             m => m.AppendFields[Atom("notes")] = "raccoon ambush");
 
-        CollectionAssert.AreEqual(new[] { ("notes", "Chuck wins raccoon ambush") }, result);
+        CollectionAssert.AreEqual(new[] { ("notes", "Chuck wins. raccoon ambush") }, result);
     }
 
     [TestMethod]

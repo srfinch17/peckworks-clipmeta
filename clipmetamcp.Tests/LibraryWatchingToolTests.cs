@@ -92,6 +92,19 @@ public class LibraryWatchingToolTests
     }
 
     [TestMethod]
+    public void Watching_AlwaysEchoesQueueDepthAndDrainOutcome()
+    {
+        // The queue is empty here, but the fields must be present (and zero) so a caller can always
+        // confirm whether a queued write landed — no more "silent flush".
+        JsonObject s = Structured(Call(new JsonObject { ["include_access_fallback"] = true }, _lib));
+
+        Assert.AreEqual(0, s["queuePending"]!.GetValue<int>());
+        var drained = (JsonObject)s["drainedFromQueue"]!;
+        foreach (string key in new[] { "written", "dropped", "stillQueued" })
+            Assert.IsTrue(drained.ContainsKey(key), $"drainedFromQueue missing '{key}'");
+    }
+
+    [TestMethod]
     public void Watching_NormalCall_HasNoWarning()
     {
         JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
