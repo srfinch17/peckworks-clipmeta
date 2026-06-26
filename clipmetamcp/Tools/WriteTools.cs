@@ -35,7 +35,9 @@ public static class WriteTools
             "clip_set_fields",
             "Writes metadata into one MP4 game clip (stored inside the file, so tags travel " +
             "with it). 'fields' maps field names to string values — well-known fields: " +
-            KnownFieldsSentence + "; any other name becomes a custom field. Setting a field " +
+            KnownFieldsSentence + "; any other name becomes a custom field. For searchability, put " +
+            "people in 'players' and searchable nouns/moments (objects, places, events) in 'tags' " +
+            "rather than burying them in free-text 'notes'. Setting a field " +
             "to an empty string DELETES it. Multi-value fields use pipe-delimited strings " +
             "(e.g. tags: \"win|comeback\"). 'rating' must be 1-5. 'timecode' is normalized to " +
             "HH:MM:SS: a bare number is seconds and a two-part value is MM:SS, so \"90\" and " +

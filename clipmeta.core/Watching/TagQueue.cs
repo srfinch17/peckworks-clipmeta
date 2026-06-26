@@ -98,7 +98,9 @@ public static class TagQueue
     /// <c>Normalizer.AppendValue</c> so the in-queue merge matches what eventually lands on disk.
     /// </summary>
     private static string MergeAppend(string field, string a, string b) =>
-        ClipMetaSchema.ProseFields.Contains(DisplayField(field)) ? $"{a.TrimEnd()} {b}" : PipeMerge(a, b);
+        ClipMetaSchema.ProseFields.Contains(DisplayField(field))
+            ? $"{a.TrimEnd()}{Normalizer.ProseSeparator}{b}"
+            : PipeMerge(a, b);
 
     /// <summary>Joins two pipe-delimited lists, dropping duplicate items (first occurrence wins).</summary>
     private static string PipeMerge(string a, string b)

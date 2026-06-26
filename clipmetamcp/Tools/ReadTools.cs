@@ -621,14 +621,16 @@ public static class ReadTools
             };
         }
 
-        if (drained.Written.Count > 0 || drained.Dropped.Count > 0)
-            response["drainedFromQueue"] = new JsonObject
-            {
-                ["written"] = drained.Written.Count,
-                ["dropped"] = drained.Dropped.Count,
-            };
-        int pendingNow = TagQueue.Status(root, LockProbe.IsInUse).Count;
-        if (pendingNow > 0) response["queuePending"] = pendingNow;
+        // Always echo the drain outcome + remaining queue depth so a caller can confirm a queued
+        // write actually landed from the watching response alone (the dogfood's "silent flush" gap):
+        // previously these were emitted only when non-zero, so "did my last tag land?" was unanswerable.
+        response["drainedFromQueue"] = new JsonObject
+        {
+            ["written"] = drained.Written.Count,
+            ["dropped"] = drained.Dropped.Count,
+            ["stillQueued"] = drained.StillQueued.Count,
+        };
+        response["queuePending"] = TagQueue.Status(root, LockProbe.IsInUse).Count;
 
         return response;
     }
