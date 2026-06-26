@@ -461,4 +461,25 @@ public class WatchingResolverTests
 
         Assert.AreEqual(0, result.Count);
     }
+
+    // ── Ledger exclusion: self-written clips must not surface as gaming live targets ─────
+
+    [TestMethod]
+    public void Resolve_SingleFreshClip_SelfWritten_IsNotLiveTarget()
+    {
+        // A clip whose fresh creation time would normally make it a gaming-mode live target
+        // must be excluded when the ledger records that ClipMeta itself wrote it (i.e. a
+        // tag-write bumped the write time but ClipMeta stamped it — not a user game-save).
+        string clip = Path.Combine(_tempDir, "fresh.mp4");
+        File.WriteAllBytes(clip, new byte[] { 0, 1, 2 });   // fresh creation time
+
+        var ledger = new SelfActionLedger();
+        ledger.MarkWritten(clip);          // ClipMeta wrote it -> not a user save
+
+        var resolver = WatchingResolver.CreateDefault(EmptyProcessWindowSource.Instance, ledger);
+        WatchingResult result = resolver.Resolve(_tempDir, limit: 5, includeAccessFallback: true);
+
+        Assert.IsFalse(result.Candidates.Any(c => c.Source == RecentWriteSignal.SourceName),
+            "a self-written clip must not surface as a recent_write gaming target");
+    }
 }

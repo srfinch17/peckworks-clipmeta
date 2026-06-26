@@ -17,26 +17,36 @@ public sealed class WatchingResolver
     private readonly IReadOnlyList<IWatchSignal> _signals;
     private readonly IProcessWindowSource _windowSource;
     private readonly IReadOnlyCollection<string> _playerNames;
+    private readonly SelfActionLedger? _ledger;
 
-    /// <summary>Creates a resolver over the given signals and process source.</summary>
+    /// <summary>
+    /// Creates a resolver over the given signals and process source. The trailing
+    /// <paramref name="ledger"/> — when supplied — is threaded into every
+    /// <see cref="WatchContext"/> so self-written clips are excluded from gaming-mode detection.
+    /// </summary>
     public WatchingResolver(
         IReadOnlyList<IWatchSignal> signals,
         IProcessWindowSource windowSource,
-        IReadOnlyCollection<string>? playerNames = null)
+        IReadOnlyCollection<string>? playerNames = null,
+        SelfActionLedger? ledger = null)
     {
         _signals = signals;
         _windowSource = windowSource;
         _playerNames = playerNames ?? MediaPlayers.KnownProcessNames;
+        _ledger = ledger;
     }
 
     /// <summary>
     /// The default resolver: player-title, then recent-write (gaming mode), then access-time signals.
     /// Order is informational only — the scorer ranks by source, not registration order.
+    /// The optional <paramref name="ledger"/> excludes paths ClipMeta itself wrote from the gaming-mode
+    /// signal so a tag-write is never mistaken for a fresh user game-save.
     /// </summary>
-    public static WatchingResolver CreateDefault(IProcessWindowSource windowSource) =>
+    public static WatchingResolver CreateDefault(
+        IProcessWindowSource windowSource, SelfActionLedger? ledger = null) =>
         new(
             new IWatchSignal[] { new PlayerTitleSignal(), new RecentWriteSignal(), new AccessTimeSignal() },
-            windowSource);
+            windowSource, playerNames: null, ledger: ledger);
 
     /// <summary>The caveat attached to a bare-name match whose file is not currently locked.</summary>
     private const string NotLockedNote =
@@ -49,7 +59,7 @@ public sealed class WatchingResolver
     /// </summary>
     public WatchingResult Resolve(string libraryRoot, int limit, bool includeAccessFallback)
     {
-        WatchContext context = WatchContext.Build(libraryRoot, _windowSource, _playerNames);
+        WatchContext context = WatchContext.Build(libraryRoot, _windowSource, _playerNames, _ledger);
         return ResolveCore(context, limit, includeAccessFallback);
     }
 
@@ -88,7 +98,7 @@ public sealed class WatchingResolver
             ? new[] { new ProcessWindow(chosen.ProcessName, chosen.RawTitle) }
             : _windowSource.GetPlayerWindows(_playerNames);
 
-        WatchContext context = WatchContext.Build(libraryRoot, windows);
+        WatchContext context = WatchContext.Build(libraryRoot, windows, _ledger);
         WatchingResult core = ResolveCore(context, limit, includeAccessFallback);
 
         List<WatchingCandidate> candidates = core.Candidates.ToList();
