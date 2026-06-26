@@ -96,6 +96,11 @@ internal static class Program
             var sandbox = LibrarySandbox.FromEnvironment();
             var registry = new ToolRegistry();
 
+            // One ledger for the whole process: write tools mark paths they write, and the watching
+            // resolver reads it so gaming-mode detection (RecentWriteSignal) can exclude clips
+            // ClipMeta itself just tagged from the "fresh user game-save" signal.
+            var selfLedger = new SelfActionLedger();
+
             // Zero-touch flush: a background pump drains the queue as locks clear, so the last clip
             // of a session lands when its player closes without an explicit library_flush_queue.
             // Only meaningful with a configured library; drains run under the same WriteGate as every
@@ -129,8 +134,8 @@ internal static class Program
                 reviewWatcher.Start();
             }
 
-            ReadTools.RegisterAll(registry, sandbox, reviewWatcher);
-            WriteTools.RegisterAll(registry, sandbox);
+            ReadTools.RegisterAll(registry, sandbox, reviewWatcher, selfLedger);
+            WriteTools.RegisterAll(registry, sandbox, selfLedger);
             QueueTools.RegisterAll(registry, sandbox, pump);
 
             logger.Log(

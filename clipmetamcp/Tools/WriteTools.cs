@@ -4,6 +4,7 @@ using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
+using ClipMetaCore.Watching;
 using ClipMetaCore.Write;
 
 namespace ClipMetaMcp.Tools;
@@ -25,8 +26,14 @@ namespace ClipMetaMcp.Tools;
 /// </summary>
 public static class WriteTools
 {
-    /// <summary>Registers all write tools against the given sandbox.</summary>
-    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)
+    /// <summary>
+    /// Registers all write tools against the given sandbox. When <paramref name="ledger"/> is
+    /// supplied, every successful metadata write marks the path in the ledger so
+    /// <c>library_watching</c>'s gaming-mode signal can exclude clips ClipMeta itself tagged
+    /// (they are not fresh user game-saves).
+    /// </summary>
+    public static void RegisterAll(
+        ToolRegistry registry, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -44,7 +51,7 @@ public static class WriteTools
             "\"1:30\" both become 00:01:30. A timestamped backup copy is kept next to the file " +
             "unless backup:false; dry_run:true previews without writing.",
             SetFieldsSchema(),
-            args => SetFields(args, sandbox),
+            args => SetFields(args, sandbox, ledger),
             clipPath => new JsonObject
             {
                 ["path"] = clipPath,
@@ -60,7 +67,7 @@ public static class WriteTools
             "value is appended. Use clip_set_fields to replace a value outright. Timestamped " +
             "backup unless backup:false; dry_run:true previews.",
             AppendFieldSchema(),
-            args => AppendField(args, sandbox),
+            args => AppendField(args, sandbox, ledger),
             clipPath => new JsonObject
             {
                 ["path"] = clipPath,
@@ -75,7 +82,7 @@ public static class WriteTools
             "other metadata is untouched). Clearing a field that is not set is not an error. " +
             "Timestamped backup unless backup:false; dry_run:true previews.",
             ClearFieldsSchema(),
-            args => ClearFields(args, sandbox),
+            args => ClearFields(args, sandbox, ledger),
             clipPath => new JsonObject
             {
                 ["path"] = clipPath,
@@ -90,7 +97,7 @@ public static class WriteTools
             "already clearly asked for a full wipe. Timestamped backup unless backup:false; " +
             "dry_run:true previews.",
             ClearAllSchema(),
-            args => ClearAll(args, sandbox),
+            args => ClearAll(args, sandbox, ledger),
             clipPath => new JsonObject
             {
                 ["path"] = clipPath,
@@ -305,7 +312,7 @@ public static class WriteTools
 
     // ── Handlers ─────────────────────────────────────────────────────────────────────────
 
-    private static JsonObject SetFields(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject SetFields(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         if (args?["fields"] is not JsonObject fieldArgs || fieldArgs.Count == 0)
             throw new ToolException(
@@ -332,10 +339,10 @@ public static class WriteTools
         {
             if (set.Count > 0) result["setFields"] = set;
             if (deleted.Count > 0) result["deletedFields"] = deleted;
-        });
+        }, ledger);
     }
 
-    private static JsonObject AppendField(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject AppendField(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         string field = ReadTools.GetRequiredString(args, "field");
         string value = ReadTools.GetRequiredString(args, "value");
@@ -347,10 +354,10 @@ public static class WriteTools
         {
             result["appendedField"] = field;
             result["appendedValue"] = value;
-        });
+        }, ledger);
     }
 
-    private static JsonObject ClearFields(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject ClearFields(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         if (args?["fields"] is not JsonArray fieldArgs || fieldArgs.Count == 0)
             throw new ToolException(
@@ -371,10 +378,10 @@ public static class WriteTools
         }
 
         return ExecuteWrite(args, sandbox, mutation,
-            result => result["clearedFields"] = cleared);
+            result => result["clearedFields"] = cleared, ledger);
     }
 
-    private static JsonObject ClearAll(JsonObject? args, LibrarySandbox sandbox)
+    private static JsonObject ClearAll(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         // The latch is the literal boolean true — a string "true" or a missing key refuses.
         // The model must consciously supply it, which in practice means it asked the user.
@@ -388,7 +395,7 @@ public static class WriteTools
 
         var mutation = new MetadataMutation { ClearAll = true };
         return ExecuteWrite(args, sandbox, mutation,
-            result => result["clearedAll"] = true);
+            result => result["clearedAll"] = true, ledger);
     }
 
     // ── Backup management handlers ─────────────────────────────────────────────────────────
@@ -532,13 +539,17 @@ public static class WriteTools
     /// policy, run the mutation through <see cref="Mp4Writer"/> single-flight, translate the
     /// write engine's exceptions into model-readable refusals, and read the file back so the
     /// response shows the actual post-write state (one extra parse buys the model ground truth
-    /// instead of an assumption — and for dry runs, proves nothing changed).
+    /// instead of an assumption — and for dry runs, proves nothing changed). On a successful
+    /// (non-dry-run) write, marks the path in <paramref name="ledger"/> so gaming-mode watching
+    /// can exclude ClipMeta-tagged clips from recent-save detection. A refused or failed write
+    /// must never mark.
     /// </summary>
     private static JsonObject ExecuteWrite(
         JsonObject? args,
         LibrarySandbox sandbox,
         MetadataMutation mutation,
-        Action<JsonObject> describeChange)
+        Action<JsonObject> describeChange,
+        SelfActionLedger? ledger = null)
     {
         string fullPath = sandbox.ResolveWritePath(ReadTools.GetRequiredString(args, "path"));
 
@@ -591,6 +602,11 @@ public static class WriteTools
         {
             WriteGate.Exit();
         }
+
+        // Mark the path written so library_watching's gaming-mode signal can exclude it.
+        // Placed here — only reached after a successful, non-dry-run write; all catch paths
+        // above throw ToolException and therefore skip this line.
+        ledger?.MarkWritten(fullPath);
 
         // Ground truth read-back (see doc comment). GetMetadata re-resolves the path through
         // the read sandbox — harmless, it just passed the stricter write check.
