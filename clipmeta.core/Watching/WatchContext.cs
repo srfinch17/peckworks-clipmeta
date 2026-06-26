@@ -61,16 +61,17 @@ public sealed class WatchContext
         var clips = new List<LibraryClip>();
         foreach (string path in Directory.EnumerateFiles(libraryRoot, "*.mp4", SearchOption.AllDirectories))
         {
-            DateTime accessTime;
+            DateTime accessTime, writeTime;
             try
             {
                 accessTime = File.GetLastAccessTimeUtc(path);
+                writeTime = File.GetLastWriteTimeUtc(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
-            clips.Add(new LibraryClip(path, Path.GetFileName(path), accessTime));
+            clips.Add(new LibraryClip(path, Path.GetFileName(path), accessTime, writeTime));
         }
 
         var byName = new Dictionary<string, List<LibraryClip>>(StringComparer.OrdinalIgnoreCase);

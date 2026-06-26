@@ -29,6 +29,18 @@ public class WatchingResolverTests
         return path;
     }
 
+    /// <summary>
+    /// Touch, then back-date the write time well outside the recent-write window, so the file is a
+    /// pure access-time fallback candidate (not a gaming-mode "just saved" clip). Used by the tests
+    /// that specifically pin the access-time fallback contract.
+    /// </summary>
+    private string TouchStale(string name)
+    {
+        string path = Touch(name);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-1));
+        return path;
+    }
+
     private WatchingResolver Resolver(params ProcessWindow[] windows) =>
         WatchingResolver.CreateDefault(new FakeProcessWindowSource(windows));
 
@@ -54,8 +66,9 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_NoPlayer_FallsBackToMostRecentAccessAsLow()
     {
-        string older = Touch("older.mp4");
-        string newer = Touch("newer.mp4");
+        // Stale writes → these are access-time fallback candidates, not gaming-mode fresh saves.
+        string older = TouchStale("older.mp4");
+        string newer = TouchStale("newer.mp4");
         File.SetLastAccessTimeUtc(older, DateTime.UtcNow.AddHours(-3));
         File.SetLastAccessTimeUtc(newer, DateTime.UtcNow);
 
@@ -160,9 +173,9 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_NoHighWinner_KeepsAccessTimeRows()
     {
-        // No player hit → the access-time fallback is all we have, so it must still answer.
-        Touch("a.mp4");
-        Touch("b.mp4");
+        // No player hit and no fresh save → the access-time fallback is all we have, so it must answer.
+        TouchStale("a.mp4");
+        TouchStale("b.mp4");
 
         IReadOnlyList<WatchingCandidate> result = Candidates(Resolver(), _tempDir, 5, true);
 
@@ -197,7 +210,9 @@ public class WatchingResolverTests
     {
         // Access-time candidates are still returned (a useful recency hint), but nothing is actually
         // open/locked — the caller must not auto-tag. AnyLiveTarget makes that an explicit contract.
-        Touch("a.mp4");
+        // (A stale write keeps this an access-time-only case; a FRESH save is a live target — see
+        // Resolve_NoPlayer_SingleFreshWrite_IsLiveTarget.)
+        TouchStale("a.mp4");
 
         WatchingResult result = Resolver().Resolve(_tempDir, 5, includeAccessFallback: true);
 
@@ -380,5 +395,67 @@ public class WatchingResolverTests
 
         Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count,
             "identical foreign players must collapse to one warning entry");
+    }
+
+    // ── Gaming mode: recent-write resolution (Policy A) ──────────────────────────────────
+
+    [TestMethod]
+    public void Resolve_NoPlayer_SingleFreshWrite_IsLiveTarget()
+    {
+        // The user clipped a game moment: one clip just saved, no player open. Policy A makes that
+        // single fresh write a high-confidence, auto-taggable live target.
+        string clip = Touch("clip.mp4"); // fresh write (default Touch leaves write time ~now)
+
+        WatchingResult result = Resolver().Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        WatchingCandidate top = result.Candidates[0];
+        Assert.AreEqual(clip, top.Path);
+        Assert.AreEqual(RecentWriteSignal.SourceName, top.Source);
+        Assert.AreEqual("high", top.Confidence);
+        Assert.IsTrue(result.AnyLiveTarget, "a single just-saved clip is a live target (Policy A)");
+    }
+
+    [TestMethod]
+    public void Resolve_NoPlayer_MultipleFreshWrites_AllLow_NotLive()
+    {
+        // Several clips saved at once is ambiguous — surface them but make the model confirm.
+        Touch("a.mp4");
+        Touch("b.mp4");
+
+        WatchingResult result = Resolver().Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        var fresh = result.Candidates.Where(c => c.Source == RecentWriteSignal.SourceName).ToList();
+        Assert.AreEqual(2, fresh.Count);
+        Assert.IsTrue(fresh.All(c => c.Confidence == "low"));
+        Assert.IsFalse(result.AnyLiveTarget, "multiple fresh saves are ambiguous — not an auto-tag target");
+    }
+
+    [TestMethod]
+    public void Resolve_PlayerOpen_FreshWriteElsewhere_PlayerWins()
+    {
+        // A clip is playing AND another was just saved in the background — the played clip is the
+        // subject; the background save must not displace it or even appear alongside the high winner.
+        string watched = Touch("watched.mp4");
+        Touch("autosaved.mp4"); // fresh, but nobody is watching it
+
+        WatchingResult result = Resolver(new ProcessWindow("mpc-hc64", $"{watched} - MPC-HC"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(watched, result.Candidates[0].Path);
+        Assert.AreEqual("high", result.Candidates[0].Confidence);
+        Assert.IsFalse(result.Candidates.Any(c => c.Source == RecentWriteSignal.SourceName),
+            "a background save is dropped beneath the high-confidence player winner");
+    }
+
+    [TestMethod]
+    public void Resolve_NoPlayer_SingleFreshWrite_FallbackDisabled_ReturnsEmpty()
+    {
+        // include_access_fallback:false means "only open-player candidates" — recent-write is a
+        // no-player signal, so it is gated too. (Default is true, so gaming mode works out of the box.)
+        Touch("clip.mp4");
+
+        IReadOnlyList<WatchingCandidate> result = Candidates(Resolver(), _tempDir, 5, false);
+
+        Assert.AreEqual(0, result.Count);
     }
 }

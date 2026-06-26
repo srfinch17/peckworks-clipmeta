@@ -41,7 +41,7 @@ A clip the game just saved has a **`LastWriteTimeUtc` of ~now**. Unlike access t
 - A path with a **player hit** is unchanged — the player dominates; its recent-write hit is ignored for sourcing. (This preserves *every* existing player-path test and the review/AC2 paths: a confidently chosen clip is never diluted by background saves.)
 - A path with **no player but a recent-write hit** → `Source = "recent_write"`, and `Confidence = high` iff it is the single in-window clip, else `low` (mirrors the player-title unambiguous/ambiguous rule the owner already approved).
 - Access-time-only paths are unchanged, and are dropped beneath a recent-write winner the same way they are dropped beneath a player winner (existing §8a rule, extended).
-- Recent-write hits survive `include_access_fallback:false` (they are the gaming signal, not the recency hint) but are still suppressed by the wrong-directory rule (a player showing a foreign file means the user is *not* gaming).
+- Recent-write hits are gated by `include_access_fallback` like every other non-player signal (its documented contract is "only open-player candidates when false"), and are also suppressed by the wrong-directory rule (a player showing a foreign file means the user is *not* gaming). The default is `true`, so gaming mode works out of the box.
 
 ### 3.1 DECISION (RESOLVED — Policy A) — does a just-saved clip become an auto-taggable "live target"?
 
