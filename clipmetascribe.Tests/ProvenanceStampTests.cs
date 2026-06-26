@@ -2,6 +2,7 @@ using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
 using ClipMetaCore.Schema;
+using ClipMetaCore.Watching;
 using ClipMetaCore.Write;
 using ClipMetaScribe.Tests.Helpers;
 
@@ -76,6 +77,24 @@ public class ProvenanceStampTests
         new Mp4Writer().WriteMetadata(clip, m, NullLogger.Instance);
 
         Assert.IsFalse(RawFields(clip).Any(f => f.Field == ClipMetaSchema.TaggedBy));
+    }
+
+    [TestMethod]
+    public void QueueDrain_StampsProvenance()
+    {
+        // The PRIMARY watch-and-tag path always queues (the player holds the lock) then drains. The
+        // drain reconstructs the mutation with the default StampProvenance=true, so a drained tag must
+        // carry tagged_by. (Untested before — the gap that let a dogfood log wrongly claim the queue
+        // path stamps nothing, because clip_get_metadata hides the internal field.)
+        string clip = MakeClip();
+        var m = new MetadataMutation();
+        m.SetFields[ClipMetaSchema.AtomName("game")] = "Team Fortress 2";
+        TagQueue.Enqueue(_dir, clip, m, confidence: "high");
+
+        TagQueue.Drain(_dir, new Mp4Writer(), NullLogger.Instance, _ => false);
+
+        Assert.AreEqual(ClipMetaSchema.ProvenanceValue,
+            RawFields(clip).Single(f => f.Field == ClipMetaSchema.TaggedBy).Value);
     }
 
     [TestMethod]
