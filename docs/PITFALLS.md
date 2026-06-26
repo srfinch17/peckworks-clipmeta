@@ -8,6 +8,31 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-26 — Watched-clip tag bound to the WRONG clip (poll-at-call-time race)
+**Symptom:** In a watch-and-tag run, a spoken tag landed on the *next* clip: the user watched clip
+N, dictated, advanced to N+1, and the tag bound to N+1. Silent and intermittent (1 of 5 in a live
+run, on the shortest clip). VLC's title detection was flawless every poll — so it was NOT a
+detection bug.
+**Cause:** `library_watching` resolved "which clip" by snapshotting open player windows **at the
+moment the tool executed** — a turn after dictation. `WatchContext.Build` took a single "now"
+snapshot and `WatchingResolver.Resolve` had no history, so it could not tell a clip that *just
+started* from one that had been playing a while. If the user advanced before the (late) poll, the
+poll read N+1.
+**Fix:** A continuous read-only `ReviewWatcher` thread records player-title **segments** (title +
+start/end) over time. `ReviewBindingResolver` applies the rule "if the open clip *just started*
+(< ~2 s), the user already advanced — bind the PREVIOUS stable clip," and
+`WatchingResolver.ResolveReview` resolves the chosen title through the existing pipeline. Binding
+correctness now depends on WHEN each title played, not on when the tool was called.
+**Lesson:** A stateless "what's open now?" tool can never capture dictation-time state — the
+earliest it learns of the dictation is the (late) call. For time-sensitive identification, record a
+timestamped history and look *back* into it; don't re-snapshot at call time. (Spec:
+`docs/superpowers/specs/2026-06-26-review-mode-watcher-design.md`.)
+**Related gotcha — the not-locked-guard exception:** the resolver normally demotes an unlocked
+bare-name hit ("may be a same-named file elsewhere"). But a review-mode *corrected* bind is
+legitimately unlocked — the player advanced away from it — and the watcher saw that exact title
+play for seconds. `ResolveReview` keeps a single history-confirmed match high-confidence rather than
+demoting it. Do NOT "fix" the collision guard to also demote corrected binds; that would re-break this.
+
 ## 2026-06-25 — Player-title detection: extract-then-exact-match is brittle (MPC-HC intermittency)
 Dogfooding (2026-06-25) showed MPC-HC's player-title detection firing intermittently (`✓✗✗✓✓`)
 while VLC was reliable. **Root cause:** the old bare-name path extracted an `.mp4` token from the

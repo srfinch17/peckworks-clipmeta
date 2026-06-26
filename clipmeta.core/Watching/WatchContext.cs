@@ -26,6 +26,38 @@ public sealed class WatchContext
     public static WatchContext Build(
         string libraryRoot, IProcessWindowSource source, IReadOnlyCollection<string> playerNames)
     {
+        ArgumentNullException.ThrowIfNull(source);
+        return Build(libraryRoot, source.GetPlayerWindows(playerNames));
+    }
+
+    /// <summary>
+    /// Builds a context over supplied player windows instead of polling a source — used by review-mode
+    /// resolution, which has already chosen WHICH title to resolve from the watcher's segment history.
+    /// </summary>
+    public static WatchContext Build(string libraryRoot, IReadOnlyList<ProcessWindow> playerWindows)
+    {
+        ArgumentNullException.ThrowIfNull(playerWindows);
+        (List<LibraryClip> clips, var byName, var byPath) = EnumerateLibrary(libraryRoot);
+        return new WatchContext
+        {
+            LibraryClips = clips,
+            ByFileName = byName,
+            ByFullPath = byPath,
+            PlayerWindows = playerWindows,
+        };
+    }
+
+    /// <summary>
+    /// Enumerates <paramref name="libraryRoot"/> for .mp4 files (recursive) and builds the name/path
+    /// lookups. Files whose access time cannot be read are skipped (a vanished/locked file must not
+    /// abort the whole pass). Shared by both <see cref="Build(string, IProcessWindowSource, IReadOnlyCollection{string})"/>
+    /// and the supplied-windows overload.
+    /// </summary>
+    private static (List<LibraryClip> Clips,
+                    IReadOnlyDictionary<string, IReadOnlyList<LibraryClip>> ByName,
+                    IReadOnlyDictionary<string, LibraryClip> ByPath)
+        EnumerateLibrary(string libraryRoot)
+    {
         var clips = new List<LibraryClip>();
         foreach (string path in Directory.EnumerateFiles(libraryRoot, "*.mp4", SearchOption.AllDirectories))
         {
@@ -51,13 +83,10 @@ public sealed class WatchContext
             byPath[clip.FullPath] = clip;
         }
 
-        return new WatchContext
-        {
-            LibraryClips = clips,
-            ByFileName = byName.ToDictionary(
+        return (
+            clips,
+            byName.ToDictionary(
                 kv => kv.Key, kv => (IReadOnlyList<LibraryClip>)kv.Value, StringComparer.OrdinalIgnoreCase),
-            ByFullPath = byPath,
-            PlayerWindows = source.GetPlayerWindows(playerNames),
-        };
+            byPath);
     }
 }

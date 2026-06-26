@@ -115,7 +115,21 @@ internal static class Program
                 pump.Start();
             }
 
-            ReadTools.RegisterAll(registry, sandbox);
+            // Review-mode watcher: a read-only background thread records player-title segments over
+            // time so library_watching can bind a tag to the clip that was playing at the user's
+            // dictation moment, not whatever the player advanced to by the time the tool runs. Only
+            // meaningful with a configured library; it never writes a file, so it races no writer.
+            ReviewWatcher? reviewWatcher = null;
+            if (sandbox.Root is not null)
+            {
+                reviewWatcher = new ReviewWatcher(
+                    ProcessWindowSource.ForCurrentPlatform(),
+                    () => DateTimeOffset.UtcNow,
+                    pollInterval: TimeSpan.FromMilliseconds(250));
+                reviewWatcher.Start();
+            }
+
+            ReadTools.RegisterAll(registry, sandbox, reviewWatcher);
             WriteTools.RegisterAll(registry, sandbox);
             QueueTools.RegisterAll(registry, sandbox, pump);
 
@@ -129,7 +143,8 @@ internal static class Program
             }
             finally
             {
-                pump?.Dispose(); // stop and join the background loop before exit
+                pump?.Dispose();          // stop and join the background loops before exit
+                reviewWatcher?.Dispose();
             }
 
             logger.Log("stdin closed by host; exiting cleanly");
