@@ -143,7 +143,8 @@ public sealed class WatchingResolver
         }
 
         return new WatchingResult(
-            candidates, core.Diagnostics, anyLive, binding.Flags, boundId, confident);
+            candidates, core.Diagnostics, anyLive,
+            ReviewFlagResolver.Resolve(binding.Flags, context), boundId, confident);
     }
 
     /// <summary>

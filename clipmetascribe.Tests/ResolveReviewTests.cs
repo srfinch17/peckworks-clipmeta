@@ -156,6 +156,26 @@ public class ResolveReviewTests
     }
 
     [TestMethod]
+    public void ResolveReview_MultiPlayerFlag_ClipsAreResolvedLibraryNames()
+    {
+        // #6 end-to-end: the multiplePlayersActive advisory lists clean library basenames, not raw
+        // VLC titles. (a.mp4 via VLC bare name, b.mp4 via MPC full path → both resolve.)
+        Touch("a.mp4");
+        Touch("b.mp4");
+        var segs = new[]
+        {
+            new TitleSegment(1, "vlc", "a.mp4 - VLC media player", T0, null),
+            new TitleSegment(2, "mpc-hc64", $"{Path.Combine(_dir, "b.mp4")} - MPC-HC", T0.AddSeconds(20), null),
+        };
+
+        WatchingResult r = Resolver().ResolveReview(_dir, segs, -1, T0.AddSeconds(40), 5, true);
+
+        ReviewFlag flag = r.Review!.Single(f => f.Type == ReviewFlag.TypeMultiplePlayersActive);
+        CollectionAssert.AreEquivalent(new[] { "a.mp4", "b.mp4" }, flag.Clips.ToList(),
+            "advisory clips are resolved library basenames, deduped, no raw titles");
+    }
+
+    [TestMethod]
     public void ResolveReview_FireNAhead_OldestFirst_BindsEachInTurn()
     {
         string one = Touch("_1.mp4");
