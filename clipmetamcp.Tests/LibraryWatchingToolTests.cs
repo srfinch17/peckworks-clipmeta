@@ -187,4 +187,28 @@ public class LibraryWatchingToolTests
         var autoFlushed2 = Structured(result2)["autoFlushed"]!.AsArray();
         Assert.AreEqual(0, autoFlushed2.Count, "report-once: second call must find autoFlushed empty");
     }
+
+    [TestMethod]
+    public void ForeignNotice_Blocking_WhenNoGamingTarget()
+    {
+        // No recent_write candidate → the foreign player is a genuine "do not tag" warning.
+        var candidates = new[]
+        {
+            new WatchingCandidate("a.mp4", "a.mp4", AccessTimeSignal.SourceName, null,
+                DateTime.UtcNow, 1.0, false, "low"),
+        };
+        Assert.IsTrue(ClipMetaMcp.Tools.ReadTools.ForeignNoticeIsBlocking(candidates));
+    }
+
+    [TestMethod]
+    public void ForeignNotice_NonBlocking_WhenGamingTargetPresent()
+    {
+        // A recent_write (gaming) candidate is present → the foreign player is demoted to advisory.
+        var candidates = new[]
+        {
+            new WatchingCandidate("saved.mp4", "saved.mp4", RecentWriteSignal.SourceName, null,
+                DateTime.UtcNow, 0.0, false, "high"),
+        };
+        Assert.IsFalse(ClipMetaMcp.Tools.ReadTools.ForeignNoticeIsBlocking(candidates));
+    }
 }
