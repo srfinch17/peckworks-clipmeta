@@ -8,6 +8,35 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-27 — A foreign-player lock must not suppress a fresh in-library save
+**Symptom:** With a media player paused on a file OUTSIDE the library, a brand-new game clip saved
+INTO the library returned `candidateCount: 0` and a blocking `player_outside_library` warning — the
+fresh save was invisible.
+**Cause:** `WatchingResolver.ResolveCore`'s `suppressAccessFallback` branch (a player on a foreign
+file ⇒ "user isn't gaming") dropped EVERY non-player hit, including the just-saved `recent_write`
+gaming candidate. A foreign lock and an in-library save are independent signals — you cannot tag a
+foreign file anyway.
+**Fix:** A single unambiguous `recent_write` hit (Policy A) survives the suppression; several fresh
+saves at once stay suppressed. At the MCP layer, `player_outside_library` demotes to a non-blocking
+`advisory` (`player_outside_library_ignored`) whenever a gaming candidate is present, so `warning`
+stays semantically "do not tag."
+**Lesson:** Two independent suppression conditions that happen to co-occur in one branch (foreign
+player + no gaming) will silently couple. When a new signal (gaming `recent_write`) is added, audit
+every existing branch that drops "non-player" hits — the new signal is non-player too.
+
+## 2026-06-27 — Review advisories must resolve segment titles to library names
+**Symptom:** `review[]` advisories listed duplicate entries and, for VLC, raw window-title strings
+and the bare process name `"vlc"` instead of clip names; `sequenceSkip` repeated `DVR_5` five times.
+**Cause:** `ReviewFlag.Clips` carried `TitleSegment.RawTitle` verbatim via `Display(s)`. MPC titles
+are full paths (look clean); VLC titles are the bare filename or `"vlc"` (look garbled); a replayed
+clip creates multiple segments with the same title (no dedup). The advisory builder and the
+candidate resolver are DIFFERENT sources — `include_access_fallback:false` cleans the candidate list
+but NOT the segment-derived advisories (a misdiagnosis to avoid).
+**Fix:** `ReviewFlagResolver.Resolve` maps each clip string through `LibraryTitleMatcher`, drops
+unresolvable entries, and dedups — wired into `ResolveReview` after the context is built.
+**Lesson:** A "residue in the advisory" symptom can have two distinct sources (segment history vs
+access-time fallback). Confirm WHICH list the strings come from before designing the fix.
+
 ## 2026-06-26 — Adding a ledger/creation-time signal makes test fixture timestamps load-bearing
 **Symptom:** When `RecentWriteSignal` was extended with a self-action ledger and keyed on NTFS
 creation time instead of write time, a broad wave of watching tests broke: tests that had nothing
