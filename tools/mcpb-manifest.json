@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "clipmeta",
   "display_name": "ClipMeta",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Read, search, and write game-clip metadata stored inside MP4 files.",
   "author": {
     "name": "Peckworks Lab"

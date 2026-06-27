@@ -8,6 +8,59 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-26 — Adding a ledger/creation-time signal makes test fixture timestamps load-bearing
+**Symptom:** When `RecentWriteSignal` was extended with a self-action ledger and keyed on NTFS
+creation time instead of write time, a broad wave of watching tests broke: tests that had nothing
+to do with gaming mode started failing because their `TouchStale` helper only back-dated
+`LastWriteTimeUtc` — creation time and access time were still "now" and the new signal fired.
+**Cause:** Every new signal that reads a file's timestamp silently turns the fixture-creation
+machinery into signal input. `TouchStale` was written to satisfy `RecentWriteSignal` v1 (write-time
+only); adding creation time and ledger signals expanded what "stale" means without updating the
+helper.
+**Fix:** `TouchStale` now sets ALL THREE timestamps (`CreationTimeUtc`, `LastWriteTimeUtc`,
+`LastAccessTimeUtc`) to a far-past value. Any test whose outcome depends on a timestamp signal
+must set that timestamp **explicitly** — implicit "just created" times are forbidden in
+timestamp-dependent test fixtures.
+**Lesson:** When a signal's inputs grow (new timestamp field, new ledger entry), every test
+helper that produces signal inputs must be audited and updated to cover the new fields. A helper
+named `TouchStale` that only sets one of three timestamps is a latent "freshness leak" waiting
+for the next signal extension.
+
+## 2026-06-26 — `recent_write` must key on CREATION time, not write time
+**Symptom (two failure modes):** (1) A clip copied into the library (e.g. via Windows Explorer
+or robocopy) looked OLD to `RecentWriteSignal` and was invisible to gaming mode — copy preserves
+the source file's original `LastWriteTimeUtc`, so a clip made yesterday but copied now has an
+old mtime. (2) ClipMeta's own `File.Replace` on a tag write bumped `LastWriteTimeUtc` to *now*,
+making a just-tagged clip a "just captured" false-positive live target on the next resolution.
+**Cause:** `RecentWriteSignal` v1 keyed on `LastWriteTimeUtc` (the file write time). On Windows,
+copy-into-library preserves source mtime; `File.Replace` always updates it. Both are OS
+behaviors that cannot be changed without imposing side-effects.
+**Fix:** Switch the freshness key to NTFS creation time (`CreationTimeUtc`) — copy-into-library
+stamps a new creation time (the clip is genuinely new to this machine), and `File.Replace` does
+NOT update creation time. Add two corroborating filters: an index-baseline check (a clip absent
+from `.clipmeta-index` is treated as newly arrived) and a self-action ledger (paths ClipMeta
+itself just wrote are excluded from the live-target candidates, preventing self-write false positives).
+**Lesson:** "Recently written" in the gaming-mode sense means "newly arrived on this machine,"
+not "file bytes recently changed." NTFS creation time is the right proxy for "new arrival,"
+because copy-into-library resets it while ClipMeta's own rewrites do not.
+
+## 2026-06-26 — Background drain pump discarded its `DrainReport`; user-facing drain saw an empty queue
+**Symptom:** A dogfood clip tagged while playing drained correctly (the tag landed on disk), but
+`library_queue_status` and `library_flush_queue` reported `written: []` as if nothing had been
+queued — even on the very next call after the tag drained. Silent success, misleading feedback.
+**Cause:** `QueueDrainPump` called an internal drain helper that returned a `DrainReport` and
+then discarded it. The foreground tools (`library_queue_status` / `library_flush_queue`) each
+read the queue state fresh from disk — after the pump had already drained it to empty — so they
+found nothing to report. The tag landed, but the report of what landed was gone.
+**Fix:** Introduce `DrainJournal` (a thread-safe, bounded ring of recent `DrainReport`s keyed
+by clip path). The pump writes to the journal on every drain; foreground tools read the journal
+and surface its entries in `autoFlushed`. A journal entry is removed once surfaced so it fires
+exactly once. `library_watching` also drains opportunistically and writes to the same journal
+so all drain paths share one report channel.
+**Lesson:** A background writer that silently succeeds is only half done — it must also leave a
+report somewhere the foreground can find it. "Wire a silent background writer to a report-once
+journal the foreground surfaces" is now the pattern for every drain path in this codebase.
+
 ## 2026-06-26 — Gaming mode: a freshly-`Touch()`ed test clip is a "recent write", which silently changed access-time tests
 **Symptom:** Adding `RecentWriteSignal` (gaming mode — resolve a clip just saved to disk when no player
 is open) flipped several long-standing watching tests: candidates that asserted `Source == "access_time"`
