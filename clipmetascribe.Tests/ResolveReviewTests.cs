@@ -87,6 +87,46 @@ public class ResolveReviewTests
         Assert.IsFalse(r.RecommendationConfident, "no confident single bind when two players are active");
     }
 
+    [TestMethod]
+    public void ResolveReview_TwoPlayersOpenFarApart_FlagsMultiPlayer()
+    {
+        // #2: two players each open a clip, started 20s apart (NOT near-simultaneous). The old rule
+        // missed this; the widened rule fires multiplePlayersActive whenever two players are open.
+        Touch("a.mp4");
+        Touch("b.mp4");
+        var segs = new[]
+        {
+            new TitleSegment(1, "vlc", $"{Path.Combine(_dir, "a.mp4")} - VLC media player", T0, null),
+            new TitleSegment(2, "mpc-hc64", $"{Path.Combine(_dir, "b.mp4")} - MPC-HC", T0.AddSeconds(20), null),
+        };
+
+        WatchingResult r = Resolver().ResolveReview(_dir, segs, -1, T0.AddSeconds(40), 5, true);
+
+        Assert.IsTrue(r.Review!.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive),
+            "two open players started far apart must still flag multiplePlayersActive");
+    }
+
+    [TestMethod]
+    public void ResolveReview_MultiPlayer_CapsConfidenceAndNotLive()
+    {
+        // #2 cap: when multiplePlayersActive fires, the caller must confirm — anyLiveTarget is false
+        // and no candidate is high, even if a clip is locked.
+        string a = Touch("a.mp4");
+        string b = Touch("b.mp4");
+        using var holdB = new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var segs = new[]
+        {
+            new TitleSegment(1, "vlc", $"{a} - VLC media player", T0, null),
+            new TitleSegment(2, "mpc-hc64", $"{b} - MPC-HC", T0.AddSeconds(20), null),
+        };
+
+        WatchingResult r = Resolver().ResolveReview(_dir, segs, -1, T0.AddSeconds(40), 5, true);
+
+        Assert.IsFalse(r.AnyLiveTarget, "two open players → not an auto-tag target");
+        Assert.IsTrue(r.Candidates.All(c => c.Confidence == "low"),
+            "every candidate is demoted to low under multiplePlayersActive");
+    }
+
     // ── AC2: spoken-at exact-timestamp binding ───────────────────────────────────────────
 
     [TestMethod]
@@ -113,6 +153,26 @@ public class ResolveReviewTests
         Assert.AreEqual(2, r.BoundSegmentId);
         Assert.IsFalse(r.Review?.Any(f => f.Type == ReviewFlag.TypeAutoCorrected) ?? false,
             "an exact-timestamp bind is not an auto-correction");
+    }
+
+    [TestMethod]
+    public void ResolveReview_MultiPlayerFlag_ClipsAreResolvedLibraryNames()
+    {
+        // #6 end-to-end: the multiplePlayersActive advisory lists clean library basenames, not raw
+        // VLC titles. (a.mp4 via VLC bare name, b.mp4 via MPC full path → both resolve.)
+        Touch("a.mp4");
+        Touch("b.mp4");
+        var segs = new[]
+        {
+            new TitleSegment(1, "vlc", "a.mp4 - VLC media player", T0, null),
+            new TitleSegment(2, "mpc-hc64", $"{Path.Combine(_dir, "b.mp4")} - MPC-HC", T0.AddSeconds(20), null),
+        };
+
+        WatchingResult r = Resolver().ResolveReview(_dir, segs, -1, T0.AddSeconds(40), 5, true);
+
+        ReviewFlag flag = r.Review!.Single(f => f.Type == ReviewFlag.TypeMultiplePlayersActive);
+        CollectionAssert.AreEquivalent(new[] { "a.mp4", "b.mp4" }, flag.Clips.ToList(),
+            "advisory clips are resolved library basenames, deduped, no raw titles");
     }
 
     [TestMethod]

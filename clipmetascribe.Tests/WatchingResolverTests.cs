@@ -297,7 +297,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback()
     {
-        Touch("inlibrary.mp4"); // exists, but nobody is playing it
+        TouchStale("inlibrary.mp4"); // exists, not fresh — no gaming target, pure suppression case
 
         WatchingResult result = Resolver(new ProcessWindow("mpc-hc64", @"D:\elsewhere\foreign.mp4 - MPC-HC"))
             .Resolve(_tempDir, 5, includeAccessFallback: true);
@@ -312,7 +312,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_BareNameForeignFile_HasNoForeignDirectory()
     {
-        Touch("inlibrary.mp4");
+        TouchStale("inlibrary.mp4");
 
         WatchingResult result = Resolver(new ProcessWindow("vlc", "foreign.mp4 - VLC media player"))
             .Resolve(_tempDir, 5, includeAccessFallback: true);
@@ -460,6 +460,40 @@ public class WatchingResolverTests
         IReadOnlyList<WatchingCandidate> result = Candidates(Resolver(), _tempDir, 5, false);
 
         Assert.AreEqual(0, result.Count);
+    }
+
+    [TestMethod]
+    public void Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression()
+    {
+        // #1 (P0): a player is open on a file OUTSIDE the library AND one clip was just saved into
+        // the library. The foreign lock and an in-library save are independent — the fresh save must
+        // surface as the high-confidence gaming target, not be suppressed to zero candidates.
+        string saved = Touch("saved.mp4"); // fresh creation time → a recent_write candidate
+
+        WatchingResult result = Resolver(new ProcessWindow("vlc", @"D:\elsewhere\foreign.mp4 - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        WatchingCandidate top = result.Candidates.Single(c => c.Name == "saved.mp4");
+        Assert.AreEqual(saved, top.Path);
+        Assert.AreEqual(RecentWriteSignal.SourceName, top.Source);
+        Assert.AreEqual("high", top.Confidence);
+        Assert.IsTrue(result.AnyLiveTarget, "a single fresh save is a live target even with a foreign player open");
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count, "the foreign player is still reported");
+    }
+
+    [TestMethod]
+    public void Resolve_ForeignPlayer_MultipleFreshSaves_StaySuppressed()
+    {
+        // Several fresh saves at once is NOT Policy A — ambiguous, so the foreign-player suppression
+        // still applies and nothing surfaces (the model must not auto-pick among them).
+        Touch("one.mp4");
+        Touch("two.mp4");
+
+        WatchingResult result = Resolver(new ProcessWindow("vlc", @"D:\elsewhere\foreign.mp4 - VLC media player"))
+            .Resolve(_tempDir, 5, includeAccessFallback: true);
+
+        Assert.AreEqual(0, result.Candidates.Count, "multiple fresh saves stay suppressed under a foreign player");
+        Assert.AreEqual(1, result.Diagnostics.UnresolvedPlayers.Count);
     }
 
     // ── Ledger exclusion: self-written clips must not surface as gaming live targets ─────

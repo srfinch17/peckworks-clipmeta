@@ -79,20 +79,18 @@ public static class ReviewBindingResolver
     {
         TitleSegment current = ordered[^1];
 
-        // Ambiguity: another player produced an OPEN segment within the threshold window of `current`.
-        bool multiPlayer = ordered.Any(s =>
-            !string.Equals(s.ProcessName, current.ProcessName, StringComparison.OrdinalIgnoreCase) &&
-            (current.StartedAt - s.StartedAt).Duration() <= threshold &&
-            s.EndedAt is null);
-        if (multiPlayer)
+        // Ambiguity (#2): two or more distinct players currently have an OPEN segment. Any such
+        // overlap is too ambiguous to bind — independent of when each started (the old near-
+        // simultaneous-start rule missed players opened seconds apart, the common case).
+        List<TitleSegment> openSegments = ordered.Where(s => s.EndedAt is null).ToList();
+        int openPlayers = openSegments
+            .Select(s => s.ProcessName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (openPlayers > 1)
             return new ReviewBinding(
                 null, null, 0, true,
-                new[]
-                {
-                    new ReviewFlag(
-                        ReviewFlag.TypeMultiplePlayersActive,
-                        NamesOf(ordered.Where(s => s.EndedAt is null))),
-                });
+                new[] { new ReviewFlag(ReviewFlag.TypeMultiplePlayersActive, NamesOf(openSegments)) });
 
         // Previous-stable correction.
         TitleSegment chosen = current;

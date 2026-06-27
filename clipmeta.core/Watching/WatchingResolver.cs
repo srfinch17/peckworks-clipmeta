@@ -132,8 +132,19 @@ public sealed class WatchingResolver
         // A corrected/confident bind is a live target even when unlocked.
         bool anyLive = core.AnyLiveTarget || confident;
 
+        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first.
+        // Nothing is an auto-tag target and no candidate may read high, even a locked one.
+        if (binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive))
+        {
+            anyLive = false;
+            candidates = candidates
+                .Select(c => c.Confidence == HighConfidence ? c with { Confidence = LowConfidence } : c)
+                .ToList();
+        }
+
         return new WatchingResult(
-            candidates, core.Diagnostics, anyLive, binding.Flags, boundId, confident);
+            candidates, core.Diagnostics, anyLive,
+            ReviewFlagResolver.Resolve(binding.Flags, context), boundId, confident);
     }
 
     /// <summary>
@@ -181,9 +192,17 @@ public sealed class WatchingResolver
             if (!hasPlayer && !includeAccessFallback)
                 continue;
             // The wrong-directory suppression (a player on a foreign file) means the user is NOT
-            // gaming, so it suppresses every non-player guess, recent-write included.
+            // gaming — so it suppresses access-time guesses. EXCEPTION (#1, Policy A): a single
+            // unambiguous just-saved clip is a legitimate in-library gaming target and the foreign
+            // lock (on a file you cannot tag anyway) must not hide it. Several fresh saves at once
+            // are ambiguous and stay suppressed.
             if (!hasPlayer && suppressAccessFallback)
-                continue;
+            {
+                bool soleFreshSave = hasRecentWrite &&
+                    hits.Any(h => h.Source == RecentWriteSignal.SourceName && !h.Ambiguous);
+                if (!soleFreshSave)
+                    continue;
+            }
 
             if (!context.ByFullPath.TryGetValue(path, out LibraryClip? clip))
                 continue;

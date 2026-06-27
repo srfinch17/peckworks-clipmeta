@@ -659,13 +659,26 @@ public static class ReadTools
                     ["referencedName"] = up.ReferencedName,
                     ["foreignDirectory"] = up.ForeignDirectory,
                 });
-            response["warning"] = new JsonObject
-            {
-                ["type"] = "player_outside_library",
-                ["message"] = "A media player is showing a file that is not in the configured clips " +
-                              "library. The user may be playing from the wrong folder. Do not tag.",
-                ["unresolvedPlayers"] = players,
-            };
+
+            if (ForeignNoticeIsBlocking(result.Candidates))
+                response["warning"] = new JsonObject
+                {
+                    ["type"] = "player_outside_library",
+                    ["message"] = "A media player is showing a file that is not in the configured clips " +
+                                  "library. The user may be playing from the wrong folder. Do not tag.",
+                    ["unresolvedPlayers"] = players,
+                };
+            else
+                // #1: a fresh in-library save was detected — the gaming candidate is the live target,
+                // so the foreign player is informational only (never "do not tag").
+                response["advisory"] = new JsonObject
+                {
+                    ["type"] = "player_outside_library_ignored",
+                    ["message"] = "A media player is showing a file outside the library, but a fresh " +
+                                  "in-library save was detected — the gaming candidate below is the live " +
+                                  "target. The foreign player was ignored.",
+                    ["unresolvedPlayers"] = players,
+                };
         }
 
         // Always echo the drain outcome + remaining queue depth so a caller can confirm a queued
@@ -729,6 +742,15 @@ public static class ReadTools
     }
 
     // ── Shared plumbing ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether an open foreign player should be reported as a BLOCKING "do not tag" warning. False
+    /// when the candidate list already contains a gaming target (a <c>recent_write</c> candidate): a
+    /// foreign lock is on a file you cannot tag anyway, so it must not block a valid in-library save —
+    /// it demotes to a non-blocking advisory instead (#1).
+    /// </summary>
+    internal static bool ForeignNoticeIsBlocking(IReadOnlyList<WatchingCandidate> candidates) =>
+        !candidates.Any(c => c.Source == RecentWriteSignal.SourceName);
 
     /// <summary>Parses an MP4, converting Core's exceptions into model-readable refusals.</summary>
     internal static BoxNode ParseClip(string fullPath)
