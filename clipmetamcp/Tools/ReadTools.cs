@@ -39,8 +39,18 @@ public static class ReadTools
     /// Registers all read tools against the given sandbox. When <paramref name="watcher"/> is supplied,
     /// library_watching resolves the watched clip from the watcher's title-segment history (the
     /// previous-stable heuristic) instead of a one-shot poll; null keeps today's live-poll behavior.
+    /// When <paramref name="ledger"/> is supplied, <c>clip_get_metadata</c> and <c>library_export</c>
+    /// mark each content-read path in the ledger (so access-time signals can subtract self-reads), and
+    /// <c>library_watching</c> threads it into <see cref="WatchingResolver.CreateDefault"/> so
+    /// gaming-mode detection excludes clips ClipMeta itself tagged. When <paramref name="journal"/> is
+    /// supplied, <c>library_watching</c> surfaces any tags the background <see cref="QueueDrainPump"/>
+    /// auto-flushed since the last call as <c>autoFlushed</c> (report-once: <see cref="DrainJournal.TakePending"/>
+    /// clears the buffer).
     /// </summary>
-    public static void RegisterAll(ToolRegistry registry, LibrarySandbox sandbox, ReviewWatcher? watcher = null)
+    public static void RegisterAll(
+        ToolRegistry registry, LibrarySandbox sandbox,
+        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null,
+        DrainJournal? journal = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -54,7 +64,7 @@ public static class ReadTools
             " For MANY clips, do NOT call this per file — library_export returns every clip's " +
             "metadata in one call, and library_search_index answers field queries in one call.",
             SinglePathSchema(),
-            args => GetMetadata(args, sandbox),
+            args => GetMetadata(args, sandbox, ledger),
             clipPath => new JsonObject { ["path"] = clipPath }));
 
         registry.Register(new ToolDefinition(
@@ -100,7 +110,7 @@ public static class ReadTools
             "known ones). Ordered alphabetically by path (note: library_list orders newest " +
             "first). Requires a configured clips library.",
             ExportSchema(),
-            args => ExportLibrary(args, sandbox),
+            args => ExportLibrary(args, sandbox, ledger),
             _ => new JsonObject()));
 
         registry.Register(new ToolDefinition(
@@ -145,7 +155,7 @@ public static class ReadTools
             "multiplePlayersActive, timestampUnmatched) to mention to the user and reconcile later — never block the run to ask. " +
             "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
-            args => Watching(args, sandbox, watcher),
+            args => Watching(args, sandbox, watcher, ledger, journal),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
     }
 
@@ -311,12 +321,15 @@ public static class ReadTools
     /// One call, the whole picture. Field-report driven (2026-06-12): the first consumer agent
     /// needed values AND set/unset/custom categorization for one clip and had to make two calls
     /// (clip_get_metadata + the since-removed clip_get_stats), each a full MP4 parse. The file
-    /// is already parsed here — return everything.
+    /// is already parsed here — return everything. When <paramref name="ledger"/> is non-null,
+    /// marks the path as read so access-time signals can subtract self-reads; internal utility
+    /// calls (e.g. ground-truth read-back in ExecuteWrite) pass null and are not marked.
     /// </summary>
-    internal static JsonObject GetMetadata(JsonObject? args, LibrarySandbox sandbox)
+    internal static JsonObject GetMetadata(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
         BoxNode root = ParseClip(fullPath);
+        ledger?.MarkRead(fullPath);
 
         // GetUserFields already excludes internal bookkeeping fields. It can legitimately return
         // the same field name more than once (a file holding duplicate clipmeta atoms, e.g.
@@ -432,7 +445,11 @@ public static class ReadTools
         };
     }
 
-    private static JsonObject ExportLibrary(JsonObject? args, LibrarySandbox sandbox)
+    /// <summary>
+    /// Exports every clip's metadata. When <paramref name="ledger"/> is non-null, marks each
+    /// exported clip path as read so access-time signals can subtract these content reads.
+    /// </summary>
+    private static JsonObject ExportLibrary(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
         string directory = sandbox.ResolveLibraryDirectory(GetOptionalString(args, "subfolder"));
         string format = GetOptionalString(args, "format")?.ToLowerInvariant() ?? "json";
@@ -441,6 +458,8 @@ public static class ReadTools
 
         IEnumerable<string> paths = Directory.EnumerateFiles(directory, "*.mp4", SearchOption.AllDirectories);
         IReadOnlyList<ExportRecord> records = ClipMetaExporter.GetRecords(paths);
+        foreach (ExportRecord record in records)
+            ledger?.MarkRead(record.FilePath);
 
         if (format == "csv")
         {
@@ -532,7 +551,17 @@ public static class ReadTools
         return result;
     }
 
-    private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox, ReviewWatcher? watcher = null)
+    /// <summary>
+    /// Resolves the watched clip and returns ranked candidates. When <paramref name="ledger"/> is
+    /// non-null it is threaded into <see cref="WatchingResolver.CreateDefault"/> so
+    /// gaming-mode (<c>recent_write</c>) detection excludes paths ClipMeta itself tagged. When
+    /// <paramref name="journal"/> is non-null, tags the background pump auto-flushed since the
+    /// last call are surfaced as <c>autoFlushed</c> (report-once via <see cref="DrainJournal.TakePending"/>).
+    /// </summary>
+    private static JsonObject Watching(
+        JsonObject? args, LibrarySandbox sandbox,
+        ReviewWatcher? watcher = null, SelfActionLedger? ledger = null,
+        DrainJournal? journal = null)
     {
         string root = sandbox.RequireRoot();
 
@@ -559,7 +588,7 @@ public static class ReadTools
         bool includeAccessFallback = GetOptionalBool(args, "include_access_fallback", defaultValue: true);
         DateTimeOffset? spokenAt = ParseSpokenAt(args);
 
-        var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform());
+        var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform(), ledger);
         WatchingResult result = watcher is null
             ? resolver.Resolve(root, limit, includeAccessFallback)
             : resolver.ResolveReview(root, watcher.Snapshot(), watcher.LastBoundId,
@@ -649,6 +678,12 @@ public static class ReadTools
             ["stillQueued"] = drained.StillQueued.Count,
         };
         response["queuePending"] = TagQueue.Status(root, LockProbe.IsInUse).Count;
+
+        // P0-1: surface tags the BACKGROUND pump auto-flushed since the last call (it writes the
+        // last clip when its player closes but reports to no one). Report-once: TakePending clears.
+        // Shape is built by QueueTools.AutoFlushedJson — single source so queue tools and watching
+        // emit identical path/fields/agoSeconds entries (agoSeconds is clamped ≥ 0 there).
+        response["autoFlushed"] = QueueTools.AutoFlushedJson(journal);
 
         return response;
     }
@@ -787,5 +822,45 @@ public static class ReadTools
         if (node is JsonValue value && value.TryGetValue(out int number))
             return number;
         throw new ToolException($"The '{name}' argument must be an integer when given.");
+    }
+
+    /// <summary>
+    /// Builds the soft "unknownPlayer" review array for a players value, or null when every token is
+    /// known. Known = library vocab players ∪ the optional session roster arg. Never blocks the write.
+    /// </summary>
+    internal static JsonArray? UnknownPlayerReview(string? playersValue, string root, JsonArray? roster)
+    {
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (string name in ClipMetaVocab.Enumerate(root, ClipMetaSchema.Players).Counts.Keys)
+                known.Add(name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return null; // enumeration failure degrades to no advisory so the write proceeds unblocked
+        }
+        if (roster is not null)
+            foreach (JsonNode? n in roster)
+                if (n?.GetValue<string>() is { Length: > 0 } s)
+                    known.Add(s.Trim());
+
+        IReadOnlyList<string> unknown = PlayerRosterGuard.UnknownPlayers(playersValue, known);
+        if (unknown.Count == 0)
+            return null;
+
+        var knownArr = new JsonArray();
+        foreach (string k in known.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            knownArr.Add(k);
+
+        var review = new JsonArray();
+        foreach (string token in unknown)
+            review.Add(new JsonObject
+            {
+                ["type"] = "unknownPlayer",
+                ["token"] = token,
+                ["knownPlayers"] = knownArr.DeepClone(),
+            });
+        return review;
     }
 }

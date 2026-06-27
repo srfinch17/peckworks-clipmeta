@@ -96,6 +96,15 @@ internal static class Program
             var sandbox = LibrarySandbox.FromEnvironment();
             var registry = new ToolRegistry();
 
+            // One ledger for the whole process: write tools mark paths they write, and the watching
+            // resolver reads it so gaming-mode detection (RecentWriteSignal) can exclude clips
+            // ClipMeta itself just tagged from the "fresh user game-save" signal.
+            var selfLedger = new SelfActionLedger();
+
+            // P0-1 drain visibility: the background pump writes clips silently; the journal captures
+            // each auto-flush and surfaces it once via the next library_watching / flush / status call.
+            var drainJournal = new DrainJournal();
+
             // Zero-touch flush: a background pump drains the queue as locks clear, so the last clip
             // of a session lands when its player closes without an explicit library_flush_queue.
             // Only meaningful with a configured library; drains run under the same WriteGate as every
@@ -111,7 +120,8 @@ internal static class Program
                         try { action(); }
                         finally { WriteGate.Exit(); }
                     },
-                    pollInterval: TimeSpan.FromSeconds(3));
+                    pollInterval: TimeSpan.FromSeconds(3),
+                    journal: drainJournal);
                 pump.Start();
             }
 
@@ -129,9 +139,9 @@ internal static class Program
                 reviewWatcher.Start();
             }
 
-            ReadTools.RegisterAll(registry, sandbox, reviewWatcher);
-            WriteTools.RegisterAll(registry, sandbox);
-            QueueTools.RegisterAll(registry, sandbox, pump);
+            ReadTools.RegisterAll(registry, sandbox, reviewWatcher, selfLedger, drainJournal);
+            WriteTools.RegisterAll(registry, sandbox, selfLedger);
+            QueueTools.RegisterAll(registry, sandbox, pump, drainJournal);
 
             logger.Log(
                 $"clipmetamcp {McpSession.ServerVersion} serving; protocol {McpSession.LatestProtocolVersion}; " +

@@ -30,14 +30,17 @@ public class WatchingResolverTests
     }
 
     /// <summary>
-    /// Touch, then back-date the write time well outside the recent-write window, so the file is a
-    /// pure access-time fallback candidate (not a gaming-mode "just saved" clip). Used by the tests
-    /// that specifically pin the access-time fallback contract.
+    /// Touch, then back-date BOTH write time AND creation time well outside the recent-write window,
+    /// so the file is a pure access-time fallback candidate (not a gaming-mode "just saved" clip).
+    /// The predicate now keys on <see cref="LibraryClip.CreationTimeUtc"/>, so back-dating write time
+    /// alone was no longer sufficient — the file's real creation time would still look fresh.
     /// </summary>
     private string TouchStale(string name)
     {
         string path = Touch(name);
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-1));
+        DateTime old = DateTime.UtcNow.AddDays(-1);
+        File.SetLastWriteTimeUtc(path, old);
+        File.SetCreationTimeUtc(path, old);
         return path;
     }
 
@@ -457,5 +460,26 @@ public class WatchingResolverTests
         IReadOnlyList<WatchingCandidate> result = Candidates(Resolver(), _tempDir, 5, false);
 
         Assert.AreEqual(0, result.Count);
+    }
+
+    // ── Ledger exclusion: self-written clips must not surface as gaming live targets ─────
+
+    [TestMethod]
+    public void Resolve_SingleFreshClip_SelfWritten_IsNotLiveTarget()
+    {
+        // A clip whose fresh creation time would normally make it a gaming-mode live target
+        // must be excluded when the ledger records that ClipMeta itself wrote it (i.e. a
+        // tag-write bumped the write time but ClipMeta stamped it — not a user game-save).
+        string clip = Path.Combine(_tempDir, "fresh.mp4");
+        File.WriteAllBytes(clip, new byte[] { 0, 1, 2 });   // fresh creation time
+
+        var ledger = new SelfActionLedger();
+        ledger.MarkWritten(clip);          // ClipMeta wrote it -> not a user save
+
+        var resolver = WatchingResolver.CreateDefault(EmptyProcessWindowSource.Instance, ledger);
+        WatchingResult result = resolver.Resolve(_tempDir, limit: 5, includeAccessFallback: true);
+
+        Assert.IsFalse(result.Candidates.Any(c => c.Source == RecentWriteSignal.SourceName),
+            "a self-written clip must not surface as a recent_write gaming target");
     }
 }

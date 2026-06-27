@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using ClipMetaCore.Logging;
+using ClipMetaCore.Watching;
 using ClipMetaMcp.Protocol;
 using ClipMetaMcp.Tools;
 
@@ -40,6 +41,57 @@ internal static class McpHarness
         ReadTools.RegisterAll(registry, sandbox);
         WriteTools.RegisterAll(registry, sandbox);
         QueueTools.RegisterAll(registry, sandbox);
+
+        using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
+        using var output = new StringWriter();
+        new McpSession(input, output, registry, NullLogger.Instance).Run();
+
+        return output.ToString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => (JsonObject)JsonNode.Parse(line)!)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Like <see cref="Run"/>, but wires a shared <paramref name="ledger"/> into both
+    /// <see cref="ReadTools"/> and <see cref="WriteTools"/>. Use this when a test needs to
+    /// verify that a write marks the ledger and a subsequent watch call honours that mark —
+    /// the same instance must back both, mirroring <c>Program.cs</c> production wiring.
+    /// </summary>
+    public static IReadOnlyList<JsonObject> RunWithLedger(
+        string? libraryRoot, SelfActionLedger ledger, params string[] requestLines)
+    {
+        var registry = new ToolRegistry();
+        var sandbox = new LibrarySandbox(libraryRoot);
+        ReadTools.RegisterAll(registry, sandbox, watcher: null, ledger: ledger);
+        WriteTools.RegisterAll(registry, sandbox, ledger);
+        QueueTools.RegisterAll(registry, sandbox);
+
+        using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
+        using var output = new StringWriter();
+        new McpSession(input, output, registry, NullLogger.Instance).Run();
+
+        return output.ToString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => (JsonObject)JsonNode.Parse(line)!)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Like <see cref="Run"/>, but wires a shared <paramref name="journal"/> into
+    /// <see cref="ReadTools"/> so <c>library_watching</c> surfaces pump auto-flushes as
+    /// <c>autoFlushed</c> (report-once). Use this to verify drain-visibility behaviour —
+    /// the same journal instance must back both the pump and the tool registration, mirroring
+    /// <c>Program.cs</c> production wiring.
+    /// </summary>
+    public static IReadOnlyList<JsonObject> RunWithJournal(
+        string? libraryRoot, DrainJournal journal, params string[] requestLines)
+    {
+        var registry = new ToolRegistry();
+        var sandbox = new LibrarySandbox(libraryRoot);
+        ReadTools.RegisterAll(registry, sandbox, watcher: null, ledger: null, journal: journal);
+        WriteTools.RegisterAll(registry, sandbox);
+        QueueTools.RegisterAll(registry, sandbox, pump: null, journal: journal);
 
         using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
         using var output = new StringWriter();

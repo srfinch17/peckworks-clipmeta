@@ -141,6 +141,42 @@ public class QueueDrainPumpTests
         Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(5), "Dispose must stop and join the loop, not hang");
     }
 
+    [TestMethod]
+    public void Pump_RecordsAutoFlush_IntoJournal()
+    {
+        // Arrange: one queued clip, immediately free (isInUse always false).
+        string clip = EnqueueClip("journal-clip.mp4");
+        var writer = new RecordingWriter();
+        var journal = new DrainJournal();
+
+        using var pump = new QueueDrainPump(
+            _dir, writer, NullLogger.Instance,
+            isInUse: _ => false,
+            runExclusive: a => a(),
+            pollInterval: TimeSpan.FromMilliseconds(20),
+            journal: journal);
+        pump.Start();
+        pump.Wake();
+
+        // Act: wait generously (15s — pass-3 background-timing lesson). Spin via TakePending;
+        // each call that finds nothing returns [] and clears nothing — safe to repeat.
+        IReadOnlyList<DrainedTag> taken = Array.Empty<DrainedTag>();
+        bool recorded = SpinWait.SpinUntil(() =>
+        {
+            taken = journal.TakePending();
+            return taken.Count > 0;
+        }, TimeSpan.FromSeconds(15));
+
+        // Assert: journal captured exactly one auto-flush for our clip.
+        Assert.IsTrue(recorded, "pump must record the auto-flush into the journal within 15s");
+        Assert.AreEqual(1, taken.Count, "exactly one DrainedTag expected");
+        Assert.AreEqual(clip, taken[0].Path, StringComparer.OrdinalIgnoreCase, "path must match the queued clip");
+        CollectionAssert.Contains(taken[0].Fields.ToList(), "tags", "fields must include 'tags'");
+
+        // Report-once: TakePending already cleared the buffer; a second call must return empty.
+        Assert.AreEqual(0, journal.TakePending().Count, "TakePending must clear — report once");
+    }
+
     private sealed class ExclusiveAssertingWriter(Func<bool> isExclusive, RecordingWriter inner) : IMediaWriter
     {
         public bool WasExclusive { get; private set; }

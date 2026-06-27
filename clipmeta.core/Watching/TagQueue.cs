@@ -146,8 +146,15 @@ public static class TagQueue
     /// <param name="writer">Write engine (production: <c>new Mp4Writer()</c>).</param>
     /// <param name="logger">Logger passed to the write engine.</param>
     /// <param name="isInUse">Lock predicate (production: <c>LockProbe.IsInUse</c>).</param>
+    /// <param name="onWritten">
+    /// Optional callback invoked for each clip successfully written. Only the background
+    /// <see cref="QueueDrainPump"/> supplies this (to feed a <see cref="DrainJournal"/>);
+    /// synchronous callers pass <see langword="null"/> — they surface results directly in
+    /// their own response and must not double-report. Never throws out of the drain.
+    /// </param>
     public static DrainReport Drain(
-        string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string, bool> isInUse)
+        string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string, bool> isInUse,
+        Action<DrainedTag>? onWritten = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(isInUse);
@@ -166,6 +173,12 @@ public static class TagQueue
             {
                 writer.WriteMetadata(entry.ClipPath, entry.Mutation.ToMutation(), logger);
                 written.Add(entry.ClipPath);
+                try
+                {
+                    onWritten?.Invoke(new DrainedTag(
+                        entry.ClipPath, ChangedFields(entry.Mutation), DateTimeOffset.UtcNow));
+                }
+                catch { /* journal is best-effort telemetry; never break a drain */ }
             }
             catch (Exception ex) when (
                 ex is IOException or UnauthorizedAccessException or InvalidDataException
@@ -186,6 +199,16 @@ public static class TagQueue
         return new DrainReport(written, stillQueued, dropped);
     }
 
+    /// <summary>User-facing names of the fields a queued mutation changes (set/append/delete).</summary>
+    private static List<string> ChangedFields(QueuedMutation mutation)
+    {
+        var changed = new List<string>();
+        changed.AddRange(mutation.SetFields.Keys.Select(DisplayField));
+        changed.AddRange(mutation.AppendFields.Keys.Select(DisplayField));
+        changed.AddRange(mutation.DeleteFields.Select(DisplayField));
+        return changed;
+    }
+
     /// <summary>Returns a read-only view of every pending entry, with its current lock state.</summary>
     public static IReadOnlyList<QueueStatusEntry> Status(string libraryDir, Func<string, bool> isInUse)
     {
@@ -195,12 +218,8 @@ public static class TagQueue
         var rows = new List<QueueStatusEntry>(data.Entries.Count);
         foreach (QueuedTag e in data.Entries)
         {
-            var changed = new List<string>();
-            changed.AddRange(e.Mutation.SetFields.Keys.Select(DisplayField));
-            changed.AddRange(e.Mutation.AppendFields.Keys.Select(DisplayField));
-            changed.AddRange(e.Mutation.DeleteFields.Select(DisplayField));
             rows.Add(new QueueStatusEntry(
-                e.ClipPath, changed, (now - e.EnqueuedAtUtc).TotalSeconds, isInUse(e.ClipPath)));
+                e.ClipPath, ChangedFields(e.Mutation), (now - e.EnqueuedAtUtc).TotalSeconds, isInUse(e.ClipPath)));
         }
         return rows;
     }
