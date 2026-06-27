@@ -681,19 +681,9 @@ public static class ReadTools
 
         // P0-1: surface tags the BACKGROUND pump auto-flushed since the last call (it writes the
         // last clip when its player closes but reports to no one). Report-once: TakePending clears.
-        var autoFlushed = new JsonArray();
-        foreach (DrainedTag t in journal?.TakePending() ?? Array.Empty<DrainedTag>())
-        {
-            var fields = new JsonArray();
-            foreach (string f in t.Fields) fields.Add(f);
-            autoFlushed.Add(new JsonObject
-            {
-                ["path"] = t.Path,
-                ["fields"] = fields,
-                ["agoSeconds"] = Math.Round((DateTimeOffset.UtcNow - t.WhenUtc).TotalSeconds, 1),
-            });
-        }
-        response["autoFlushed"] = autoFlushed;
+        // Shape is built by QueueTools.AutoFlushedJson — single source so queue tools and watching
+        // emit identical path/fields/agoSeconds entries (agoSeconds is clamped ≥ 0 there).
+        response["autoFlushed"] = QueueTools.AutoFlushedJson(journal);
 
         return response;
     }
@@ -841,8 +831,15 @@ public static class ReadTools
     internal static JsonArray? UnknownPlayerReview(string? playersValue, string root, JsonArray? roster)
     {
         var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string name in ClipMetaVocab.Enumerate(root, ClipMetaSchema.Players).Counts.Keys)
-            known.Add(name);
+        try
+        {
+            foreach (string name in ClipMetaVocab.Enumerate(root, ClipMetaSchema.Players).Counts.Keys)
+                known.Add(name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return null; // enumeration failure degrades to no advisory so the write proceeds unblocked
+        }
         if (roster is not null)
             foreach (JsonNode? n in roster)
                 if (n?.GetValue<string>() is { Length: > 0 } s)

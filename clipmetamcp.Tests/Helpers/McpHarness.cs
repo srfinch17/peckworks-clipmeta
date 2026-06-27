@@ -91,7 +91,7 @@ internal static class McpHarness
         var sandbox = new LibrarySandbox(libraryRoot);
         ReadTools.RegisterAll(registry, sandbox, watcher: null, ledger: null, journal: journal);
         WriteTools.RegisterAll(registry, sandbox);
-        QueueTools.RegisterAll(registry, sandbox);
+        QueueTools.RegisterAll(registry, sandbox, pump: null, journal: journal);
 
         using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
         using var output = new StringWriter();

@@ -194,10 +194,10 @@ public static class QueueTools
     /// <summary>
     /// Builds the <c>autoFlushed</c> array from the journal: tags the background pump wrote
     /// since the last foreground call. Report-once — <see cref="DrainJournal.TakePending"/> clears.
-    /// Only the pump feeds the journal; synchronous drains pass <see langword="null"/> and are
-    /// already reflected in the caller's own response, so they are never double-reported here.
+    /// Called from both queue tools and <see cref="ReadTools.Watching"/> (DRY single source of shape).
+    /// <c>agoSeconds</c> is clamped to ≥ 0 so a sub-millisecond race never emits -0.0.
     /// </summary>
-    private static JsonArray AutoFlushedJson(DrainJournal? journal)
+    internal static JsonArray AutoFlushedJson(DrainJournal? journal)
     {
         var arr = new JsonArray();
         foreach (DrainedTag t in journal?.TakePending() ?? Array.Empty<DrainedTag>())
@@ -208,7 +208,7 @@ public static class QueueTools
             {
                 ["path"] = t.Path,
                 ["fields"] = fields,
-                ["agoSeconds"] = Math.Round((DateTimeOffset.UtcNow - t.WhenUtc).TotalSeconds, 1),
+                ["agoSeconds"] = Math.Max(0.0, Math.Round((DateTimeOffset.UtcNow - t.WhenUtc).TotalSeconds, 1)),
             });
         }
         return arr;

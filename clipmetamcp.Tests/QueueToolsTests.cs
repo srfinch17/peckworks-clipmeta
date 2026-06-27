@@ -213,4 +213,86 @@ public class QueueToolsTests
 
         AssertRefused(result, "CLIPMETA_LIBRARY_ROOT");
     }
+
+    // ── autoFlushed surfacing via library_flush_queue (Fix 6) ────────────────────────────
+
+    /// <summary>
+    /// When a DrainJournal is wired into QueueTools (via RunWithJournal), library_flush_queue
+    /// must surface its entries as autoFlushed (report-once: second call sees an empty array).
+    /// </summary>
+    [TestMethod]
+    public void FlushQueue_SurfacesAutoFlushed_FromJournal_ReportOnce()
+    {
+        string path = Path.Combine(_lib, "auto.mp4");
+        File.WriteAllBytes(path, Array.Empty<byte>());
+
+        var journal = new DrainJournal();
+        journal.Record(new DrainedTag(path, new[] { "tags" }, DateTimeOffset.UtcNow));
+
+        // First call — must surface the one journal entry.
+        var responses = McpHarness.RunWithJournal(_lib, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_flush_queue", new JsonObject()));
+        JsonObject result = (JsonObject)responses[1]["result"]!;
+
+        Assert.IsNull(result["isError"], "flush must succeed: " + result.ToJsonString());
+        JsonObject s = Structured(result);
+        Assert.IsTrue(s.ContainsKey("autoFlushed"), "autoFlushed key must be present");
+
+        var autoFlushed = s["autoFlushed"]!.AsArray();
+        Assert.AreEqual(1, autoFlushed.Count, "autoFlushed must surface the one journal entry");
+
+        JsonObject entry = (JsonObject)autoFlushed[0]!;
+        Assert.AreEqual(path, entry["path"]!.GetValue<string>(), "autoFlushed path must match");
+        Assert.IsTrue(entry.ContainsKey("fields"), "autoFlushed entry must include fields");
+        Assert.IsTrue(entry.ContainsKey("agoSeconds"), "autoFlushed entry must include agoSeconds");
+        Assert.IsTrue(entry["agoSeconds"]!.GetValue<double>() >= 0.0, "agoSeconds must never be negative");
+
+        // Report-once: second call must see an empty array (journal was drained by TakePending).
+        var responses2 = McpHarness.RunWithJournal(_lib, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_flush_queue", new JsonObject()));
+        JsonObject result2 = (JsonObject)responses2[1]["result"]!;
+        var autoFlushed2 = Structured(result2)["autoFlushed"]!.AsArray();
+        Assert.AreEqual(0, autoFlushed2.Count, "report-once: second flush must find autoFlushed empty");
+    }
+
+    // ── library_queue_tag player roster advisory (Fix 7) ─────────────────────────────────
+
+    /// <summary>
+    /// library_queue_tag with an unknown players value (not in vocab, not in roster) must
+    /// fire an "unknownPlayer" advisory, but the tag must still be enqueued (soft advisory).
+    /// </summary>
+    [TestMethod]
+    public void QueueTag_UnknownPlayer_AdvisoryFires_TagStillEnqueued()
+    {
+        // Empty-bytes file is enough — queue_tag stores the path and never parses.
+        string clip = Path.Combine(_lib, "clip.mp4");
+        File.WriteAllBytes(clip, Array.Empty<byte>());
+
+        JsonObject result = Call("library_queue_tag", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["players"] = "unknown person x" },
+        });
+
+        // Must succeed (not isError).
+        Assert.IsNull(result["isError"], "queue_tag must succeed even when advisory fires: " + result.ToJsonString());
+        JsonObject s = Structured(result);
+
+        // Advisory must be present.
+        var review = s["review"]?.AsArray();
+        Assert.IsNotNull(review, "expected a 'review' array for an unknown player");
+        Assert.AreEqual(1, review!.Count, "exactly one advisory entry");
+        Assert.AreEqual("unknownPlayer", review[0]!["type"]!.GetValue<string>(),
+            "advisory type must be 'unknownPlayer'");
+        Assert.AreEqual("unknown person x", review[0]!["token"]!.GetValue<string>(),
+            "advisory token must match the unrecognised name");
+
+        // Tag must still be enqueued (advisory never gates the write).
+        Assert.IsTrue(s["pending"]!.GetValue<int>() >= 1,
+            "pending must be >= 1 after enqueue despite advisory");
+        TagQueueData data = TagQueue.Load(_lib);
+        Assert.AreEqual(1, data.Entries.Count, "queue must have exactly one entry");
+    }
 }

@@ -36,7 +36,7 @@ public sealed class RecentWriteSignal : IWatchSignal
     public IEnumerable<SignalHit> Detect(WatchContext context)
     {
         DateTime now = _clock();
-        DateTimeOffset nowOffset = new(now, TimeSpan.Zero);
+        DateTimeOffset nowOffset = new(DateTime.SpecifyKind(now, DateTimeKind.Utc), TimeSpan.Zero);
 
         List<LibraryClip> fresh = context.LibraryClips
             .Where(c =>

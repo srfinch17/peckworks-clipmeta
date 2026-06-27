@@ -438,6 +438,13 @@ public class WriteToolsTests
         Assert.AreEqual("unknownPlayer", review[0]!["type"]!.GetValue<string>());
         Assert.AreEqual("miami element", review[0]!["token"]!.GetValue<string>());
 
+        // knownPlayers must be present (an array; empty when vocab and roster are both empty).
+        var entry = review[0]!.AsObject();
+        Assert.IsTrue(entry.ContainsKey("knownPlayers"),
+            "advisory must include a 'knownPlayers' array");
+        Assert.AreEqual(0, entry["knownPlayers"]!.AsArray().Count,
+            "knownPlayers must be empty when vocab and roster are both empty");
+
         // Write must have landed (soft advisory, not a gate).
         Assert.AreEqual("miami element", ReadFields(clip)["players"]!.GetValue<string>(),
             "players field must be written even when the advisory fires");
@@ -490,6 +497,42 @@ public class WriteToolsTests
         AssertOk(result);
         Assert.IsNull(Structured(result)["review"],
             "no advisory when the player is already in the library vocab");
+    }
+
+    /// <summary>
+    /// (d) clip_append_field with field:"players" and an unknown name fires the advisory but
+    /// the append still lands (soft advisory, not a gate). Mirrors test (a) for the append path.
+    /// </summary>
+    [TestMethod]
+    public void AppendField_UnknownPlayer_AdvisoryFires_AppendStillLands()
+    {
+        string clip = PrepareClip();
+        // Library has one clip with no metadata → players vocab is empty; no roster given.
+        JsonObject result = Call("clip_append_field", new JsonObject
+        {
+            ["path"] = clip,
+            ["field"] = "players",
+            ["value"] = "newguy",
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        JsonObject s = Structured(result);
+
+        // Advisory must be present.
+        var review = s["review"]?.AsArray();
+        Assert.IsNotNull(review, "expected a 'review' array for an unknown player in append");
+        Assert.AreEqual(1, review!.Count, "exactly one advisory entry");
+        Assert.AreEqual("unknownPlayer", review[0]!["type"]!.GetValue<string>());
+        Assert.AreEqual("newguy", review[0]!["token"]!.GetValue<string>());
+
+        // Append must have landed.
+        Assert.AreEqual("players", s["appendedField"]!.GetValue<string>(),
+            "appendedField must confirm the field name");
+        Assert.AreEqual("newguy", s["appendedValue"]!.GetValue<string>(),
+            "appendedValue must confirm the appended value");
+        Assert.AreEqual("newguy", ReadFields(clip)["players"]!.GetValue<string>(),
+            "players field must be written even when the advisory fires");
     }
 
     // ── media integrity (the test that matters most) ─────────────────────────────────────

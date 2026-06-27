@@ -173,8 +173,12 @@ public static class TagQueue
             {
                 writer.WriteMetadata(entry.ClipPath, entry.Mutation.ToMutation(), logger);
                 written.Add(entry.ClipPath);
-                onWritten?.Invoke(new DrainedTag(
-                    entry.ClipPath, ChangedFields(entry.Mutation), DateTimeOffset.UtcNow));
+                try
+                {
+                    onWritten?.Invoke(new DrainedTag(
+                        entry.ClipPath, ChangedFields(entry.Mutation), DateTimeOffset.UtcNow));
+                }
+                catch { /* journal is best-effort telemetry; never break a drain */ }
             }
             catch (Exception ex) when (
                 ex is IOException or UnauthorizedAccessException or InvalidDataException
