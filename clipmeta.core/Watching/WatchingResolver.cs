@@ -132,6 +132,16 @@ public sealed class WatchingResolver
         // A corrected/confident bind is a live target even when unlocked.
         bool anyLive = core.AnyLiveTarget || confident;
 
+        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first.
+        // Nothing is an auto-tag target and no candidate may read high, even a locked one.
+        if (binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive))
+        {
+            anyLive = false;
+            candidates = candidates
+                .Select(c => c.Confidence == HighConfidence ? c with { Confidence = LowConfidence } : c)
+                .ToList();
+        }
+
         return new WatchingResult(
             candidates, core.Diagnostics, anyLive, binding.Flags, boundId, confident);
     }
