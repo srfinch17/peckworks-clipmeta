@@ -43,7 +43,8 @@ public static class QueueTools
             "re-tags of the same clip (notes join as prose; tags/players merge), while game/rating " +
             "replace. The tag is written " +
             "automatically the next time you call a watched-clip tool after the player advances " +
-            "(the lock clears), or immediately via library_flush_queue. Requires a configured library.",
+            "(the lock clears), or immediately via library_flush_queue. Requires a configured library. " +
+            "Name players up front in the optional 'roster' arg to reduce unknown-player advisories.",
             QueueTagSchema(),
             args => QueueTag(args, sandbox, pump),
             clipPath => new JsonObject
@@ -88,6 +89,14 @@ public static class QueueTools
                 ["description"] = "Field name → string value. Empty string deletes the field.",
                 ["additionalProperties"] = new JsonObject { ["type"] = "string" },
             },
+            ["roster"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject { ["type"] = "string" },
+                ["description"] = "Optional: tonight's player names. A 'players' value outside this list " +
+                                  "and the library's known players is flagged (not blocked) so you can " +
+                                  "confirm it's a person and not a tag. Name players up front to reduce flags.",
+            },
         },
         ["required"] = new JsonArray("path", "fields"),
     };
@@ -126,6 +135,10 @@ public static class QueueTools
                 mutation.SetFields[atom] = text;
         }
 
+        // Capture players value for advisory check before the drain/enqueue steps.
+        string? playersValue = fieldArgs[ClipMetaSchema.Players] is JsonValue pv &&
+            pv.TryGetValue(out string? pvs) ? pvs : null;
+
         string root = sandbox.RequireRoot();
         DrainReport drain = DrainUnderGate(root);   // opportunistic: land anything already freed
         TagQueue.Enqueue(root, fullPath, mutation, confidence: "high");
@@ -134,12 +147,15 @@ public static class QueueTools
         // zero-touch flush for the last clip, where no further watched-clip call will drain it.
         pump?.Wake();
 
-        return new JsonObject
+        var result = new JsonObject
         {
             ["queued"] = fullPath,
             ["pending"] = TagQueue.Status(root, LockProbe.IsInUse).Count,
             ["drained"] = DrainJson(drain),
         };
+        if (ReadTools.UnknownPlayerReview(playersValue, root, args?["roster"] as JsonArray) is { } review)
+            result["review"] = review;
+        return result;
     }
 
     private static JsonObject FlushQueue(JsonObject? args, LibrarySandbox sandbox, DrainJournal? journal = null)

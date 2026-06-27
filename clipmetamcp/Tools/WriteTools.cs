@@ -49,7 +49,8 @@ public static class WriteTools
             "(e.g. tags: \"win|comeback\"). 'rating' must be 1-5. 'timecode' is normalized to " +
             "HH:MM:SS: a bare number is seconds and a two-part value is MM:SS, so \"90\" and " +
             "\"1:30\" both become 00:01:30. A timestamped backup copy is kept next to the file " +
-            "unless backup:false; dry_run:true previews without writing.",
+            "unless backup:false; dry_run:true previews without writing. " +
+            "Name players up front in the optional 'roster' arg to reduce unknown-player advisories.",
             SetFieldsSchema(),
             args => SetFields(args, sandbox, ledger),
             clipPath => new JsonObject
@@ -178,6 +179,14 @@ public static class WriteTools
             ["type"] = "boolean",
             ["description"] = "Write a 'tagged_by: Peckworks ClipMeta' provenance marker into the " +
                               "file alongside the metadata (default true). Set false to opt out.",
+        },
+        ["roster"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["items"] = new JsonObject { ["type"] = "string" },
+            ["description"] = "Optional: tonight's player names. A 'players' value outside this list " +
+                              "and the library's known players is flagged (not blocked) so you can " +
+                              "confirm it's a person and not a tag. Name players up front to reduce flags.",
         },
     };
 
@@ -335,10 +344,22 @@ public static class WriteTools
             else set.Add(pair.Key);
         }
 
+        // Pre-compute the advisory BEFORE the write so we check against the library's existing
+        // vocab, not the just-written clip. sandbox.Root bypasses RequireRoot() (which throws a
+        // different message than ResolveWritePath), preserving the existing no-root error text.
+        string? playersValue = fieldArgs[ClipMetaSchema.Players] is JsonValue pv &&
+            pv.TryGetValue(out string? pvs) ? pvs : null;
+        JsonArray? roster = args?["roster"] as JsonArray;
+        JsonArray? playerReview = (playersValue is not null && sandbox.Root is not null)
+            ? ReadTools.UnknownPlayerReview(playersValue, sandbox.Root, roster)
+            : null;
+
         return ExecuteWrite(args, sandbox, mutation, result =>
         {
             if (set.Count > 0) result["setFields"] = set;
             if (deleted.Count > 0) result["deletedFields"] = deleted;
+            if (playerReview is not null)
+                result["review"] = playerReview;
         }, ledger);
     }
 
@@ -350,10 +371,19 @@ public static class WriteTools
         var mutation = new MetadataMutation();
         mutation.AppendFields[ClipMetaSchema.AtomName(field)] = value;
 
+        // Advisory for players append: pre-compute before the write (same timing rationale as SetFields).
+        string? playersValue = field.Equals(ClipMetaSchema.Players, StringComparison.OrdinalIgnoreCase) ? value : null;
+        JsonArray? roster = args?["roster"] as JsonArray;
+        JsonArray? playerReview = (playersValue is not null && sandbox.Root is not null)
+            ? ReadTools.UnknownPlayerReview(playersValue, sandbox.Root, roster)
+            : null;
+
         return ExecuteWrite(args, sandbox, mutation, result =>
         {
             result["appendedField"] = field;
             result["appendedValue"] = value;
+            if (playerReview is not null)
+                result["review"] = playerReview;
         }, ledger);
     }
 

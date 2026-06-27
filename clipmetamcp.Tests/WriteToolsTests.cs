@@ -410,6 +410,88 @@ public class WriteToolsTests
         AssertRefused(result, "outside the configured clips library");
     }
 
+    // ── player roster advisory ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// (a) An unknown player name (not in library vocab, not in roster) generates an
+    /// "unknownPlayer" advisory — but the write STILL lands (soft, not a gate).
+    /// </summary>
+    [TestMethod]
+    public void SetFields_UnknownPlayer_AdvisoryFires_WriteStillLands()
+    {
+        string clip = PrepareClip();
+        // Library has one clip with no metadata → players vocab is empty.
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["players"] = "miami element" },
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        JsonObject s = Structured(result);
+
+        // Advisory must be present with the right shape.
+        var review = s["review"]?.AsArray();
+        Assert.IsNotNull(review, "expected a 'review' array for an unknown player");
+        Assert.AreEqual(1, review!.Count, "exactly one advisory entry");
+        Assert.AreEqual("unknownPlayer", review[0]!["type"]!.GetValue<string>());
+        Assert.AreEqual("miami element", review[0]!["token"]!.GetValue<string>());
+
+        // Write must have landed (soft advisory, not a gate).
+        Assert.AreEqual("miami element", ReadFields(clip)["players"]!.GetValue<string>(),
+            "players field must be written even when the advisory fires");
+    }
+
+    /// <summary>
+    /// (b) Same unknown player but listed in the roster arg → no advisory.
+    /// </summary>
+    [TestMethod]
+    public void SetFields_UnknownPlayer_SuppressedByRoster()
+    {
+        string clip = PrepareClip();
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["players"] = "miami element" },
+            ["roster"] = new JsonArray("miami element"),
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        Assert.IsNull(Structured(result)["review"],
+            "no advisory when the player is named in the roster");
+    }
+
+    /// <summary>
+    /// (c) Player already in the library vocab (seeded first) → no advisory.
+    /// </summary>
+    [TestMethod]
+    public void SetFields_KnownPlayer_NoAdvisory()
+    {
+        // Seed the vocab: write players=chuck to a clip so the library knows the name.
+        string seed = PrepareClip("seed.mp4");
+        AssertOk(Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = seed,
+            ["fields"] = new JsonObject { ["players"] = "chuck" },
+            ["backup"] = false,
+        }));
+
+        // A second call with players=chuck should not trigger the advisory.
+        string clip = PrepareClip("clip2.mp4");
+        JsonObject result = Call("clip_set_fields", new JsonObject
+        {
+            ["path"] = clip,
+            ["fields"] = new JsonObject { ["players"] = "chuck" },
+            ["backup"] = false,
+        });
+
+        AssertOk(result);
+        Assert.IsNull(Structured(result)["review"],
+            "no advisory when the player is already in the library vocab");
+    }
+
     // ── media integrity (the test that matters most) ─────────────────────────────────────
 
     [TestMethod]

@@ -833,4 +833,37 @@ public static class ReadTools
             return number;
         throw new ToolException($"The '{name}' argument must be an integer when given.");
     }
+
+    /// <summary>
+    /// Builds the soft "unknownPlayer" review array for a players value, or null when every token is
+    /// known. Known = library vocab players ∪ the optional session roster arg. Never blocks the write.
+    /// </summary>
+    internal static JsonArray? UnknownPlayerReview(string? playersValue, string root, JsonArray? roster)
+    {
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string name in ClipMetaVocab.Enumerate(root, ClipMetaSchema.Players).Counts.Keys)
+            known.Add(name);
+        if (roster is not null)
+            foreach (JsonNode? n in roster)
+                if (n?.GetValue<string>() is { Length: > 0 } s)
+                    known.Add(s.Trim());
+
+        IReadOnlyList<string> unknown = PlayerRosterGuard.UnknownPlayers(playersValue, known);
+        if (unknown.Count == 0)
+            return null;
+
+        var knownArr = new JsonArray();
+        foreach (string k in known.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            knownArr.Add(k);
+
+        var review = new JsonArray();
+        foreach (string token in unknown)
+            review.Add(new JsonObject
+            {
+                ["type"] = "unknownPlayer",
+                ["token"] = token,
+                ["knownPlayers"] = knownArr.DeepClone(),
+            });
+        return review;
+    }
 }
