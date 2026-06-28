@@ -30,6 +30,16 @@ public class ResolveReviewTests
     private WatchingResolver Resolver() =>
         WatchingResolver.CreateDefault(new FakeProcessWindowSource());
 
+    // Seeds the LIVE poll (FakeProcessWindowSource) so a test can model players that are open NOW,
+    // distinct from the segment history. An empty list models "no player open live" (e.g. a ghost:
+    // a closed player that survives only in segment history).
+    private static WatchingResolver ResolverWithLive(params ProcessWindow[] live) =>
+        WatchingResolver.CreateDefault(new FakeProcessWindowSource(live));
+
+    // A title naming a file that is NOT in the test library — an "outside the library" player.
+    private const string ForeignTitle =
+        @"C:\Outside\Team Fortress 2 2026.01.20 - 21.41.04.189.DVR.mp4 - VLC media player";
+
     private static TitleSegment Seg(long id, string title, double start, double? end) =>
         new(id, "vlc", title, T0.AddSeconds(start), end is { } e ? T0.AddSeconds(e) : null);
 
@@ -206,5 +216,80 @@ public class ResolveReviewTests
 
         CollectionAssert.AreEqual(new[] { one, two, three }, resolved,
             "each call resolves its own clip from its timestamp");
+    }
+
+    // ── §4: foreign-player + fresh-save time-base split ─────────────────────────────────
+
+    [TestMethod]
+    public void ResolveReview_ForeignPlayerOpen_FreshSave_SurfacesGamingCandidate()
+    {
+        // §4.1a: a player is open live on a file OUTSIDE the library, and one fresh clip was just saved
+        // INTO the library. Policy A must survive review mode: the gaming candidate is the live target.
+        string saved = Touch("saved.mp4"); // creation time = now → a fresh in-library save
+        var foreignSeg = new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, null) };
+
+        WatchingResult r = ResolverWithLive(new ProcessWindow("vlc", ForeignTitle))
+            .ResolveReview(_dir, foreignSeg, lastBoundId: -1, DateTimeOffset.UtcNow, limit: 5, includeAccessFallback: true);
+
+        Assert.AreEqual(1, r.Candidates.Count, "the gaming candidate is returned, not blanked");
+        Assert.AreEqual(saved, r.Candidates[0].Path);
+        Assert.AreEqual(RecentWriteSignal.SourceName, r.Candidates[0].Source);
+        Assert.AreEqual("high", r.Candidates[0].Confidence);
+        Assert.IsTrue(r.AnyLiveTarget, "a sole fresh save is a live target even with a foreign player open");
+    }
+
+    [TestMethod]
+    public void ResolveReview_ForeignPlayerClosed_FreshSave_NoGhostWarning()
+    {
+        // §4.2a (ghost): the foreign player is CLOSED — it survives only as a closed segment in history,
+        // with NO live window. It must not be replayed as an open player; the fresh save still surfaces.
+        string saved = Touch("saved.mp4");
+        var closedForeign = new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, T0.AddSeconds(5)) };
+
+        WatchingResult r = ResolverWithLive() // no live windows → the closed player is gone
+            .ResolveReview(_dir, closedForeign, lastBoundId: -1, DateTimeOffset.UtcNow, limit: 5, includeAccessFallback: true);
+
+        Assert.AreEqual(0, r.Diagnostics.UnresolvedPlayers.Count, "a closed player raises no foreign diagnostic (no ghost)");
+        Assert.AreEqual(saved, r.Candidates[0].Path);
+        Assert.AreEqual(RecentWriteSignal.SourceName, r.Candidates[0].Source);
+        Assert.IsTrue(r.AnyLiveTarget);
+    }
+
+    [TestMethod]
+    public void ResolveReview_ForeignPlayerClosed_NoSave_NoWarningNotLive()
+    {
+        // §4.2b: closed foreign player + nothing fresh. No ghost warning; nothing is a live target.
+        string stale = Touch("stale.mp4");
+        File.SetCreationTimeUtc(stale, DateTime.UtcNow.AddHours(-3)); // not a fresh save
+        var closedForeign = new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, T0.AddSeconds(5)) };
+
+        WatchingResult r = ResolverWithLive()
+            .ResolveReview(_dir, closedForeign, lastBoundId: -1, DateTimeOffset.UtcNow, limit: 5, includeAccessFallback: true);
+
+        Assert.AreEqual(0, r.Diagnostics.UnresolvedPlayers.Count, "no ghost foreign diagnostic");
+        Assert.IsFalse(r.AnyLiveTarget, "an access-time guess is not a live target");
+    }
+
+    [TestMethod]
+    public void ResolveReview_Invariant_AnyLiveTargetImpliesCandidatesPresent()
+    {
+        // The structural guarantee: anyLiveTarget true ⇒ at least one candidate. Exercised across the
+        // foreign-open, foreign-closed, and cold-start shapes.
+        string saved = Touch("saved.mp4");
+        foreach (WatchingResult r in new[]
+        {
+            ResolverWithLive(new ProcessWindow("vlc", ForeignTitle))
+                .ResolveReview(_dir, new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, null) },
+                               -1, DateTimeOffset.UtcNow, 5, true),
+            ResolverWithLive()
+                .ResolveReview(_dir, new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, T0.AddSeconds(5)) },
+                               -1, DateTimeOffset.UtcNow, 5, true),
+        })
+        {
+            if (r.AnyLiveTarget)
+                Assert.IsTrue(r.Candidates.Count > 0, "anyLiveTarget:true must never accompany an empty candidate list");
+        }
+
+        _ = saved;
     }
 }

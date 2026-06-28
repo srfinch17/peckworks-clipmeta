@@ -5,8 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <AssemblyVersion>1.5.0</AssemblyVersion>
-    <InformationalVersion>1.5.0</InformationalVersion>
+    <AssemblyVersion>1.6.0</AssemblyVersion>
+    <InformationalVersion>1.6.0</InformationalVersion>
     <!--
       PublishTrimmed must stay OFF (spec risk R4): the protocol layer uses reflection-based
       System.Text.Json, which trimming breaks silently. Do not enable trimming until the

@@ -143,9 +143,13 @@ public static class QueueTools
         DrainReport drain = DrainUnderGate(root);   // opportunistic: land anything already freed
         TagQueue.Enqueue(root, fullPath, mutation, confidence: "high");
 
-        // Wake the background pump so it lands THIS tag the instant the player's lock clears — the
-        // zero-touch flush for the last clip, where no further watched-clip call will drain it.
-        pump?.Wake();
+        // Wake the background pump ONLY for a clip that is currently LOCKED — that is the case the
+        // pump exists for (zero-touch landing when the player closes). An UNLOCKED queued tag is left
+        // for the foreground drain (the next watched-clip call or an explicit library_flush_queue) so
+        // it reports under `written`, not `autoFlushed`. The pump idles on an event, so not waking it
+        // means it never races that foreground flush. (dogfood §4.4)
+        if (LockProbe.IsInUse(fullPath))
+            pump?.Wake();
 
         var result = new JsonObject
         {

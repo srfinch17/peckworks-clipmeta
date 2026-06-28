@@ -61,6 +61,27 @@ public sealed class WatchContext
     }
 
     /// <summary>
+    /// Returns a context that REUSES this one's already-enumerated library, baseline, and ledger but
+    /// resolves against a different set of <paramref name="playerWindows"/>. Review-mode resolution uses
+    /// this to ask the same library two questions with two window sets — "what is open live?" and "which
+    /// recorded title did the user describe?" — without paying for a second library enumeration.
+    /// </summary>
+    /// <param name="playerWindows">The window set the returned context resolves against.</param>
+    public WatchContext WithPlayerWindows(IReadOnlyList<ProcessWindow> playerWindows)
+    {
+        ArgumentNullException.ThrowIfNull(playerWindows);
+        return new WatchContext
+        {
+            LibraryClips = LibraryClips,
+            ByFileName = ByFileName,
+            ByFullPath = ByFullPath,
+            PlayerWindows = playerWindows,
+            KnownBaselinePaths = KnownBaselinePaths,
+            Ledger = Ledger,
+        };
+    }
+
+    /// <summary>
     /// Enumerates <paramref name="libraryRoot"/> for .mp4 files (recursive) and builds the name/path
     /// lookups. Files whose access time cannot be read are skipped (a vanished/locked file must not
     /// abort the whole pass). Shared by both <see cref="Build(string, IProcessWindowSource, IReadOnlyCollection{string}, SelfActionLedger?)"/>

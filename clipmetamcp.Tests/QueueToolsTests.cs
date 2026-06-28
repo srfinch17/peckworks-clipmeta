@@ -1,7 +1,10 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore.Logging;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
+using ClipMetaCore.Write;
 using ClipMetaMcp.Tests.Helpers;
+using ClipMetaMcp.Tools;
 using ClipMetaScribe.Tests.Helpers;
 
 namespace ClipMetaMcp.Tests;
@@ -294,5 +297,45 @@ public class QueueToolsTests
             "pending must be >= 1 after enqueue despite advisory");
         TagQueueData data = TagQueue.Load(_lib);
         Assert.AreEqual(1, data.Entries.Count, "queue must have exactly one entry");
+    }
+
+    // ── §4.4: pump wake guard for unlocked clips ──────────────────────────────────────────
+
+    /// <summary>
+    /// §4.4: with a REAL pump wired, queueing a tag for an UNLOCKED clip must NOT wake the pump, so
+    /// the explicit flush lands the write under <c>written</c> (not the pump's <c>autoFlushed</c>).
+    /// Pre-fix the pump is woken, drains the unlocked clip immediately, and the flush reports written:[].
+    /// A real pristine clip is required so Mp4Writer can actually succeed; an empty byte array is
+    /// rejected by the parser (InvalidDataException) and goes to stillQueued, not written.
+    /// </summary>
+    [TestMethod]
+    public void QueueTag_UnlockedClip_PumpNotWoken_FlushReportsUnderWritten()
+    {
+        // PrepareClip() copies a pristine clip to scratch so the writer can mutate it safely.
+        string clip = PrepareClip();
+
+        var journal = new DrainJournal();
+        // pollInterval is deliberately long: the pump is purely event-driven (idles on
+        // WaitHandle.WaitAny) and is never woken for an unlocked clip, so it never reaches a poll
+        // wait — the long interval just documents that and guards against any future pump change.
+        using var pump = new QueueDrainPump(
+            _lib, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse,
+            runExclusive: action => { WriteGate.Enter(); try { action(); } finally { WriteGate.Exit(); } },
+            pollInterval: TimeSpan.FromMinutes(1), journal: journal);
+        pump.Start();
+
+        var enqueue = McpHarness.RunWithPump(_lib, pump, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_queue_tag",
+                new JsonObject { ["path"] = clip, ["fields"] = new JsonObject { ["tags"] = "headshot" } }));
+        Assert.IsNull(((JsonObject)enqueue[1]["result"]!)["isError"], "enqueue must succeed");
+
+        var flushResponses = McpHarness.RunWithPump(_lib, pump, journal,
+            McpHarness.InitializeRequest,
+            McpHarness.ToolCall(2, "library_flush_queue", new JsonObject()));
+        JsonObject s = Structured((JsonObject)flushResponses[1]["result"]!);
+
+        Assert.AreEqual(1, s["written"]!.AsArray().Count, "an unlocked queued tag lands via the foreground flush → written");
+        Assert.AreEqual(0, s["autoFlushed"]!.AsArray().Count, "the pump must not be woken for an unlocked clip");
     }
 }
