@@ -8,7 +8,7 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
-## Review-mode resolver: diagnose live, bind from history (pass-7)
+## 2026-06-28 — Review-mode resolver: diagnose live, bind from history (pass-7)
 
 `WatchingResolver.ResolveReview` must answer two questions from two time-bases. "Is a foreign player
 open right now?" (the `player_outside_library` diagnostic + access suppression) MUST come from a LIVE
@@ -21,7 +21,7 @@ the FINAL candidate list (shared `IsLiveTarget` predicate) so true-beside-empty 
 Policy A fix lived in `ResolveCore`; its tests never drove `ResolveReview` with a foreign SEGMENT
 present, so the regression hid — always test the resolver through `ResolveReview` with seeded segments.
 
-## Queue: wake the drain pump only for locked clips (pass-7)
+## 2026-06-28 — Queue: wake the drain pump only for locked clips (pass-7)
 
 `library_queue_tag` waking `QueueDrainPump` unconditionally made the (event-driven) pump drain an
 UNLOCKED clip and book it under `autoFlushed` before an explicit `library_flush_queue` ran — so

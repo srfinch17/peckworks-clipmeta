@@ -290,6 +290,6 @@ public class ResolveReviewTests
                 Assert.IsTrue(r.Candidates.Count > 0, "anyLiveTarget:true must never accompany an empty candidate list");
         }
 
-        GC.KeepAlive(saved);
+        _ = saved;
     }
 }

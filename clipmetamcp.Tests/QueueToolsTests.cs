@@ -305,15 +305,13 @@ public class QueueToolsTests
     /// §4.4: with a REAL pump wired, queueing a tag for an UNLOCKED clip must NOT wake the pump, so
     /// the explicit flush lands the write under <c>written</c> (not the pump's <c>autoFlushed</c>).
     /// Pre-fix the pump is woken, drains the unlocked clip immediately, and the flush reports written:[].
+    /// A real pristine clip is required so Mp4Writer can actually succeed; an empty byte array is
+    /// rejected by the parser (InvalidDataException) and goes to stillQueued, not written.
     /// </summary>
     [TestMethod]
     public void QueueTag_UnlockedClip_PumpNotWoken_FlushReportsUnderWritten()
     {
-        // §4.4: with a REAL pump wired, queueing a tag for an UNLOCKED clip must NOT wake the pump, so
-        // the explicit flush lands the write under `written` (not the pump's `autoFlushed`). Pre-fix the
-        // pump is woken, drains the unlocked clip immediately, and the flush reports written:[].
-        // A real pristine clip is required so Mp4Writer can actually succeed; an empty byte array is
-        // rejected by the parser (InvalidDataException) and goes to stillQueued, not written.
+        // PrepareClip() copies a pristine clip to scratch so the writer can mutate it safely.
         string clip = PrepareClip();
 
         var journal = new DrainJournal();

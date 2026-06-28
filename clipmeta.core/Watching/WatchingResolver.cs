@@ -152,8 +152,10 @@ public sealed class WatchingResolver
     }
 
     /// <summary>
-    /// Resolves over an already-built context — a live snapshot (<see cref="Resolve"/>) or a single
-    /// review-chosen title (<see cref="ResolveReview"/>). Holds the entire scoring/ranking pipeline.
+    /// Resolves over an already-built context — holds the entire scoring/ranking pipeline.
+    /// Called once by <see cref="Resolve"/> over a live snapshot; called twice by
+    /// <see cref="ResolveReview"/> — once over the live snapshot for diagnostics/gaming/access,
+    /// and once over the chosen segment's synthetic window for the historical bind.
     /// </summary>
     private WatchingResult ResolveCore(WatchContext context, int limit, bool includeAccessFallback)
     {
