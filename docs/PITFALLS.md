@@ -8,6 +8,27 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## Review-mode resolver: diagnose live, bind from history (pass-7)
+
+`WatchingResolver.ResolveReview` must answer two questions from two time-bases. "Is a foreign player
+open right now?" (the `player_outside_library` diagnostic + access suppression) MUST come from a LIVE
+player poll — never from `binding.Chosen`'s segment, which may be a player that has since CLOSED.
+Replaying a closed segment as a synthetic window made closed players "ghost" (warn after exit) and,
+combined with the review-mode `recent_write` strip, blanked a valid in-library gaming candidate
+(`anyLiveTarget:true` beside `candidates:[]`). "Which clip did the user describe?" (the bind) is the
+historical question and is resolved separately from the chosen segment. Derive `anyLiveTarget` from
+the FINAL candidate list (shared `IsLiveTarget` predicate) so true-beside-empty is impossible. Pass-6's
+Policy A fix lived in `ResolveCore`; its tests never drove `ResolveReview` with a foreign SEGMENT
+present, so the regression hid — always test the resolver through `ResolveReview` with seeded segments.
+
+## Queue: wake the drain pump only for locked clips (pass-7)
+
+`library_queue_tag` waking `QueueDrainPump` unconditionally made the (event-driven) pump drain an
+UNLOCKED clip and book it under `autoFlushed` before an explicit `library_flush_queue` ran — so
+`flush` reported `written:[]` though the write succeeded. Wake the pump only when `LockProbe.IsInUse`
+is true; an unlocked tag then lands via the foreground drain and reports under `written`. The pump
+idles on an event, so not waking it means no race with the foreground flush.
+
 ## 2026-06-27 — A foreign-player lock must not suppress a fresh in-library save
 **Symptom:** With a media player paused on a file OUTSIDE the library, a brand-new game clip saved
 INTO the library returned `candidateCount: 0` and a blocking `player_outside_library` warning — the
