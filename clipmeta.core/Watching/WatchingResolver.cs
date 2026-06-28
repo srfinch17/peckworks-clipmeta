@@ -92,59 +92,63 @@ public sealed class WatchingResolver
         ReviewBinding binding = ReviewBindingResolver.Resolve(
             segments, lastBoundId, now, stableThreshold: null, spokenAt: spokenAt);
 
-        // Which windows to resolve: the single chosen title, else the live windows (cold start /
-        // ambiguous) so the existing pipeline produces its normal candidates + diagnostics.
-        IReadOnlyList<ProcessWindow> windows = binding.Chosen is { } chosen
-            ? new[] { new ProcessWindow(chosen.ProcessName, chosen.RawTitle) }
-            : _windowSource.GetPlayerWindows(_playerNames);
-
-        WatchContext context = WatchContext.Build(libraryRoot, windows, _ledger);
-        WatchingResult core = ResolveCore(context, limit, includeAccessFallback);
+        // TIME-BASE 1 (live reality): diagnostics, wrong-directory suppression, gaming (recent_write)
+        // and access fallback all reflect what is open RIGHT NOW. A player closed a turn ago is simply
+        // absent here — so it can raise no "do not tag" warning (the ghost) and skew no suppression.
+        WatchContext liveContext = WatchContext.Build(libraryRoot, _windowSource.GetPlayerWindows(_playerNames), _ledger);
+        WatchingResult core = ResolveCore(liveContext, limit, includeAccessFallback);
 
         List<WatchingCandidate> candidates = core.Candidates.ToList();
         bool confident = false;
         long? boundId = null;
 
+        // TIME-BASE 2 (history): which recorded title did the user describe? Resolve the chosen segment
+        // against the SAME (already-enumerated) library. Only when it resolves to a single in-library
+        // player-title candidate is it a real "what you watched" bind — and then it IS the answer, so a
+        // background save (recent_write) and recency guesses are noise and drop out. When the chosen
+        // segment is foreign/closed/unresolved, there is no bind: the live `core` result stands, so a
+        // fresh game-save (Policy A) survives and a live foreign player demotes to an advisory downstream.
         if (binding.Chosen is { } sel)
         {
-            // A review bind is about WHAT YOU WATCHED; a background save (recent_write) is noise here,
-            // so drop those rows before promoting. (Recent-write still answers the cold-start branch
-            // below — that IS the gaming case: no player history, what did you just save.)
-            candidates = candidates.Where(c => c.Source != RecentWriteSignal.SourceName).ToList();
+            WatchContext bindContext = liveContext.WithPlayerWindows(
+                new[] { new ProcessWindow(sel.ProcessName, sel.RawTitle) });
+            IReadOnlyList<WatchingCandidate> bindCandidates = ResolveCore(bindContext, limit, includeAccessFallback).Candidates;
 
-            // The chosen title resolves to exactly the candidates the pipeline produced for that
-            // window. Promote a single player-title match past the not-locked demotion (it is
-            // expected to be unlocked — the user advanced away from it), keeping its true lock state.
-            int idx = candidates.FindIndex(c => c.Source == PlayerTitleSignal.SourceName);
-            bool singleMatch = candidates.Count(c => c.Source == PlayerTitleSignal.SourceName) == 1;
-            if (idx >= 0 && singleMatch)
+            List<WatchingCandidate> playerBinds = bindCandidates
+                .Where(c => c.Source == PlayerTitleSignal.SourceName)
+                .ToList();
+            if (playerBinds.Count == 1)
             {
-                candidates[idx] = candidates[idx] with
+                WatchingCandidate bind = playerBinds[0];
+                candidates = new List<WatchingCandidate>
                 {
-                    Confidence = HighConfidence,
-                    Note = binding.CorrectedFrom is null ? candidates[idx].Note : CorrectedBindNote,
+                    bind with
+                    {
+                        Confidence = HighConfidence,
+                        Note = binding.CorrectedFrom is null ? bind.Note : CorrectedBindNote,
+                    },
                 };
                 confident = true;
                 boundId = sel.Id;
             }
         }
 
-        // A corrected/confident bind is a live target even when unlocked.
-        bool anyLive = core.AnyLiveTarget || confident;
-
-        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first.
-        // Nothing is an auto-tag target and no candidate may read high, even a locked one.
-        if (binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive))
-        {
-            anyLive = false;
+        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first. Nothing
+        // is an auto-tag target and no candidate may read high, even a locked one.
+        bool multiPlayer = binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive);
+        if (multiPlayer)
             candidates = candidates
                 .Select(c => c.Confidence == HighConfidence ? c with { Confidence = LowConfidence } : c)
                 .ToList();
-        }
+
+        // Single source of truth: anyLiveTarget is DERIVED from the final list (never carried stale), so
+        // anyLiveTarget:true alongside an empty candidate list is impossible. The multi-player cap can
+        // only lower it.
+        bool anyLive = !multiPlayer && candidates.Any(IsLiveTarget);
 
         return new WatchingResult(
             candidates, core.Diagnostics, anyLive,
-            ReviewFlagResolver.Resolve(binding.Flags, context), boundId, confident);
+            ReviewFlagResolver.Resolve(binding.Flags, liveContext), boundId, confident);
     }
 
     /// <summary>
@@ -297,11 +301,8 @@ public sealed class WatchingResolver
 
         // #3 — a live target is one a player named, one currently locked, OR a confidently just-saved
         // clip (gaming mode, Policy A). When false, every candidate is an unverified recency guess and
-        // the caller must confirm before tagging.
-        bool anyLiveTarget = finalCandidates.Any(c =>
-            c.Source == PlayerTitleSignal.SourceName ||
-            c.InUse ||
-            (c.Source == RecentWriteSignal.SourceName && c.Confidence == HighConfidence));
+        // the caller must confirm before tagging. Shared with ResolveReview so the two paths cannot drift.
+        bool anyLiveTarget = finalCandidates.Any(IsLiveTarget);
 
         return new WatchingResult(finalCandidates, diagnostics, anyLiveTarget);
     }
@@ -309,6 +310,16 @@ public sealed class WatchingResolver
     /// <summary>The caveat attached to a lock attributed to a player by the open-window heuristic.</summary>
     private const string PlayerAttributedNote =
         "player title not recognized — player attributed from the single open player window";
+
+    /// <summary>
+    /// Whether a candidate is an actually-live tag target: a player named it, it is currently locked,
+    /// or it is a high-confidence just-saved clip (gaming mode, Policy A). The single definition of
+    /// "live", shared by <see cref="ResolveCore"/> and <see cref="ResolveReview"/>.
+    /// </summary>
+    private static bool IsLiveTarget(WatchingCandidate c) =>
+        c.Source == PlayerTitleSignal.SourceName ||
+        c.InUse ||
+        (c.Source == RecentWriteSignal.SourceName && c.Confidence == HighConfidence);
 
     /// <summary>
     /// The process name of the one open recognized player that resolved no candidate, or null when

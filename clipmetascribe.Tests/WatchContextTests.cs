@@ -67,4 +67,25 @@ public class WatchContextTests
         Assert.AreEqual(1, ctx.PlayerWindows.Count);
         Assert.AreEqual("vlc", ctx.PlayerWindows[0].ProcessName);
     }
+
+    [TestMethod]
+    public void WithPlayerWindows_ReusesLibrary_SwapsWindows()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "a.mp4"), Array.Empty<byte>());
+            WatchContext baseCtx = WatchContext.Build(dir, Array.Empty<ProcessWindow>());
+            var win = new[] { new ProcessWindow("vlc", "a.mp4 - VLC media player") };
+
+            WatchContext swapped = baseCtx.WithPlayerWindows(win);
+
+            Assert.AreSame(baseCtx.ByFullPath, swapped.ByFullPath, "library lookups are reused, not re-enumerated");
+            Assert.AreSame(baseCtx.ByFileName, swapped.ByFileName);
+            CollectionAssert.AreEqual(win, swapped.PlayerWindows.ToList(), "windows are replaced");
+            Assert.AreEqual(0, baseCtx.PlayerWindows.Count, "the original is unchanged");
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }
