@@ -103,6 +103,31 @@ internal static class McpHarness
             .ToList();
     }
 
+    /// <summary>
+    /// Like <see cref="Run"/>, but wires a real <paramref name="pump"/> + shared <paramref name="journal"/>
+    /// into the queue tools (and the journal into <see cref="ReadTools"/>), mirroring <c>Program.cs</c>
+    /// production wiring. Use this to exercise the background-pump path the plain harness never wires
+    /// (its <c>pump:null</c> hides §4.4). The caller owns the pump's lifecycle (Start/Dispose).
+    /// </summary>
+    public static IReadOnlyList<JsonObject> RunWithPump(
+        string? libraryRoot, QueueDrainPump pump, DrainJournal journal, params string[] requestLines)
+    {
+        var registry = new ToolRegistry();
+        var sandbox = new LibrarySandbox(libraryRoot);
+        ReadTools.RegisterAll(registry, sandbox, watcher: null, ledger: null, journal: journal);
+        WriteTools.RegisterAll(registry, sandbox);
+        QueueTools.RegisterAll(registry, sandbox, pump: pump, journal: journal);
+
+        using var input = new StringReader(string.Concat(requestLines.Select(line => line + "\n")));
+        using var output = new StringWriter();
+        new McpSession(input, output, registry, NullLogger.Instance).Run();
+
+        return output.ToString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => (JsonObject)JsonNode.Parse(line)!)
+            .ToList();
+    }
+
     /// <summary>Builds a tools/call request line for <paramref name="tool"/>.</summary>
     public static string ToolCall(int id, string tool, JsonObject arguments) =>
         new JsonObject
