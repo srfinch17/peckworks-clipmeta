@@ -90,6 +90,9 @@ The repo-root **`VERSION`** file is the single source of truth for the whole pro
 Tools (`tools/`):
 - `bump-version.ps1 <major|minor|patch|set X.Y.Z>` — the **deliberate** bump: rewrites `VERSION`, re-stamps the manifest. Run it when shipping, not on every commit.
 - `check-version.ps1` — drift check: probes each artifact's real self-report and prints OK/DRIFT per artifact. `-NoBuild` to skip the build.
+- `build-release-artifacts.ps1` — builds the three downloadable assets (`clipmeta.mcpb`, `clipmeta-unpacked.zip`, `clipmeta-cli-win-x64.zip`) into `dist/`. Used locally and by CI.
+
+**Cutting a release:** `bump-version.ps1` → commit → `git tag vX.Y.Z` (the tag must match `VERSION`) → `git push origin vX.Y.Z`. The **`Release` workflow** (`.github/workflows/release.yml`) then builds the assets on a Windows runner and publishes the GitHub Release automatically — it fails the run if the tag and `VERSION` disagree. Use the Actions tab "Run workflow" (workflow_dispatch) to build + upload the assets to the run for inspection **without** publishing, to test the build before tagging. (Releases are Windows-only, self-contained, unsigned.)
 
 **The rule that trips people up:** a bump is **not live in a built/installed artifact until that artifact is rebuilt, repacked, and reinstalled.** Editing `VERSION` makes the repo say the new number instantly, but a running binary / the `.mcpb` installed in Claude Desktop still reports the old one until its own deploy step runs. `check-version.ps1` sees the *repo-built* exe, not what Desktop is running — the installed bundle is verified by reinstalling. (Reset to **1.0.0** for the first public release; pass-N remains the stable feature id, and 1.0.0 supersedes the internal 1.0–1.6 bundle versions.)
 
