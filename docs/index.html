@@ -117,6 +117,21 @@
   .figcap{font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--muted); text-align:center; margin-top:11px; letter-spacing:.05em;}
   .figcap b{color:var(--signal);}
 
+  /* flow diagrams (decision trees) */
+  .fl text{font-family:"IBM Plex Mono",ui-monospace,monospace; dominant-baseline:middle;}
+  .fl .box{fill:#151A21; stroke:#2C3442; stroke-width:1.5;}
+  .fl .dia{fill:#1C2330; stroke:#2C3442; stroke-width:1.6;}
+  .fl .t{fill:#EAEDF3; font-size:13px;}
+  .fl .s{fill:#94A0B2; font-size:11px;}
+  .fl .el{fill:#7E8A9C; font-size:11px;}
+  .fl .lbl{font-size:11px; letter-spacing:.07em;}
+  .fl .teal{stroke:#2BE0CE;} .fl .orange{stroke:#FF8A3D;} .fl .red{stroke:#FF5C82;}
+  .fl .amber{stroke:#F5C13D;} .fl .violet{stroke:#B98CFF;} .fl .green{stroke:#2EE36E;}
+  .fl .stage{fill:#5F6A7B; font-size:12px; letter-spacing:.22em;}
+  .fl-legend{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 16px;}
+  .fl-legend span{font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--muted); border:1px solid var(--line); border-radius:20px; padding:4px 11px; background:var(--ink);}
+  .fl-legend i{width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:7px; vertical-align:middle;}
+
   .analogy{border-left:3px solid var(--partial); background:#14110a; border-radius:0 10px 10px 0; padding:11px 16px; margin:0 0 15px; font-size:.94rem; color:#E7DCC4;}
   .analogy b{color:var(--partial); font-weight:600;}
 
@@ -233,12 +248,13 @@
     </div>
 
     <nav class="toc" aria-label="Contents">
-      <h2>What this page covers — eight parts</h2>
+      <h2>What this page covers</h2>
       <div class="toc-grid">
         <a href="#problem"><span class="n">01</span><span><span class="t">The Problem</span><span class="d">the library you'll never finish</span></span></a>
         <a href="#idea"><span class="n">02</span><span><span class="t">The Idea</span><span class="d">capture the memory while it's fresh</span></span></a>
         <a href="#solution"><span class="n">03</span><span><span class="t">The Solution</span><span class="d">metadata written into the MP4 itself</span></span></a>
         <a href="#voice"><span class="n">04</span><span><span class="t">Tag by Voice</span><span class="d">Claude + MCP, mid-game</span></span></a>
+        <a href="#flow"><span class="n">04·</span><span><span class="t">The Decision Tree</span><span class="d">gaming vs review mode, step by step</span></span></a>
         <a href="#built"><span class="n">05</span><span><span class="t">How It's Built</span><span class="d">Core + CLIs + MCP server</span></span></a>
         <a href="#find"><span class="n">06</span><span><span class="t">Find Your Clips</span><span class="d">search, index, vocab, export</span></span></a>
         <a href="#safety"><span class="n">07</span><span><span class="t">Built Not To Corrupt</span><span class="d">the safety engineering</span></span></a>
@@ -436,6 +452,162 @@
   </section>
 
   <!-- ============ 05 BUILT ============ -->
+  <!-- ============ 04 DETAIL: DECISION TREES ============ -->
+  <div class="phase" id="flow"><span class="ph-code">PART&nbsp;04 · DETAIL</span><h3>From spoken tag to saved byte: the exact path</h3><span class="rule"></span></div>
+
+  <section class="teach">
+    <p class="kicker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"/></svg>THE DECISION TREE</p>
+    <h3 class="tt">Two ways to answer "which clip do you mean?"</h3>
+    <p class="lead">Tagging by voice hides one hard question: at the instant you speak, which file on disk do you mean? clipmeta never guesses. It resolves that deterministically, and the answer comes from one of two modes, depending on what you are doing right then.</p>
+    <div class="analogy"><b>Think of a darkroom.</b> If a print just dropped into the tray, the newest one is obviously the shot you mean. If you are flipping through prints already hung on the line, the one you mean is whichever you are holding up to the light. Same words, two different ways to know which print.</div>
+    <div class="tgrid">
+      <div class="tcard a"><div class="th">Gaming mode</div><div class="td">No media player open. You just made a clip and you are still in the game. clipmeta resolves the clip <b>just saved to disk</b>.</div></div>
+      <div class="tcard v"><div class="th">Review mode</div><div class="td">You are watching clips back in a player. clipmeta binds to the clip that was <b>playing the moment you spoke</b>, even if you have skipped ahead since.</div></div>
+    </div>
+
+    <div class="fl-legend">
+      <span><i style="background:#2BE0CE"></i>resolve</span>
+      <span><i style="background:#FF8A3D"></i>write</span>
+      <span><i style="background:#2EE36E"></i>done</span>
+      <span><i style="background:#F5C13D"></i>asks you to confirm</span>
+      <span><i style="background:#FF5C82"></i>stops safely, file unchanged</span>
+      <span><i style="background:#B98CFF"></i>queued, written later</span>
+    </div>
+
+    <h4 class="sub">Gaming mode: tag the clip you just saved</h4>
+    <div class="fig">
+      <svg class="fl" viewBox="0 0 900 716" role="img" aria-label="Gaming mode decision tree. You say a tag while still in the game. Claude calls library_watching, which scans the disk for a clip saved in the last five minutes. Decision: one fresh save? If none or several, Claude asks or confirms and never auto-tags. If exactly one, it resolves that clip, which the game has already freed. Decision: writable shape, not fragmented? If no, it is refused and the file is never opened for writing. If yes, a temp copy is built, verified, and atomically swapped in; the video stays byte-identical and a failed verify keeps the original. Result: the tag is saved inside the MP4.">
+        <defs>
+          <marker id="gm-arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7E8A9C"/></marker>
+          <marker id="gm-amber" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#F5C13D"/></marker>
+          <marker id="gm-red" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#FF5C82"/></marker>
+        </defs>
+        <text class="stage" transform="translate(22,360) rotate(-90)" text-anchor="middle" style="fill:#FF8A3D">GAMING MODE</text>
+
+        <rect class="box orange" x="100" y="34" width="300" height="38" rx="19"/>
+        <text class="t" x="250" y="53" text-anchor="middle">You say a tag, still in the game</text>
+        <line x1="250" y1="72" x2="250" y2="98" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+
+        <rect class="box teal" x="100" y="100" width="300" height="72" rx="9"/>
+        <text class="t" x="250" y="128" text-anchor="middle">Claude calls library_watching</text>
+        <text class="s" x="250" y="150" text-anchor="middle">a clip saved to disk in the last ~5 min</text>
+        <line x1="250" y1="172" x2="250" y2="203" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+
+        <polygon class="dia" points="250,205 384,251 250,297 116,251"/>
+        <text class="t" x="250" y="251" text-anchor="middle">One fresh save?</text>
+        <line x1="384" y1="251" x2="468" y2="251" stroke="#F5C13D" stroke-width="1.6" marker-end="url(#gm-amber)"/>
+        <text class="el" x="424" y="240" text-anchor="middle">no</text>
+        <rect class="box amber" x="470" y="216" width="392" height="70" rx="9"/>
+        <text class="lbl" x="486" y="237" style="fill:#F5C13D">CLAUDE ASKS FIRST</text>
+        <text class="s" x="486" y="255">None on disk, or several at once:</text>
+        <text class="s" x="486" y="271">it confirms, and never auto-tags a guess.</text>
+        <line x1="250" y1="297" x2="250" y2="320" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+        <text class="el" x="268" y="311">one</text>
+
+        <rect class="box teal" x="100" y="322" width="300" height="66" rx="9"/>
+        <text class="t" x="250" y="348" text-anchor="middle">Resolved: that one fresh clip</text>
+        <text class="s" x="250" y="370" text-anchor="middle">in your library; the game already freed it</text>
+        <line x1="250" y1="388" x2="250" y2="416" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+
+        <polygon class="dia" points="250,418 384,462 250,506 116,462"/>
+        <text class="t" x="250" y="456" text-anchor="middle">Writable shape?</text>
+        <text class="s" x="250" y="474" text-anchor="middle">not fragmented</text>
+        <line x1="384" y1="462" x2="468" y2="462" stroke="#FF5C82" stroke-width="1.6" marker-end="url(#gm-red)"/>
+        <text class="el" x="424" y="451" text-anchor="middle">no</text>
+        <rect class="box red" x="470" y="427" width="392" height="70" rx="9"/>
+        <text class="lbl" x="486" y="448" style="fill:#FF5C82">STOPS, FILE UNCHANGED</text>
+        <text class="s" x="486" y="466">Fragmented or unreadable layout:</text>
+        <text class="s" x="486" y="482">refused; never opened for writing.</text>
+        <line x1="250" y1="506" x2="250" y2="534" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+        <text class="el" x="266" y="521">yes</text>
+
+        <rect class="box orange" x="100" y="536" width="300" height="74" rx="9"/>
+        <text class="t" x="250" y="562" text-anchor="middle">Temp copy, verified, atomic swap</text>
+        <text class="s" x="250" y="584" text-anchor="middle">video copied byte-for-byte</text>
+        <line x1="250" y1="610" x2="250" y2="638" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#gm-arr)"/>
+
+        <rect class="box green" x="100" y="640" width="300" height="44" rx="22" style="fill:#0f2417"/>
+        <text class="t" x="250" y="662" text-anchor="middle" style="fill:#ffffff">Tag saved inside the MP4</text>
+      </svg>
+      <p class="figcap"><b>Gaming mode.</b> One fresh save is auto-taggable. Zero or several, and clipmeta asks you first.</p>
+    </div>
+
+    <h4 class="sub">Review mode: tag the clip you are watching</h4>
+    <div class="fig">
+      <svg class="fl" viewBox="0 0 900 842" role="img" aria-label="Review mode decision tree. You say a tag while reviewing clips in a player. Claude calls library_watching, which binds to the clip that was playing when you spoke using a background watcher. Decision: one clear clip? If two or more players are open or the title is ambiguous, confidence is capped and Claude confirms first. Decision: is a player on a file outside your library while nothing in-library is live? If yes, it warns and does not tag. Otherwise it resolves the clip you were watching. Decision: is that clip still locked by the player? If yes, the tag is saved to a queue and written automatically the moment the player closes the clip. If no, a temp copy is built, verified, and atomically swapped in. Result: the tag is saved inside the MP4.">
+        <defs>
+          <marker id="rv-arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7E8A9C"/></marker>
+          <marker id="rv-amber" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#F5C13D"/></marker>
+          <marker id="rv-red" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#FF5C82"/></marker>
+          <marker id="rv-violet" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#B98CFF"/></marker>
+        </defs>
+        <text class="stage" transform="translate(22,430) rotate(-90)" text-anchor="middle" style="fill:#B98CFF">REVIEW MODE</text>
+
+        <rect class="box violet" x="100" y="34" width="300" height="38" rx="19"/>
+        <text class="t" x="250" y="53" text-anchor="middle">You say a tag, reviewing in a player</text>
+        <line x1="250" y1="72" x2="250" y2="98" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+
+        <rect class="box teal" x="100" y="100" width="300" height="72" rx="9"/>
+        <text class="t" x="250" y="128" text-anchor="middle">Claude calls library_watching</text>
+        <text class="s" x="250" y="150" text-anchor="middle">bind to the clip playing when you spoke</text>
+        <line x1="250" y1="172" x2="250" y2="203" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+
+        <polygon class="dia" points="250,205 384,251 250,297 116,251"/>
+        <text class="t" x="250" y="251" text-anchor="middle">One clear clip?</text>
+        <line x1="384" y1="251" x2="468" y2="251" stroke="#F5C13D" stroke-width="1.6" marker-end="url(#rv-amber)"/>
+        <text class="el" x="424" y="240" text-anchor="middle">no</text>
+        <rect class="box amber" x="470" y="216" width="392" height="70" rx="9"/>
+        <text class="lbl" x="486" y="237" style="fill:#F5C13D">CLAUDE CONFIRMS</text>
+        <text class="s" x="486" y="255">2+ players open, or an ambiguous title:</text>
+        <text class="s" x="486" y="271">confidence is capped, so it asks first.</text>
+        <line x1="250" y1="297" x2="250" y2="328" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+        <text class="el" x="266" y="313">yes</text>
+
+        <polygon class="dia" points="250,330 384,376 250,422 116,376"/>
+        <text class="t" x="250" y="370" text-anchor="middle">Player on a file</text>
+        <text class="s" x="250" y="388" text-anchor="middle">outside your library?</text>
+        <line x1="384" y1="376" x2="468" y2="376" stroke="#FF5C82" stroke-width="1.6" marker-end="url(#rv-red)"/>
+        <text class="el" x="424" y="365" text-anchor="middle">yes</text>
+        <rect class="box red" x="470" y="341" width="392" height="70" rx="9"/>
+        <text class="lbl" x="486" y="362" style="fill:#FF5C82">WARNS, DOES NOT TAG</text>
+        <text class="s" x="486" y="380">A player is outside your library and</text>
+        <text class="s" x="486" y="396">nothing in-library is live to tag.</text>
+        <line x1="250" y1="422" x2="250" y2="450" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+        <text class="el" x="266" y="437">no</text>
+
+        <rect class="box teal" x="100" y="452" width="300" height="58" rx="9"/>
+        <text class="t" x="250" y="481" text-anchor="middle">Resolved: the clip you watched</text>
+        <line x1="250" y1="510" x2="250" y2="543" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+
+        <polygon class="dia" points="250,545 384,591 250,637 116,591"/>
+        <text class="t" x="250" y="585" text-anchor="middle">Still locked</text>
+        <text class="s" x="250" y="603" text-anchor="middle">by the player?</text>
+        <line x1="384" y1="591" x2="468" y2="591" stroke="#B98CFF" stroke-width="1.6" marker-end="url(#rv-violet)"/>
+        <text class="el" x="424" y="580" text-anchor="middle">yes</text>
+        <rect class="box violet" x="470" y="556" width="392" height="70" rx="9"/>
+        <text class="lbl" x="486" y="577" style="fill:#B98CFF">QUEUED</text>
+        <text class="s" x="486" y="595">Saved to the queue, then written the</text>
+        <text class="s" x="486" y="611">moment the player closes the clip.</text>
+        <line x1="250" y1="637" x2="250" y2="665" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+        <text class="el" x="266" y="652">no</text>
+
+        <rect class="box orange" x="100" y="667" width="300" height="74" rx="9"/>
+        <text class="t" x="250" y="693" text-anchor="middle">Temp copy, verified, atomic swap</text>
+        <text class="s" x="250" y="715" text-anchor="middle">video copied byte-for-byte</text>
+        <line x1="250" y1="741" x2="250" y2="769" stroke="#5F6A7B" stroke-width="1.6" marker-end="url(#rv-arr)"/>
+
+        <rect class="box green" x="100" y="771" width="300" height="44" rx="22" style="fill:#0f2417"/>
+        <text class="t" x="250" y="793" text-anchor="middle" style="fill:#ffffff">Tag saved inside the MP4</text>
+
+        <path d="M862,591 L882,591 L882,793 L404,793" fill="none" stroke="#B98CFF" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#rv-violet)"/>
+        <text class="el" x="640" y="783" text-anchor="middle" style="fill:#B98CFF">drains when the player closes</text>
+      </svg>
+      <p class="figcap"><b>Review mode.</b> A clip a player still holds is locked, so the tag waits in a queue and lands the instant the file frees.</p>
+    </div>
+
+    <p>Both modes converge on the <strong>same safe write pipeline</strong> (see Part 07): the only file ever opened for writing is a throwaway temp, verified to be byte-identical before an all-or-nothing swap. Any failed check leaves your original exactly as it was.</p>
+  </section>
+
   <div class="phase" id="built"><span class="ph-code">PART&nbsp;05</span><h3>How it's built — one engine, three front doors</h3><span class="rule"></span></div>
 
   <section class="teach violet">
@@ -674,7 +846,7 @@
 <footer class="wrap">
   <p><strong>clipmeta</strong> — metadata that lives inside your clips, taggable by voice the moment they happen. A Peckworks Lab project by Scott Finch.</p>
   <p>Built in C# / .NET 10 · zero external dependencies in production · open source on <a href="https://github.com/srfinch17/peckworks-clipmeta">GitHub</a>.</p>
-  <p class="meta-line">clipmeta info page · v1.0 · published 2026-06-29. Mission-control theme. Diagrams inline-SVG, no external assets.</p>
+  <p class="meta-line">clipmeta info page · v1.0 · published 2026-06-29 · added gaming/review decision trees 2026-06-29. Mission-control theme. Diagrams inline-SVG, no external assets.</p>
 </footer>
 
 </body>
