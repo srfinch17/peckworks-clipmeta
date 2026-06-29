@@ -105,7 +105,7 @@ public class ReviewBindingResolverTests
     [TestMethod]
     public void Resolve_SpokenAtInPastSegment_BindsThatSegment_NotCurrent()
     {
-        // The user spoke 15s in — during _2 — even though the player is now parked on _3.
+        // The user spoke 15s in, during _2, even though the player is now parked on _3.
         DateTimeOffset spokenAt = T0.AddSeconds(15);
         DateTimeOffset now = T0.AddSeconds(40);
 

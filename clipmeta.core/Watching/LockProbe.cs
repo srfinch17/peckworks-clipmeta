@@ -3,10 +3,10 @@ using System.Security;
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// Best-effort check of whether a file currently has an open handle that denies exclusive access —
+/// Best-effort check of whether a file currently has an open handle that denies exclusive access, 
 /// the signal that a media player is actively reading it. Cloud-safe: an offline/placeholder file
 /// (Dropbox/OneDrive online-only) is reported not-in-use WITHOUT being opened, so the probe can
-/// never trigger a hydration download. Never throws — any inaccessible, invalid, missing, or
+/// never trigger a hydration download. Never throws, any inaccessible, invalid, missing, or
 /// offline path is reported not-in-use; no non-fatal exception ever escapes this method.
 /// </summary>
 public static class LockProbe
@@ -20,14 +20,14 @@ public static class LockProbe
     {
         try
         {
-            // Never open an offline/placeholder file — opening would force a download. An
+            // Never open an offline/placeholder file, opening would force a download. An
             // un-hydrated file is not the one a player is actively reading, so treat it not-in-use.
             if ((File.GetAttributes(path) & FileAttributes.Offline) != 0)
                 return false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return false; // missing/inaccessible/invalid/malformed path — not lockable
+            return false; // missing/inaccessible/invalid/malformed path, not lockable
         }
 
         try
@@ -41,7 +41,7 @@ public static class LockProbe
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or NotSupportedException or SecurityException or ArgumentException)
         {
-            return false; // inaccessible/invalid/malformed path — not lockable
+            return false; // inaccessible/invalid/malformed path, not lockable
         }
     }
 }

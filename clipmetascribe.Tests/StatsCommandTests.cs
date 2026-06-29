@@ -143,7 +143,7 @@ public class StatsCommandTests
     public void Run_PartialFieldsSet_ShowsUnsetKnownFields()
     {
         string pristine = TestClipsLocator.AllPristine().First();
-        // Write only game — the other 5 should appear as unset
+        // Write only game, the other 5 should appear as unset
         string scratch = WriteFields(pristine, new()
         {
             [ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2",

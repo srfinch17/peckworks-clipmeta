@@ -25,7 +25,7 @@ public class LibrarySandboxTests
     [TestCleanup]
     public void TearDown()
     {
-        // Directory.Delete(recursive) refuses junctions (UnauthorizedAccessException) —
+        // Directory.Delete(recursive) refuses junctions (UnauthorizedAccessException), 
         // remove each link itself first (non-recursive delete removes the reparse point
         // without touching its target), then the rest of the tree.
         foreach (string junction in _junctions)
@@ -141,7 +141,7 @@ public class LibrarySandboxTests
     [TestMethod]
     public void GetMetadata_ThroughJunctionPointingInsideLibrary_StillWorks()
     {
-        // A junction whose target is INSIDE the library is legitimate and must keep working —
+        // A junction whose target is INSIDE the library is legitimate and must keep working, 
         // the canonicalization must not be a blanket reparse-point ban (cloud-placeholder files
         // are reparse points too).
         string library = Path.Combine(_tempDir, "library");

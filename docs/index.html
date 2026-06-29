@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>clipmeta — tag your game clips by voice, the moment they happen</title>
-<meta name="description" content="clipmeta writes searchable metadata INSIDE your MP4 files, and lets Claude tag the clip you just recorded — by voice, while you're still playing. A zero-dependency C# tool suite with an MCP server." />
+<title>clipmeta, tag your game clips by voice, the moment they happen</title>
+<meta name="description" content="clipmeta writes searchable metadata INSIDE your MP4 files, and lets Claude tag the clip you just recorded, by voice, while you're still playing. A zero-dependency C# tool suite with an MCP server." />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D1015'/%3E%3Crect x='0.5' y='0.5' width='31' height='31' rx='6.5' fill='none' stroke='%232C3442'/%3E%3Crect x='6' y='9' width='20' height='14' rx='2.5' fill='none' stroke='%232BE0CE' stroke-width='1.6'/%3E%3Cpath d='M14 13.5 L19 16 L14 18.5 Z' fill='%232BE0CE'/%3E%3Ccircle cx='23.5' cy='8.5' r='3.4' fill='%23FF8A3D'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -231,9 +231,9 @@
 <header class="hero">
   <div class="wrap">
     <p class="eyebrow">Peckworks Lab · open-source MP4 metadata suite · MCP-native</p>
-    <h1 class="thesis">Tag the clip you just recorded — <span class="hl">by voice, while you're still playing.</span></h1>
+    <h1 class="thesis">Tag the clip you just recorded, <span class="hl">by voice, while you're still playing.</span></h1>
     <p class="thesis-by mono">// clipmeta writes searchable metadata INSIDE your .mp4 files, so the tag never leaves the clip.</p>
-    <p class="lede">You have a hard drive full of game clips you'll never get through, and a highlight reel in your head you'll never sit down to make. <strong>clipmeta</strong> fixes the root cause: the moment something great happens, you say what it was out loud — <span class="m">"tag that, market-garden triple, save it for the montage"</span> — and Claude writes that straight into the clip's bytes. Later you ask for <em>"every TF2 airshot rated 4+"</em> and they're <strong>just there</strong>. No spreadsheet, no folders, no sidecar files that get lost. The tag lives <strong>inside the MP4</strong> and travels with it forever.</p>
+    <p class="lede">You have a hard drive full of game clips you'll never get through, and a highlight reel in your head you'll never sit down to make. <strong>clipmeta</strong> fixes the root cause: the moment something great happens, you say what it was out loud, <span class="m">"tag that, market-garden triple, save it for the montage"</span>, and Claude writes that straight into the clip's bytes. Later you ask for <em>"every TF2 airshot rated 4+"</em> and they're <strong>just there</strong>. No spreadsheet, no folders, no sidecar files that get lost. The tag lives <strong>inside the MP4</strong> and travels with it forever.</p>
     <div class="herobtns">
       <a class="btn primary" href="#voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>See the voice workflow</a>
       <a class="btn" href="https://github.com/srfinch17/peckworks-clipmeta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.7c-2.78.62-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9v2.81c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>View on GitHub</a>
@@ -267,7 +267,7 @@
 <main class="wrap">
 
   <!-- ============ 01 PROBLEM ============ -->
-  <div class="phase" id="problem"><span class="ph-code">PART&nbsp;01</span><h3>The problem — clips go in, nothing comes out</h3><span class="rule"></span></div>
+  <div class="phase" id="problem"><span class="ph-code">PART&nbsp;01</span><h3>The problem, clips go in, nothing comes out</h3><span class="rule"></span></div>
 
   <section class="teach">
     <p class="kicker">
@@ -275,19 +275,19 @@
       Where this started
     </p>
     <h3 class="tt">A folder of thousands of clips is a graveyard, not a library.</h3>
-    <p class="lead">Modern capture makes saving a moment effortless — one hotkey and the last 30 seconds are on disk. So you press it. A lot. Months later you have a directory of <span class="m">2022-02-01 21.50.02.mp4</span>, <span class="m">Replay_0473.mp4</span>, <span class="m">clip001.mp4</span> — hundreds of gigabytes, and <strong>no idea what's in any of them.</strong></p>
+    <p class="lead">Modern capture makes saving a moment effortless, one hotkey and the last 30 seconds are on disk. So you press it. A lot. Months later you have a directory of <span class="m">2022-02-01 21.50.02.mp4</span>, <span class="m">Replay_0473.mp4</span>, <span class="m">clip001.mp4</span>, hundreds of gigabytes, and <strong>no idea what's in any of them.</strong></p>
     <p>Two specific frustrations started this project:</p>
     <ul>
       <li><strong>The library I'll never get through.</strong> The great moments are in there. Finding them means re-watching everything, which means I never do.</li>
       <li><strong>The montage I'll never make.</strong> I can picture the highlight reel perfectly. Actually scrubbing a thousand files to assemble it? That hour never arrives.</li>
     </ul>
-    <p>The information that would fix this — <em>what game, who was in it, what happened, was it any good</em> — existed for about ten seconds: right when the clip was recorded, while I was still grinning about it. Then it evaporated. By the time I'm looking at the file name, it's gone.</p>
+    <p>The information that would fix this, <em>what game, who was in it, what happened, was it any good</em>, existed for about ten seconds: right when the clip was recorded, while I was still grinning about it. Then it evaporated. By the time I'm looking at the file name, it's gone.</p>
 
-    <div class="analogy"><b>Feynman version:</b> it's a shoebox of unlabeled photos. Every single one was obvious the day it was taken — "oh that's the trip to the coast." A year later it's a stack of strangers. The fix was never a better shoebox. It's <em>writing on the back of the photo while you still remember.</em></div>
+    <div class="analogy"><b>Feynman version:</b> it's a shoebox of unlabeled photos. Every single one was obvious the day it was taken, "oh that's the trip to the coast." A year later it's a stack of strangers. The fix was never a better shoebox. It's <em>writing on the back of the photo while you still remember.</em></div>
 
     <div class="fig">
       <svg viewBox="0 0 760 250" role="img" aria-label="A funnel diagram. Many clips pour into the top labelled 'capture is effortless'. They collect in a large bin labelled 'unlabelled library, hundreds of GB'. The bottom outlet, labelled 'the montage', is plugged, so nothing comes out.">
-        <text x="380" y="24" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">capture is effortless — one hotkey, endless clips</text>
+        <text x="380" y="24" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">capture is effortless, one hotkey, endless clips</text>
         <!-- incoming clips -->
         <g font-family="'IBM Plex Mono',monospace" font-size="9" fill="#5F6A7B">
           <rect x="150" y="40" width="64" height="20" rx="3" fill="#1C2330" stroke="#2C3442"/><text x="158" y="54">Replay_0473</text>
@@ -304,53 +304,53 @@
         <line x1="352" y1="208" x2="408" y2="208" stroke="#FF5C82" stroke-width="3"/>
         <circle cx="380" cy="208" r="13" fill="#0D1015" stroke="#FF5C82" stroke-width="2"/>
         <line x1="371" y1="199" x2="389" y2="217" stroke="#FF5C82" stroke-width="2"/>
-        <text x="380" y="238" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#FF5C82">the montage — never comes out</text>
+        <text x="380" y="238" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#FF5C82">the montage, never comes out</text>
       </svg>
       <p class="figcap"><b>The funnel that never drains.</b> The bottleneck isn't capture or storage. It's that the <b>meaning</b> is never recorded.</p>
     </div>
   </section>
 
   <!-- ============ 02 IDEA ============ -->
-  <div class="phase" id="idea"><span class="ph-code">PART&nbsp;02</span><h3>The idea — record the meaning when it's freshest</h3><span class="rule"></span></div>
+  <div class="phase" id="idea"><span class="ph-code">PART&nbsp;02</span><h3>The idea, record the meaning when it's freshest</h3><span class="rule"></span></div>
 
   <section class="teach amber">
     <p class="kicker">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1M15 16.8c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
       The insight the whole tool is built around
     </p>
-    <h3 class="tt">The best time to label a clip is the second it happens — not "later."</h3>
-    <p class="lead">"Later" is where metadata goes to die. The entire design follows from refusing to wait. If the only moment you reliably know what a clip is worth is right after it's recorded, then <strong>that</strong> is when the tag has to be written — without breaking your flow, without alt-tabbing out of the game, ideally without even taking your hands off the controls.</p>
+    <h3 class="tt">The best time to label a clip is the second it happens, not "later."</h3>
+    <p class="lead">"Later" is where metadata goes to die. The entire design follows from refusing to wait. If the only moment you reliably know what a clip is worth is right after it's recorded, then <strong>that</strong> is when the tag has to be written, without breaking your flow, without alt-tabbing out of the game, ideally without even taking your hands off the controls.</p>
     <p>That single constraint produced three design commitments:</p>
     <div class="tgrid">
-      <div class="tcard a"><div class="th">Capture at the source</div><div class="td">Tag the moment of recording, when the memory is vivid — not in a cleanup session that never happens.</div></div>
+      <div class="tcard a"><div class="th">Capture at the source</div><div class="td">Tag the moment of recording, when the memory is vivid, not in a cleanup session that never happens.</div></div>
       <div class="tcard"><div class="th">Hands-free input</div><div class="td">Speaking is the only input that doesn't pull you out of the game. So the front door is <b>your voice</b>, via an AI assistant.</div></div>
-      <div class="tcard c"><div class="th">The tag rides along</div><div class="td">Write it <b>inside</b> the file, not a database beside it. Move the clip, back it up, share it — the meaning goes too.</div></div>
+      <div class="tcard c"><div class="th">The tag rides along</div><div class="td">Write it <b>inside</b> the file, not a database beside it. Move the clip, back it up, share it, the meaning goes too.</div></div>
     </div>
-    <div class="analogy"><b>Analogy:</b> a field biologist doesn't photograph a hundred birds and identify them next winter from memory. They speak into a recorder the instant they see one — <em>"male goldfinch, north ridge, 7:12."</em> clipmeta is that recorder, for your clips. The identification happens at the only moment it's easy.</div>
+    <div class="analogy"><b>Analogy:</b> a field biologist doesn't photograph a hundred birds and identify them next winter from memory. They speak into a recorder the instant they see one, <em>"male goldfinch, north ridge, 7:12."</em> clipmeta is that recorder, for your clips. The identification happens at the only moment it's easy.</div>
   </section>
 
   <!-- ============ 03 SOLUTION ============ -->
-  <div class="phase" id="solution"><span class="ph-code">PART&nbsp;03</span><h3>The solution — metadata that lives inside the MP4</h3><span class="rule"></span></div>
+  <div class="phase" id="solution"><span class="ph-code">PART&nbsp;03</span><h3>The solution, metadata that lives inside the MP4</h3><span class="rule"></span></div>
 
   <section class="teach cyan">
     <p class="kicker">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v1M3 8v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8M3 8h18M8 12h8"/></svg>
       Why inside the file, and not a sidecar
     </p>
-    <h3 class="tt">The tag is written into the clip's own bytes — so it can never get separated from it.</h3>
+    <h3 class="tt">The tag is written into the clip's own bytes, so it can never get separated from it.</h3>
     <p class="lead">Most "tagging" tools keep your labels in a separate database or a <span class="m">.json</span> sitting next to the video. The day you move, rename, copy to another drive, or hand a clip to an editor, that link breaks and the metadata is orphaned. clipmeta takes the harder, durable path: it writes the metadata <strong>into the MP4 container itself</strong>, the same place a camera stores GPS and a song stores its artist.</p>
 
-    <div class="analogy"><b>Feynman version:</b> a sidecar file is a sticky note on a folder — it falls off. clipmeta is ink on the back of the photo. The two never part, because they're one object.</div>
+    <div class="analogy"><b>Feynman version:</b> a sidecar file is a sticky note on a folder, it falls off. clipmeta is ink on the back of the photo. The two never part, because they're one object.</div>
 
-    <p>An MP4 is a tree of nested <em>boxes</em> (the format calls them "atoms"). clipmeta adds its fields as <span class="m">----</span> "freeform" atoms under a private namespace — <span class="m">com.peckworkslab.clipmeta</span> — so they sit alongside, and never collide with, the file's existing metadata, the iTunes-style tags, or another tool's data.</p>
+    <p>An MP4 is a tree of nested <em>boxes</em> (the format calls them "atoms"). clipmeta adds its fields as <span class="m">----</span> "freeform" atoms under a private namespace, <span class="m">com.peckworkslab.clipmeta</span>, so they sit alongside, and never collide with, the file's existing metadata, the iTunes-style tags, or another tool's data.</p>
 
     <div class="fig">
       <svg viewBox="0 0 720 340" role="img" aria-label="An MP4 box tree. Top-level boxes ftyp, moov, mdat. Inside moov is a udta box, inside that meta, inside that ilst, and inside ilst a highlighted box named with the clipmeta freeform atom holding game, players, tags, rating fields. The mdat box, the actual video, is marked untouched.">
-        <text x="360" y="22" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">one .mp4 file — a tree of nested boxes</text>
+        <text x="360" y="22" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">one .mp4 file, a tree of nested boxes</text>
         <!-- top level -->
         <rect x="40" y="40" width="120" height="34" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="100" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">ftyp</text>
         <rect x="172" y="40" width="180" height="34" rx="6" fill="#151A21" stroke="#6E9BFF"/><text x="262" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#6E9BFF">moov (metadata)</text>
-        <rect x="364" y="40" width="316" height="34" rx="6" fill="#102a28" stroke="#2BE0CE"/><text x="522" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#2BE0CE">mdat — your video (never touched)</text>
+        <rect x="364" y="40" width="316" height="34" rx="6" fill="#102a28" stroke="#2BE0CE"/><text x="522" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#2BE0CE">mdat, your video (never touched)</text>
         <!-- nesting from moov -->
         <line x1="200" y1="74" x2="200" y2="92" stroke="#2C3442"/>
         <rect x="172" y="92" width="300" height="30" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="186" y="112" font-family="'IBM Plex Mono',monospace" font-size="11.5" fill="#94A0B2">udta · user data</text>
@@ -374,19 +374,19 @@
     </div>
 
     <h4 class="sub">The fields you get out of the box</h4>
-    <p>Six well-known fields cover most of what you'd search by — plus any custom name you invent. Multi-value fields are pipe-delimited (<span class="m">"rocket jump|headshot"</span>).</p>
+    <p>Six well-known fields cover most of what you'd search by, plus any custom name you invent. Multi-value fields are pipe-delimited (<span class="m">"rocket jump|headshot"</span>).</p>
     <div class="tgrid">
-      <div class="tcard"><div class="th">game</div><div class="td">What you were playing — the top-level filter.</div></div>
+      <div class="tcard"><div class="th">game</div><div class="td">What you were playing, the top-level filter.</div></div>
       <div class="tcard"><div class="th">players</div><div class="td">Who was in it (you, your squad, the victim).</div></div>
       <div class="tcard"><div class="th">tags</div><div class="td">Free-form moments: <span class="mono" style="color:#2BE0CE">airshot</span>, <span class="mono" style="color:#2BE0CE">clutch</span>, <span class="mono" style="color:#2BE0CE">funny</span>.</div></div>
       <div class="tcard a"><div class="th">rating</div><div class="td">Is it montage-worthy? The "make the cut" signal.</div></div>
       <div class="tcard"><div class="th">timecode</div><div class="td">The exact in-clip moment worth keeping.</div></div>
-      <div class="tcard"><div class="th">notes</div><div class="td">Anything else — context, a caption idea.</div></div>
+      <div class="tcard"><div class="th">notes</div><div class="td">Anything else, context, a caption idea.</div></div>
     </div>
   </section>
 
   <!-- ============ 04 VOICE ============ -->
-  <div class="phase" id="voice"><span class="ph-code">PART&nbsp;04</span><h3>Tag by voice — the workflow this was built for</h3><span class="rule"></span></div>
+  <div class="phase" id="voice"><span class="ph-code">PART&nbsp;04</span><h3>Tag by voice, the workflow this was built for</h3><span class="rule"></span></div>
 
   <section class="teach">
     <p class="kicker">
@@ -397,15 +397,15 @@
     <p class="lead">This is the part that makes clipmeta more than a metadata library. Because it ships an <strong>MCP server</strong>, an AI assistant like <strong>Claude</strong> can drive it directly. Pair that with voice input and the whole loop closes without you ever leaving the game: you hit your normal record hotkey, then <em>talk</em>, and Claude figures out <strong>which clip you mean</strong> and writes the tag.</p>
 
     <div class="voice">
-      <div class="bub you"><div class="av">YOU</div><div><div class="who">mid-match, hands on keyboard</div><div class="msg">"Claude — that last clip, tag it. Team Fortress 2, market-garden airshot on the spy. Rate it a 5, that's going in the montage."</div></div></div>
-      <div class="bub claude"><div class="av">AI</div><div><div class="who">Claude, via the clipmeta MCP server</div><div class="msg">Found the clip you just recorded — <span class="m">Replay_0488.mp4</span> (newest in your library, and your player still has it open). It's playing right now, so I've <b>queued</b> the tag; it'll be written the instant the file is free. <span class="m">game=Team Fortress 2 · tags=market garden|airshot · players=spy · rating=5</span> ✓</div></div></div>
+      <div class="bub you"><div class="av">YOU</div><div><div class="who">mid-match, hands on keyboard</div><div class="msg">"Claude, that last clip, tag it. Team Fortress 2, market-garden airshot on the spy. Rate it a 5, that's going in the montage."</div></div></div>
+      <div class="bub claude"><div class="av">AI</div><div><div class="who">Claude, via the clipmeta MCP server</div><div class="msg">Found the clip you just recorded, <span class="m">Replay_0488.mp4</span> (newest in your library, and your player still has it open). It's playing right now, so I've <b>queued</b> the tag; it'll be written the instant the file is free. <span class="m">game=Team Fortress 2 · tags=market garden|airshot · players=spy · rating=5</span> ✓</div></div></div>
       <div class="bub you"><div class="av">YOU</div><div><div class="who">next day</div><div class="msg">"Pull up every TF2 clip rated 4 or higher."</div></div></div>
-      <div class="bub claude"><div class="av">AI</div><div><div class="who">Claude</div><div class="msg">7 clips match <span class="m">game=Team Fortress 2</span> and <span class="m">rating ≥ 4</span>. Here they are, newest first — want me to copy them into a <span class="m">montage/</span> folder?</div></div></div>
+      <div class="bub claude"><div class="av">AI</div><div><div class="who">Claude</div><div class="msg">7 clips match <span class="m">game=Team Fortress 2</span> and <span class="m">rating ≥ 4</span>. Here they are, newest first, want me to copy them into a <span class="m">montage/</span> folder?</div></div></div>
     </div>
     <p class="figcap mono" style="text-align:left; color:var(--muted-2);">// Illustrative exchange. Voice-to-text is provided by your assistant/OS; clipmeta provides the tools Claude calls.</p>
 
     <h4 class="sub">What actually happens under the hood</h4>
-    <p>The clever part is "<em>which</em> clip." You didn't give a filename — you can't, you're playing. clipmeta resolves it from the world around you: it checks your open media players and your newest recordings, scoped strictly to your clips folder.</p>
+    <p>The clever part is "<em>which</em> clip." You didn't give a filename, you can't, you're playing. clipmeta resolves it from the world around you: it checks your open media players and your newest recordings, scoped strictly to your clips folder.</p>
 
     <div class="fig">
       <svg viewBox="0 0 780 300" role="img" aria-label="A four-lane sequence. Lane 1 You speak. Lane 2 Claude in Claude Desktop or Claude Code. Lane 3 the clipmeta MCP server with library_watching and the write tools. Lane 4 the MP4 file. Arrows flow left to right: voice to Claude, Claude calls library_watching, server resolves the just-recorded clip, Claude confirms and calls a write or queue tool, the tag lands in the file. A note shows that if the clip is locked by a player, the tag is queued and drained later.">
@@ -421,14 +421,14 @@
         <g stroke="#212834" stroke-dasharray="3 4"><line x1="95" y1="76" x2="95" y2="280"/><line x1="290" y1="76" x2="290" y2="280"/><line x1="500" y1="76" x2="500" y2="280"/><line x1="695" y1="76" x2="695" y2="280"/></g>
         <!-- arrows -->
         <g font-family="'IBM Plex Sans',sans-serif" font-size="10.5" fill="#C7CEDA">
-          <line x1="95" y1="100" x2="288" y2="100" stroke="#FF8A3D" stroke-width="1.6" marker-end="url(#a)"/><text x="100" y="94">"tag that last clip — TF2 airshot, rate it 5"</text>
+          <line x1="95" y1="100" x2="288" y2="100" stroke="#FF8A3D" stroke-width="1.6" marker-end="url(#a)"/><text x="100" y="94">"tag that last clip, TF2 airshot, rate it 5"</text>
           <line x1="290" y1="132" x2="498" y2="132" stroke="#2BE0CE" stroke-width="1.6" marker-end="url(#ac)"/><text x="298" y="126" fill="#2BE0CE">calls library_watching</text>
           <line x1="500" y1="164" x2="500" y2="164"/><text x="412" y="160" fill="#B98CFF">resolves newest / open clip →</text>
           <line x1="498" y1="180" x2="292" y2="180" stroke="#B98CFF" stroke-width="1.6" marker-end="url(#av)"/><text x="300" y="174" fill="#94A0B2">"it's Replay_0488.mp4 (locked: playing)"</text>
           <line x1="290" y1="212" x2="498" y2="212" stroke="#2BE0CE" stroke-width="1.6" marker-end="url(#ac)"/><text x="298" y="206" fill="#2BE0CE">calls clip_set_fields / library_queue_tag</text>
           <line x1="500" y1="244" x2="693" y2="244" stroke="#FF8A3D" stroke-width="1.6" marker-end="url(#a)"/><text x="508" y="238" fill="#FF8A3D">writes (or queues) the tag</text>
         </g>
-        <text x="390" y="276" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#5F6A7B">a clip that's playing is locked — the tag waits in the queue, written the moment it frees</text>
+        <text x="390" y="276" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#5F6A7B">a clip that's playing is locked, the tag waits in the queue, written the moment it frees</text>
         <defs>
           <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0L7 3L0 6Z" fill="#FF8A3D"/></marker>
           <marker id="ac" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0L7 3L0 6Z" fill="#2BE0CE"/></marker>
@@ -439,15 +439,15 @@
     </div>
 
     <div class="tgrid">
-      <div class="tcard c"><div class="th">Resolve, never guess</div><div class="td">A clip is only ever matched from a file <b>inside your library folder</b>. A window title that names a path elsewhere matches nothing — it's dropped. The tool selects; it never invents a path.</div></div>
+      <div class="tcard c"><div class="th">Resolve, never guess</div><div class="td">A clip is only ever matched from a file <b>inside your library folder</b>. A window title that names a path elsewhere matches nothing, it's dropped. The tool selects; it never invents a path.</div></div>
       <div class="tcard a"><div class="th">Playing = locked</div><div class="td">A clip your player is showing can't be safely rewritten. clipmeta detects the lock and <b>defers</b> the tag to a queue instead of failing or corrupting.</div></div>
-      <div class="tcard v"><div class="th">Drains automatically</div><div class="td">Next time you tag, list, or flush, queued tags whose clips are now free get written — so "tag it now" works even mid-playback.</div></div>
+      <div class="tcard v"><div class="th">Drains automatically</div><div class="td">Next time you tag, list, or flush, queued tags whose clips are now free get written, so "tag it now" works even mid-playback.</div></div>
     </div>
 
     <div class="shot">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-      <div class="lab">Voice-tagging session — screenshot coming soon</div>
-      <div class="hint">Drop a real screen capture here: Claude Desktop (or Claude Code) calling <span class="mono">library_watching</span> then a write tool, alongside the game. This is the money shot for LinkedIn — replace before publishing.</div>
+      <div class="lab">Voice-tagging session, screenshot coming soon</div>
+      <div class="hint">Drop a real screen capture here: Claude Desktop (or Claude Code) calling <span class="mono">library_watching</span> then a write tool, alongside the game. This is the money shot for LinkedIn, replace before publishing.</div>
     </div>
   </section>
 
@@ -608,7 +608,7 @@
     <p>Both modes converge on the <strong>same safe write pipeline</strong> (see Part 07): the only file ever opened for writing is a throwaway temp, verified to be byte-identical before an all-or-nothing swap. Any failed check leaves your original exactly as it was.</p>
   </section>
 
-  <div class="phase" id="built"><span class="ph-code">PART&nbsp;05</span><h3>How it's built — one engine, three front doors</h3><span class="rule"></span></div>
+  <div class="phase" id="built"><span class="ph-code">PART&nbsp;05</span><h3>How it's built, one engine, three front doors</h3><span class="rule"></span></div>
 
   <section class="teach violet">
     <p class="kicker">
@@ -616,7 +616,7 @@
       The architecture, in one breath
     </p>
     <h3 class="tt">All the real work lives in one zero-dependency core. The CLI, the batch jobs, and the MCP server are thin shells over it.</h3>
-    <p class="lead">clipmeta is a small suite of C# (.NET 10) projects. The rule that keeps it honest: <strong>all business logic lives in <span class="m">clipmeta.core</span></strong> — MP4 parsing, the safe write engine, search and indexing — and it has <strong>zero external NuGet dependencies</strong>, pure .NET base library only. Everything a user touches is a <em>thin shell</em> that parses input and calls into Core. Add a new front door without rewriting the engine.</p>
+    <p class="lead">clipmeta is a small suite of C# (.NET 10) projects. The rule that keeps it honest: <strong>all business logic lives in <span class="m">clipmeta.core</span></strong>, MP4 parsing, the safe write engine, search and indexing, and it has <strong>zero external NuGet dependencies</strong>, pure .NET base library only. Everything a user touches is a <em>thin shell</em> that parses input and calls into Core. Add a new front door without rewriting the engine.</p>
 
     <div class="fig">
       <svg viewBox="0 0 760 320" role="img" aria-label="A layered architecture diagram. At the top, three front doors: clipmetaview the tree viewer, clipmetascribe the CLI, and clipmetamcp the MCP server. They all sit on top of a wide base box, clipmeta.core, which contains Mp4 parse, the write engine, watching and the tag queue, schema, and search and index. Below core, a label says .NET base library only, zero NuGet. To the side, MCP hosts Claude Desktop and Claude Code connect into the MCP server.">
@@ -635,7 +635,7 @@
         <line x1="600" y1="76" x2="582" y2="76" stroke="#2BE0CE" stroke-dasharray="3 3"/><text x="497" y="34" font-family="'IBM Plex Mono',monospace" font-size="9" fill="#5F6A7B">stdio JSON-RPC 2.0</text>
         <!-- core -->
         <rect x="40" y="150" width="542" height="96" rx="11" fill="#17120a" stroke="#FF8A3D" stroke-width="1.6"/>
-        <text x="58" y="174" font-family="'IBM Plex Mono',monospace" font-size="12.5" font-weight="700" fill="#FF8A3D">clipmeta.core — the whole engine</text>
+        <text x="58" y="174" font-family="'IBM Plex Mono',monospace" font-size="12.5" font-weight="700" fill="#FF8A3D">clipmeta.core, the whole engine</text>
         <g font-family="'IBM Plex Mono',monospace" font-size="10.5" fill="#EAEDF3">
           <rect x="58" y="186" width="118" height="24" rx="5" fill="#1C2330" stroke="#2C3442"/><text x="117" y="202" text-anchor="middle">Mp4 parse</text>
           <rect x="184" y="186" width="128" height="24" rx="5" fill="#1C2330" stroke="#2C3442"/><text x="248" y="202" text-anchor="middle">safe write engine</text>
@@ -646,37 +646,37 @@
         </g>
         <!-- foundation -->
         <rect x="40" y="258" width="542" height="40" rx="9" fill="#1C2330" stroke="#2C3442"/>
-        <text x="311" y="282" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#94A0B2">.NET 10 base library only — 0 external NuGet packages in production code</text>
+        <text x="311" y="282" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#94A0B2">.NET 10 base library only, 0 external NuGet packages in production code</text>
       </svg>
-      <p class="figcap"><b>One engine, three shells.</b> The MCP server is just another thin caller of the same Core the CLI uses — so a tool Claude runs and a command you type take the exact same safe path.</p>
+      <p class="figcap"><b>One engine, three shells.</b> The MCP server is just another thin caller of the same Core the CLI uses, so a tool Claude runs and a command you type take the exact same safe path.</p>
     </div>
 
     <h4 class="sub">What is MCP, and why does it matter here?</h4>
-    <p><strong>MCP — the Model Context Protocol</strong> — is an open standard for giving an AI assistant real, typed tools instead of just a chat box. The clipmeta MCP server speaks JSON-RPC over stdio and advertises <strong>17 tools</strong> the model can call, each with a strict schema and a description written <em>for the model</em> so it self-corrects.</p>
-    <div class="analogy"><b>Analogy:</b> without MCP, an assistant is a brilliant intern who can only <em>talk</em> about your clips. MCP hands that intern a labelled control panel — buttons for "list," "tag," "search," "undo" — each one wired to the same safe engine you'd use by hand. clipmeta builds and ships that control panel.</p></div>
+    <p><strong>MCP, the Model Context Protocol</strong>, is an open standard for giving an AI assistant real, typed tools instead of just a chat box. The clipmeta MCP server speaks JSON-RPC over stdio and advertises <strong>17 tools</strong> the model can call, each with a strict schema and a description written <em>for the model</em> so it self-corrects.</p>
+    <div class="analogy"><b>Analogy:</b> without MCP, an assistant is a brilliant intern who can only <em>talk</em> about your clips. MCP hands that intern a labelled control panel, buttons for "list," "tag," "search," "undo", each one wired to the same safe engine you'd use by hand. clipmeta builds and ships that control panel.</p></div>
 
     <h4 class="sub">The 17 tools Claude can call</h4>
     <table class="tooltable">
       <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr class="grp"><td colspan="2">Read — 7 tools (always safe, never modify a file)</td></tr>
+        <tr class="grp"><td colspan="2">Read, 7 tools (always safe, never modify a file)</td></tr>
         <tr><td class="nm">clip_get_metadata</td><td>Read every clipmeta field on one clip.</td></tr>
         <tr><td class="nm">library_list</td><td>List clips in the library with their tags.</td></tr>
         <tr><td class="nm">library_find</td><td>Find clips where a field matches a value (live scan).</td></tr>
-        <tr><td class="nm">library_vocab</td><td>Show every distinct value used for a field — your tag vocabulary.</td></tr>
+        <tr><td class="nm">library_vocab</td><td>Show every distinct value used for a field, your tag vocabulary.</td></tr>
         <tr><td class="nm">library_export</td><td>Export the library's metadata as JSON or CSV.</td></tr>
         <tr><td class="nm">library_search_index</td><td>Fast search against a pre-built index.</td></tr>
         <tr><td class="nm">library_watching</td><td>Resolve the clip you're currently/just watching from open players + newest files.</td></tr>
-        <tr class="grp"><td colspan="2">Write — 4 tools (the safe write engine, sandboxed)</td></tr>
+        <tr class="grp"><td colspan="2">Write, 4 tools (the safe write engine, sandboxed)</td></tr>
         <tr><td class="nm w">clip_set_fields</td><td>Set one or more fields on a clip.</td></tr>
         <tr><td class="nm w">clip_append_field</td><td>Add a value to a multi-value field without losing the rest.</td></tr>
         <tr><td class="nm w">clip_clear_fields</td><td>Remove specific fields.</td></tr>
         <tr><td class="nm w">clip_clear_all</td><td>Strip all clipmeta metadata back to pristine.</td></tr>
-        <tr class="grp"><td colspan="2">Backup &amp; restore — 3 tools (an undo button for writes)</td></tr>
+        <tr class="grp"><td colspan="2">Backup &amp; restore, 3 tools (an undo button for writes)</td></tr>
         <tr><td class="nm bk">library_list_backups</td><td>List the <span class="mono">.bak</span> safety copies on hand.</td></tr>
         <tr><td class="nm bk">clip_restore_backup</td><td>Roll a clip back to a backup.</td></tr>
         <tr><td class="nm bk">clip_prune_backups</td><td>Clean up old backups.</td></tr>
-        <tr class="grp"><td colspan="2">Deferred-tag queue — 3 tools (for clips that are still playing)</td></tr>
+        <tr class="grp"><td colspan="2">Deferred-tag queue, 3 tools (for clips that are still playing)</td></tr>
         <tr><td class="nm q">library_queue_tag</td><td>Queue a tag for a clip that's locked, to write when it frees up.</td></tr>
         <tr><td class="nm q">library_flush_queue</td><td>Write all queued tags whose clips are now free.</td></tr>
         <tr><td class="nm q">library_queue_status</td><td>Show what's waiting in the queue.</td></tr>
@@ -687,12 +687,12 @@
     <h4 class="sub">…and the CLI underneath, for everything else</h4>
     <p>Prefer the keyboard, or want to script a thousand clips at once? <span class="m">clipmetascribe</span> is the same engine as a command-line tool. Directory-wide batch ops, copying tags from one clip to many, building a search index, and flushing the queue all live here.</p>
     <div class="term">
-      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="tt">clipmetascribe — PowerShell</span></div>
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="tt">clipmetascribe, PowerShell</span></div>
 <pre><span class="dm"># tag one clip</span>
 <span class="pr">PS&gt;</span> clipmetascribe <span class="hl">"Replay_0488.mp4"</span> <span class="fl">--set</span> game <span class="hl">"Team Fortress 2"</span> <span class="fl">--append</span> tags <span class="hl">"airshot"</span> <span class="fl">--set</span> rating <span class="hl">"5"</span>
 <span class="ok">  ✓ wrote 3 fields · verified · mdat byte-identical</span>
 
-<span class="dm"># find everything that matches — across the whole library</span>
+<span class="dm"># find everything that matches, across the whole library</span>
 <span class="pr">PS&gt;</span> clipmetascribe <span class="hl">"C:\clips\"</span> <span class="fl">--find</span> game <span class="hl">"Team Fortress 2"</span>
 <span class="dm">  Replay_0488.mp4   tags=airshot|market garden   rating=5</span>
 <span class="dm">  Replay_0461.mp4   tags=clutch                  rating=4</span>
@@ -705,28 +705,28 @@
   </section>
 
   <!-- ============ 06 FIND ============ -->
-  <div class="phase" id="find"><span class="ph-code">PART&nbsp;06</span><h3>Finding your clips — the payoff</h3><span class="rule"></span></div>
+  <div class="phase" id="find"><span class="ph-code">PART&nbsp;06</span><h3>Finding your clips, the payoff</h3><span class="rule"></span></div>
 
   <section class="teach blue">
     <p class="kicker">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       Tagging is only worth it if finding is effortless
     </p>
-    <h3 class="tt">Ask in plain language; get back the exact clips — by game, player, tag, rating, or any combination.</h3>
+    <h3 class="tt">Ask in plain language; get back the exact clips, by game, player, tag, rating, or any combination.</h3>
     <p>Because every clip carries its own metadata, search is just reading it back. There are two speeds:</p>
     <ul>
-      <li><strong>Live find</strong> (<span class="m">library_find</span> / <span class="m">--find</span>) scans the folder directly — always current, great for a few hundred clips.</li>
+      <li><strong>Live find</strong> (<span class="m">library_find</span> / <span class="m">--find</span>) scans the folder directly, always current, great for a few hundred clips.</li>
       <li><strong>Indexed search</strong> (<span class="m">library_search_index</span> / <span class="m">--index</span> then <span class="m">--index-search</span>) builds a small index file once, then answers instantly across huge libraries.</li>
     </ul>
     <p>Two more tools turn a pile of tags into something you can actually reason about:</p>
     <div class="tgrid">
       <div class="tcard b"><div class="th">vocab</div><div class="td">"What tags do I even use?" Lists every distinct value for a field, so your vocabulary stays consistent instead of <span class="mono">airshot</span> vs <span class="mono">air-shot</span> vs <span class="mono">airshots</span>.</div></div>
-      <div class="tcard"><div class="th">export</div><div class="td">Dump the whole library to JSON or CSV — drop it into a spreadsheet, a video-editor script, or a montage tool.</div></div>
+      <div class="tcard"><div class="th">export</div><div class="td">Dump the whole library to JSON or CSV, drop it into a spreadsheet, a video-editor script, or a montage tool.</div></div>
       <div class="tcard c"><div class="th">copy-from</div><div class="td">Tag one clip well, then stamp those tags across an entire folder of related clips in one command.</div></div>
     </div>
     <div class="shot">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-      <div class="lab">Search results — screenshot coming soon</div>
+      <div class="lab">Search results, screenshot coming soon</div>
       <div class="hint">Drop a capture of a real <span class="mono">--find</span> / <span class="mono">library_search_index</span> result here, or a Claude conversation pulling up "every TF2 clip rated 4+."</div>
     </div>
   </section>
@@ -740,10 +740,10 @@
       The part that took the most engineering
     </p>
     <h3 class="tt">A tool that edits irreplaceable footage has exactly one unforgivable bug: silently breaking the video.</h3>
-    <p class="lead">Rewriting an MP4 in place is genuinely dangerous — get one byte-offset table wrong and the file still <em>looks</em> fine but plays garbage, or the entire video track vanishes while the program reports success. clipmeta is built around <strong>not doing that</strong>, and the safety is tested, not assumed (~600 tests, including ones that hash every frame of video before and after a write).</p>
+    <p class="lead">Rewriting an MP4 in place is genuinely dangerous, get one byte-offset table wrong and the file still <em>looks</em> fine but plays garbage, or the entire video track vanishes while the program reports success. clipmeta is built around <strong>not doing that</strong>, and the safety is tested, not assumed (~600 tests, including ones that hash every frame of video before and after a write).</p>
 
     <h4 class="sub">The golden rule: your original is never opened for writing</h4>
-    <p>Every change goes to a brand-new temp file. The new file is then <strong>re-parsed and verified</strong> from scratch — does it still contain all the video, byte-for-byte? — and only if it passes does an <strong>atomic swap</strong> replace the original. If anything fails, the temp is deleted and your file is untouched. You can't end up half-written.</p>
+    <p>Every change goes to a brand-new temp file. The new file is then <strong>re-parsed and verified</strong> from scratch, does it still contain all the video, byte-for-byte?, and only if it passes does an <strong>atomic swap</strong> replace the original. If anything fails, the temp is deleted and your file is untouched. You can't end up half-written.</p>
 
     <div class="fig">
       <svg viewBox="0 0 760 210" role="img" aria-label="A safe-write pipeline. Box 1 the original mp4 is opened read-only. Box 2 a new temp file is built with the metadata added and the video stream-copied. Box 3 the temp is re-parsed and verified that its boxes tile the whole file and the mdat is byte-identical. A decision: if verify fails, delete temp and the original is untouched; if it passes, an atomic File.Replace swaps it in. The original is never opened for writing.">
@@ -761,7 +761,7 @@
         <text x="495" y="150" text-anchor="middle" font-family="'IBM Plex Sans',sans-serif" font-size="10" fill="#2EE36E">▲ PASS → swap in</text>
         <line x1="495" y1="120" x2="495" y2="170" stroke="#FF5C82" stroke-dasharray="3 3"/>
         <text x="495" y="186" text-anchor="middle" font-family="'IBM Plex Sans',sans-serif" font-size="10" fill="#FF5C82">FAIL → delete temp · original untouched</text>
-        <text x="190" y="196" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#5F6A7B">the source is never opened for writing — at all</text>
+        <text x="190" y="196" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#5F6A7B">the source is never opened for writing, at all</text>
         <defs>
           <marker id="s1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0L7 3L0 6Z" fill="#2BE0CE"/></marker>
           <marker id="s2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0L7 3L0 6Z" fill="#F5C13D"/></marker>
@@ -771,28 +771,28 @@
       <p class="figcap"><b>Temp → verify → atomic swap.</b> The only file ever opened for writing is a throwaway. The swap is all-or-nothing.</p>
     </div>
 
-    <div class="qa"><span class="q">WAR STORY</span><b>"Read-lenient, write-strict."</b> Early on, a single unreadable box between the header and the video made the parser stop early — and the writer faithfully rebuilt the file <em>without the video</em>, returning success. The footage was gone, exit code 0. The fix is now a hard rule: the parser stays forgiving so a damaged file is still <em>viewable</em>, but the <b>writer refuses</b> any rewrite whose parsed boxes don't account for the whole file, byte-for-byte. That boundary is explicit and tested.</div>
+    <div class="qa"><span class="q">WAR STORY</span><b>"Read-lenient, write-strict."</b> Early on, a single unreadable box between the header and the video made the parser stop early, and the writer faithfully rebuilt the file <em>without the video</em>, returning success. The footage was gone, exit code 0. The fix is now a hard rule: the parser stays forgiving so a damaged file is still <em>viewable</em>, but the <b>writer refuses</b> any rewrite whose parsed boxes don't account for the whole file, byte-for-byte. That boundary is explicit and tested.</div>
 
     <div class="tgrid" style="margin-top:14px;">
-      <div class="tcard c"><div class="th">Foreign data preserved</div><div class="td">Tags another tool wrote — iTunes fields, camera GPS, a different app's data — are copied through byte-for-byte. clipmeta only ever touches its own atoms.</div></div>
-      <div class="tcard a"><div class="th">Survives the AV race</div><div class="td">Antivirus grabbing a freshly-written file used to make the swap fail. The final swap now retries on transient locks — safely, because the bytes are already verified.</div></div>
-      <div class="tcard v"><div class="th">Hard sandbox</div><div class="td">The MCP server can only ever touch files inside the one library folder you chose at install — verified against the OS-canonical path, so even directory-junction tricks can't escape it.</div></div>
+      <div class="tcard c"><div class="th">Foreign data preserved</div><div class="td">Tags another tool wrote, iTunes fields, camera GPS, a different app's data, are copied through byte-for-byte. clipmeta only ever touches its own atoms.</div></div>
+      <div class="tcard a"><div class="th">Survives the AV race</div><div class="td">Antivirus grabbing a freshly-written file used to make the swap fail. The final swap now retries on transient locks, safely, because the bytes are already verified.</div></div>
+      <div class="tcard v"><div class="th">Hard sandbox</div><div class="td">The MCP server can only ever touch files inside the one library folder you chose at install, verified against the OS-canonical path, so even directory-junction tricks can't escape it.</div></div>
       <div class="tcard"><div class="th">Backups + undo</div><div class="td">Opt-in <span class="mono">.bak</span> copies and restore tools mean a write is reversible. Clearing metadata returns the file to genuinely pristine bytes.</div></div>
     </div>
-    <p class="figcap mono" style="text-align:left; color:var(--muted-2);">// Every hazard above is a real bug that was hit, fixed, and written into docs/PITFALLS.md — the project keeps a running log of exactly this class of mistake.</p>
+    <p class="figcap mono" style="text-align:left; color:var(--muted-2);">// Every hazard above is a real bug that was hit, fixed, and written into docs/PITFALLS.md, the project keeps a running log of exactly this class of mistake.</p>
   </section>
 
   <!-- ============ 08 CAVEATS ============ -->
-  <div class="phase" id="caveats"><span class="ph-code">PART&nbsp;08</span><h3>Caveats &amp; roadmap — the honest limits</h3><span class="rule"></span></div>
+  <div class="phase" id="caveats"><span class="ph-code">PART&nbsp;08</span><h3>Caveats &amp; roadmap, the honest limits</h3><span class="rule"></span></div>
 
   <section class="teach amber">
     <p class="kicker">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-      What it does and doesn't do — stated plainly
+      What it does and doesn't do, stated plainly
     </p>
     <h3 class="tt">No vaporware. Here's exactly where the edges are.</h3>
     <div class="caveats">
-      <div class="cav"><div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>MP4 only<span class="tag now">today</span></div><p>Reads and writes <span class="mono">.mp4</span> / MOV-family files. That covers most game capture (ShadowPlay, OBS-MP4, GoPro, consoles). The architecture is built for new formats to plug in — but right now, MP4 is it.</p></div>
+      <div class="cav"><div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>MP4 only<span class="tag now">today</span></div><p>Reads and writes <span class="mono">.mp4</span> / MOV-family files. That covers most game capture (ShadowPlay, OBS-MP4, GoPro, consoles). The architecture is built for new formats to plug in, but right now, MP4 is it.</p></div>
       <div class="cav"><div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Fragmented MP4 refused<span class="tag now">by design</span></div><p>Some live-streaming recorders write fragmented (<span class="mono">moof</span>) MP4s. clipmeta detects these and <b>refuses to write</b> with a clear message rather than risk corruption. Reading still works.</p></div>
       <div class="cav"><div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Watched-clip = Windows<span class="tag soon">maturing</span></div><p>The "which clip am I watching" resolution currently recognizes Windows media players (MPC-HC, VLC). Tagging and search are cross-platform; the live-resolution piece is being dogfooded and hardened.</p></div>
       <div class="cav"><div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Voice is your assistant's job<span class="tag now">integration</span></div><p>clipmeta doesn't ship a microphone. It provides the tools; speech-to-text comes from Claude Desktop, your OS dictation, or a voice front-end. clipmeta makes the <b>tagging</b> hands-free, not the talking.</p></div>
@@ -802,7 +802,7 @@
 
     <h4 class="sub">On the roadmap</h4>
     <ul>
-      <li>The full <strong>"montage run"</strong> workflow — describe a reel out loud, have Claude gather, order, and stage the matching clips.</li>
+      <li>The full <strong>"montage run"</strong> workflow, describe a reel out loud, have Claude gather, order, and stage the matching clips.</li>
       <li>Broader watched-clip support across players and platforms.</li>
       <li>More capture formats behind the same safe write engine.</li>
     </ul>
@@ -816,11 +816,11 @@
       Straight answers
     </p>
     <div class="qa"><span class="q">Q</span><b>Will this re-encode or degrade my video?</b> No. Your video and audio streams are copied byte-for-byte; only a tiny metadata box is added. A tagged clip is bit-identical in the parts that matter, and that's verified on every write.</div>
-    <div class="qa"><span class="q">Q</span><b>Do the tags survive uploading to YouTube / Discord / a cloud drive?</b> The tags live in the file, so any copy or move keeps them. Platforms that <em>re-encode</em> on upload (YouTube) won't preserve them in the published video — but your local master keeps them, which is exactly where you search and build montages.</div>
+    <div class="qa"><span class="q">Q</span><b>Do the tags survive uploading to YouTube / Discord / a cloud drive?</b> The tags live in the file, so any copy or move keeps them. Platforms that <em>re-encode</em> on upload (YouTube) won't preserve them in the published video, but your local master keeps them, which is exactly where you search and build montages.</div>
     <div class="qa"><span class="q">Q</span><b>Can other tools read clipmeta's tags?</b> They're standard MP4 freeform (<span class="mono">----</span>) atoms under a private namespace. Tools that surface freeform atoms can see them; clipmeta won't disturb tags written by other tools either.</div>
     <div class="qa"><span class="q">Q</span><b>Do I have to use Claude / voice?</b> No. The CLI (<span class="mono">clipmetascribe</span>) does everything by hand or in scripts. Voice + MCP is the marquee workflow, not a requirement.</div>
     <div class="qa"><span class="q">Q</span><b>What if I tag the wrong clip?</b> Writes can keep a <span class="mono">.bak</span>, there are restore tools, and clearing returns the file to pristine bytes. The whole design assumes you'll occasionally want to undo.</div>
-    <div class="qa"><span class="q">Q</span><b>Is my clip library sent anywhere?</b> No. clipmeta runs locally and has zero network calls and zero external dependencies. If you use it through Claude, your assistant sees the tool results you invoke — the files themselves stay on your machine.</div>
+    <div class="qa"><span class="q">Q</span><b>Is my clip library sent anywhere?</b> No. clipmeta runs locally and has zero network calls and zero external dependencies. If you use it through Claude, your assistant sees the tool results you invoke, the files themselves stay on your machine.</div>
   </section>
 
   <!-- ============ START ============ -->
@@ -839,13 +839,13 @@
       <a class="btn primary" href="https://github.com/srfinch17/peckworks-clipmeta/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Download v1.0.0 (Windows)</a>
       <a class="btn" href="https://github.com/srfinch17/peckworks-clipmeta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.7c-2.78.62-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9v2.81c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>Source on GitHub</a>
     </div>
-    <p style="color:var(--muted); font-size:.86rem; margin-top:14px;">Always tag <strong>copies</strong> until you trust it on your own library. The safety engineering is real, but your footage is irreplaceable — treat it that way.</p>
+    <p style="color:var(--muted); font-size:.86rem; margin-top:14px;">Always tag <strong>copies</strong> until you trust it on your own library. The safety engineering is real, but your footage is irreplaceable, treat it that way.</p>
   </section>
 
 </main>
 
 <footer class="wrap">
-  <p><strong>clipmeta</strong> — metadata that lives inside your clips, taggable by voice the moment they happen. A Peckworks Lab project by Scott Finch.</p>
+  <p><strong>clipmeta</strong>, metadata that lives inside your clips, taggable by voice the moment they happen. A Peckworks Lab project by Scott Finch.</p>
   <p>Built in C# / .NET 10 · zero external dependencies in production · open source on <a href="https://github.com/srfinch17/peckworks-clipmeta">GitHub</a>.</p>
   <p class="meta-line">clipmeta info page · v1.0 · published 2026-06-29 · added gaming/review decision trees 2026-06-29. Mission-control theme. Diagrams inline-SVG, no external assets.</p>
 </footer>

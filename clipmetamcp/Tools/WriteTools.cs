@@ -11,17 +11,17 @@ namespace ClipMetaMcp.Tools;
 
 /// <summary>
 /// Registers the write tools (phase 3). Every mutation goes through Core's
-/// <see cref="Mp4Writer"/> — the engine with the temp-file/verify/<c>File.Replace</c> golden
-/// rule, parser-coverage gate, and media-integrity guards — so these tools contain parameter
+/// <see cref="Mp4Writer"/>, the engine with the temp-file/verify/<c>File.Replace</c> golden
+/// rule, parser-coverage gate, and media-integrity guards, so these tools contain parameter
 /// mapping and safety policy, never write logic.
 ///
 /// Safety policy (spec §3):
-/// - <c>backup</c> defaults ON — a timestamped sibling copy survives every write unless the
+/// - <c>backup</c> defaults ON, a timestamped sibling copy survives every write unless the
 ///   caller explicitly opts out. An LLM is the caller; the user's clips get belt and braces.
 /// - <c>dry_run</c> reports what would change without touching the file.
 /// - <c>clip_clear_all</c> additionally requires the literal argument <c>confirm: true</c>.
 /// - Writes hard-require the configured library (<see cref="LibrarySandbox.ResolveWritePath"/>).
-/// - Single-flight: one write at a time process-wide (risk R8) — two concurrent rewrites of
+/// - Single-flight: one write at a time process-wide (risk R8), two concurrent rewrites of
 ///   the same file would race at <c>File.Replace</c>.
 /// </summary>
 public static class WriteTools
@@ -41,7 +41,7 @@ public static class WriteTools
         registry.Register(new ToolDefinition(
             "clip_set_fields",
             "Writes metadata into one MP4 game clip (stored inside the file, so tags travel " +
-            "with it). 'fields' maps field names to string values — well-known fields: " +
+            "with it). 'fields' maps field names to string values, well-known fields: " +
             KnownFieldsSentence + "; any other name becomes a custom field. For searchability, put " +
             "people in 'players' and searchable nouns/moments (objects, places, events) in 'tags' " +
             "rather than burying them in free-text 'notes'. Setting a field " +
@@ -63,7 +63,7 @@ public static class WriteTools
         registry.Register(new ToolDefinition(
             "clip_append_field",
             "Appends a value to one metadata field of an MP4 clip without disturbing what is " +
-            "already there — for multi-value fields (players, tags, timecode) the new items " +
+            "already there, for multi-value fields (players, tags, timecode) the new items " +
             "merge into the pipe-delimited list (duplicates removed); for text fields the " +
             "value is appended. Use clip_set_fields to replace a value outright. Timestamped " +
             "backup unless backup:false; dry_run:true previews.",
@@ -79,7 +79,7 @@ public static class WriteTools
 
         registry.Register(new ToolDefinition(
             "clip_clear_fields",
-            "Deletes the named metadata fields from one MP4 clip (the listed fields only — " +
+            "Deletes the named metadata fields from one MP4 clip (the listed fields only, " +
             "other metadata is untouched). Clearing a field that is not set is not an error. " +
             "Timestamped backup unless backup:false; dry_run:true previews.",
             ClearFieldsSchema(),
@@ -94,7 +94,7 @@ public static class WriteTools
         registry.Register(new ToolDefinition(
             "clip_clear_all",
             "Removes ALL clipmeta metadata from one MP4 clip. Destructive: requires the " +
-            "explicit argument confirm:true — ask the user before calling this unless they " +
+            "explicit argument confirm:true, ask the user before calling this unless they " +
             "already clearly asked for a full wipe. Timestamped backup unless backup:false; " +
             "dry_run:true previews.",
             ClearAllSchema(),
@@ -121,7 +121,7 @@ public static class WriteTools
         registry.Register(new ToolDefinition(
             "clip_restore_backup",
             "Restores a clip from one of its backups, overwriting the clip's current contents. " +
-            "Destructive (the current bytes are replaced), so it requires confirm:true — show " +
+            "Destructive (the current bytes are replaced), so it requires confirm:true, show " +
             "the user which backup (from library_list_backups) and confirm first. The backup is " +
             "validated as a complete MP4 before the swap; a corrupt backup is refused and the " +
             "current file left untouched. The backup file itself is kept.",
@@ -138,7 +138,7 @@ public static class WriteTools
             "clip_prune_backups",
             "Deletes a clip's backup copies, keeping the newest 'keep' (default 0 = delete all). " +
             "Destructive and irreversible: requires confirm:true. Only files matching this clip's " +
-            "<clip>.mp4.bak-<timestamp> backups are deleted — never the clip itself, never an " +
+            "<clip>.mp4.bak-<timestamp> backups are deleted, never the clip itself, never an " +
             "unrelated file. Use library_list_backups first to see what would be removed.",
             PruneBackupsSchema(),
             args => PruneBackups(args, sandbox),
@@ -289,7 +289,7 @@ public static class WriteTools
             ["confirm"] = new JsonObject
             {
                 ["type"] = "boolean",
-                ["description"] = "Must be literally true. Safety latch — restoring overwrites the clip.",
+                ["description"] = "Must be literally true. Safety latch, restoring overwrites the clip.",
             },
         },
         ["required"] = new JsonArray("backup", "confirm"),
@@ -313,7 +313,7 @@ public static class WriteTools
             ["confirm"] = new JsonObject
             {
                 ["type"] = "boolean",
-                ["description"] = "Must be literally true. Safety latch — deletion is irreversible.",
+                ["description"] = "Must be literally true. Safety latch, deletion is irreversible.",
             },
         },
         ["required"] = new JsonArray("clip", "confirm"),
@@ -338,7 +338,7 @@ public static class WriteTools
                     $"Field '{pair.Key}' must have a string value (use \"\" to delete it).");
 
             mutation.SetFields[ClipMetaSchema.AtomName(pair.Key)] = text;
-            // Empty string is the schema's delete idiom — report it as what it IS so the
+            // Empty string is the schema's delete idiom, report it as what it IS so the
             // model tells the user "deleted", not "set to nothing".
             if (string.IsNullOrEmpty(text)) deleted.Add(pair.Key);
             else set.Add(pair.Key);
@@ -413,7 +413,7 @@ public static class WriteTools
 
     private static JsonObject ClearAll(JsonObject? args, LibrarySandbox sandbox, SelfActionLedger? ledger = null)
     {
-        // The latch is the literal boolean true — a string "true" or a missing key refuses.
+        // The latch is the literal boolean true, a string "true" or a missing key refuses.
         // The model must consciously supply it, which in practice means it asked the user.
         if (args?["confirm"] is not JsonValue confirmValue ||
             !confirmValue.TryGetValue(out bool confirmed) || !confirmed)
@@ -434,7 +434,7 @@ public static class WriteTools
     {
         string root = sandbox.RequireRoot();
 
-        // Optional clip filter: contain it in the library, but don't require it to exist — a
+        // Optional clip filter: contain it in the library, but don't require it to exist, a
         // user may want to see the backups of a clip they've since deleted.
         string? clipFilter = null;
         if (ReadTools.GetOptionalString(args, "clip") is string clipArg)
@@ -480,7 +480,7 @@ public static class WriteTools
                 ".mp4.bak-<timestamp>). Use library_list_backups to find valid backups.");
 
         // The derived clip is a sibling of the (contained) backup, so it is contained too;
-        // single-flight with the write tools — restoring is a write.
+        // single-flight with the write tools, restoring is a write.
         WriteGate.Enter();
         try
         {
@@ -508,7 +508,7 @@ public static class WriteTools
     private static JsonObject PruneBackups(JsonObject? args, LibrarySandbox sandbox)
     {
         string root = sandbox.RequireRoot();
-        // Clip need not exist — prune the backups of a deleted clip too.
+        // Clip need not exist, prune the backups of a deleted clip too.
         string clipPath = sandbox.ResolveContainedPath(
             ReadTools.GetRequiredString(args, "clip"), mustExist: false);
         int keep = Math.Max(0, ReadTools.GetOptionalInt(args, "keep", 0));
@@ -523,7 +523,7 @@ public static class WriteTools
         }
 
         // ListBackups returns newest-first and only files matching the backup convention for
-        // this clip — so skipping the first `keep` and deleting the rest can never touch the
+        // this clip, so skipping the first `keep` and deleting the rest can never touch the
         // clip itself or any unrelated file.
         IReadOnlyList<BackupInfo> all = ClipBackup.ListBackups(root, clipPath);
         var deleted = new JsonArray();
@@ -569,7 +569,7 @@ public static class WriteTools
     /// policy, run the mutation through <see cref="Mp4Writer"/> single-flight, translate the
     /// write engine's exceptions into model-readable refusals, and read the file back so the
     /// response shows the actual post-write state (one extra parse buys the model ground truth
-    /// instead of an assumption — and for dry runs, proves nothing changed). On a successful
+    /// instead of an assumption, and for dry runs, proves nothing changed). On a successful
     /// (non-dry-run) write, marks the path in <paramref name="ledger"/> so gaming-mode watching
     /// can exclude ClipMeta-tagged clips from recent-save detection. A refused or failed write
     /// must never mark.
@@ -586,7 +586,7 @@ public static class WriteTools
         // Dry-run: report the PREDICTED post-write fields without touching the file. Computed via
         // Core's MetadataPreview (which reuses the writer's Normalizer), so the preview matches an
         // actual write's read-back. (The prior dry-run read the UNCHANGED file back and so showed
-        // current — not predicted — state.)
+        // current, not predicted, state.)
         if (ReadTools.GetOptionalBool(args, "dry_run", defaultValue: false))
             return PreviewWrite(fullPath, mutation, describeChange);
 
@@ -603,7 +603,7 @@ public static class WriteTools
         {
             new Mp4Writer().WriteMetadata(fullPath, mutation, NullLogger.Instance);
         }
-        // Bad user values (rating out of range, malformed timecode — Core's Normalizer)...
+        // Bad user values (rating out of range, malformed timecode, Core's Normalizer)...
         catch (ArgumentException ex)
         {
             throw new ToolException($"Invalid value: {ex.Message}");
@@ -634,12 +634,12 @@ public static class WriteTools
         }
 
         // Mark the path written so library_watching's gaming-mode signal can exclude it.
-        // Placed here — only reached after a successful, non-dry-run write; all catch paths
+        // Placed here, only reached after a successful, non-dry-run write; all catch paths
         // above throw ToolException and therefore skip this line.
         ledger?.MarkWritten(fullPath);
 
         // Ground truth read-back (see doc comment). GetMetadata re-resolves the path through
-        // the read sandbox — harmless, it just passed the stricter write check.
+        // the read sandbox, harmless, it just passed the stricter write check.
         JsonObject result = ReadTools.GetMetadata(
             new JsonObject { ["path"] = fullPath }, sandbox);
         result["dryRun"] = false;

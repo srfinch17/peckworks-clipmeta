@@ -206,7 +206,7 @@ public static class ClipMetaIndex
 
             // Swap the fully-written temp into place. File.Move(overwrite) is a same-volume
             // atomic MoveFileEx(REPLACE_EXISTING) that works whether or not the target exists.
-            // Retry only this post-write swap on a transient AV/indexer lock — the temp is
+            // Retry only this post-write swap on a transient AV/indexer lock, the temp is
             // already complete, so retrying the atomic op weakens nothing (see PITFALLS
             // 2026-06-12; reuses the write engine's tested helper).
             Mp4Writer.RetryOnTransientLock(
@@ -259,7 +259,7 @@ public static class ClipMetaIndex
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // The file exists but we cannot confirm it is current — treat as changed rather than
+            // The file exists but we cannot confirm it is current, treat as changed rather than
             // crashing the search.
             return StaleReason.Modified;
         }

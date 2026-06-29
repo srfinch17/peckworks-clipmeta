@@ -4,7 +4,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// The durable subset of a <see cref="MetadataMutation"/> — the field changes worth persisting in
+/// The durable subset of a <see cref="MetadataMutation"/>, the field changes worth persisting in
 /// the deferred-tag queue. Deliberately omits the transient write-time flags (<c>DryRun</c>,
 /// <c>BackupPath</c>) so the on-disk queue schema is independent of how a write is executed.
 /// </summary>
@@ -31,7 +31,7 @@ public sealed record QueuedMutation(
 
     /// <summary>
     /// Rebuilds a <see cref="MetadataMutation"/> for the write engine. <c>DryRun</c> is false and
-    /// <c>BackupPath</c> is null — a drained tag is a real write and backups are a per-call policy
+    /// <c>BackupPath</c> is null, a drained tag is a real write and backups are a per-call policy
     /// concern, not a durable one.
     /// </summary>
     public MetadataMutation ToMutation()

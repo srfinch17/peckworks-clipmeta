@@ -5,7 +5,7 @@ using ClipMetaCore.Schema;
 namespace ClipMetaScribe.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="ClipMetaCopier.BuildCopyMutation"/> — the pure read→mutation core of
+/// Unit tests for <see cref="ClipMetaCopier.BuildCopyMutation"/>, the pure read→mutation core of
 /// the CopyTags command. Drives manually-built BoxNode trees (no filesystem) per the project's
 /// "core logic is testable without the CLI" convention.
 /// </summary>

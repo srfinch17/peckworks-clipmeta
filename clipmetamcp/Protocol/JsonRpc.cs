@@ -40,12 +40,12 @@ public sealed class JsonRpcMessage
     /// <summary>
     /// True when the message carried an explicit <c>"id": null</c>. MCP forbids null ids
     /// ("Unlike base JSON-RPC, the ID MUST NOT be null"), but a JSON-null id parses to the same
-    /// .NET null as an absent id — without this flag such a request would be misclassified as a
+    /// .NET null as an absent id, without this flag such a request would be misclassified as a
     /// notification and silently never answered.
     /// </summary>
     public bool HasExplicitNullId { get; private init; }
 
-    /// <summary>True when no id was present — notifications never get a response.</summary>
+    /// <summary>True when no id was present, notifications never get a response.</summary>
     public bool IsNotification => Id is null;
 
     private JsonRpcMessage() { }
@@ -83,7 +83,7 @@ public sealed class JsonRpcMessage
 }
 
 /// <summary>
-/// Writes JSON-RPC 2.0 responses as single newline-terminated lines of compact JSON — the MCP
+/// Writes JSON-RPC 2.0 responses as single newline-terminated lines of compact JSON, the MCP
 /// stdio framing. Compact serialization guarantees no embedded raw newlines (newlines inside
 /// string values are escaped as \n by the serializer).
 /// </summary>
@@ -119,7 +119,7 @@ public static class JsonRpcWriter
     private static void WriteLine(TextWriter output, JsonObject response)
     {
         output.Write(response.ToJsonString());
-        // Bare \n framing per the MCP stdio transport — never WriteLine, whose newline is
+        // Bare \n framing per the MCP stdio transport, never WriteLine, whose newline is
         // platform-dependent (\r\n on Windows).
         output.Write('\n');
         output.Flush();

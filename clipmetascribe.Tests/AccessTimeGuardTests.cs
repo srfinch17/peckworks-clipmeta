@@ -55,7 +55,7 @@ public class AccessTimeGuardTests
     {
         if (!TestClipsLocator.PristineClipsPresent())
         {
-            Assert.Inconclusive("No test clips in testclips/pristine — skipped (e.g. CI).");
+            Assert.Inconclusive("No test clips in testclips/pristine, skipped (e.g. CI).");
             return;
         }
 

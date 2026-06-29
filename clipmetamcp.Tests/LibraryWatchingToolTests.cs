@@ -77,7 +77,7 @@ public class LibraryWatchingToolTests
     [TestMethod]
     public void Watching_StillReturnsAnyLiveTarget_WithNoWatcherWired()
     {
-        // The harness wires no ReviewWatcher, so library_watching uses the live-poll fallback — the
+        // The harness wires no ReviewWatcher, so library_watching uses the live-poll fallback, the
         // existing contract (incl. anyLiveTarget) must stay intact.
         JsonObject result = Call(new JsonObject { ["include_access_fallback"] = true }, _lib);
         Assert.IsNull(result["isError"]);
@@ -96,7 +96,7 @@ public class LibraryWatchingToolTests
     public void Watching_AlwaysEchoesQueueDepthAndDrainOutcome()
     {
         // The queue is empty here, but the fields must be present (and zero) so a caller can always
-        // confirm whether a queued write landed — no more "silent flush".
+        // confirm whether a queued write landed, no more "silent flush".
         JsonObject s = Structured(Call(new JsonObject { ["include_access_fallback"] = true }, _lib));
 
         Assert.AreEqual(0, s["queuePending"]!.GetValue<int>());
@@ -130,7 +130,7 @@ public class LibraryWatchingToolTests
     [TestMethod]
     public void Watching_BadSpokenAt_DegradesToHeuristic_NoError()
     {
-        // A malformed spoken_at must never fail a watched-clip read — it is parsed leniently to null.
+        // A malformed spoken_at must never fail a watched-clip read, it is parsed leniently to null.
         JsonObject result = Call(
             new JsonObject { ["include_access_fallback"] = true, ["spoken_at"] = "not-a-date" },
             _lib);
@@ -160,7 +160,7 @@ public class LibraryWatchingToolTests
         journal.Record(new DrainedTag(
             Path.Combine(_lib, "a.mp4"), new[] { "tags" }, DateTimeOffset.UtcNow));
 
-        // Act: first call — must surface the one journal entry.
+        // Act: first call, must surface the one journal entry.
         var responses = McpHarness.RunWithJournal(_lib, journal,
             McpHarness.InitializeRequest,
             McpHarness.ToolCall(2, "library_watching", new JsonObject { ["include_access_fallback"] = true }));

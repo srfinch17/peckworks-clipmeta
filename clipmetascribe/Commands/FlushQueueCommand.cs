@@ -7,7 +7,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaScribe.Commands;
 
 /// <summary>
-/// Drains the deferred-tag queue for a library — writing every queued tag whose clip is no longer
+/// Drains the deferred-tag queue for a library, writing every queued tag whose clip is no longer
 /// locked. Used for the final clip of a session, after the player has closed and there is no
 /// "next" watched-clip call to pump the drain.
 /// </summary>

@@ -67,12 +67,12 @@ internal static class MinimalMp4Builder
 
     /// <summary>
     /// Builds a ---- freeform atom with mean (domain), name (field), and data children.
-    /// Both mean and name are FullBoxes — version+flags are 4 bytes each.
+    /// Both mean and name are FullBoxes, version+flags are 4 bytes each.
     /// </summary>
     /// <param name="dataTypeIndicator">
     /// The data box's 24-bit type indicator: 1 = UTF-8 text (the default, and what clipmeta
     /// itself always writes). Pass another value (13 = JPEG, 21 = signed int, …) to fabricate
-    /// a NON-text atom — used to prove the writer refuses to append to one rather than
+    /// a NON-text atom, used to prove the writer refuses to append to one rather than
     /// splicing its display placeholder into the file.
     /// </param>
     public static byte[] FreeformAtom(string domain, string fieldName, string value,
@@ -156,7 +156,7 @@ internal static class MinimalMp4Builder
     /// </summary>
     public static byte[] StblBox(byte[] stcoBox) => Box("stbl", stcoBox);
 
-    /// <summary>Wraps stbl in minf, minf in mdia, mdia in trak — minimal valid track chain.</summary>
+    /// <summary>Wraps stbl in minf, minf in mdia, mdia in trak, minimal valid track chain.</summary>
     public static byte[] TrakBox(byte[] stcoBox)
     {
         byte[] stbl = StblBox(stcoBox);
@@ -214,7 +214,7 @@ internal static class MinimalMp4Builder
     /// </summary>
     /// <remarks>
     /// Contrast with <see cref="BuildMp4WithStco"/>, whose single offset (e.g. 9999) points at
-    /// nothing — fine for structural tests, useless for proving offsets were patched correctly.
+    /// nothing, fine for structural tests, useless for proving offsets were patched correctly.
     /// Layout produced:
     /// <code>
     ///   moov
@@ -226,7 +226,7 @@ internal static class MinimalMp4Builder
     ///           distinct marker byte so misdirected offsets are unmistakable)
     /// </code>
     /// Two tracks are deliberate: PITFALLS hazard #2 is "only one stco adjusted, others
-    /// missed" — a single-track fixture cannot catch that bug.
+    /// missed", a single-track fixture cannot catch that bug.
     /// Building is two-pass: stco entry width is fixed, so a moov built with dummy offsets has
     /// the same length as the final one; measure it, compute the real offsets, rebuild.
     /// </remarks>
@@ -287,7 +287,7 @@ internal static class MinimalMp4Builder
     /// <summary>
     /// The co64 twin of <see cref="BuildMoovFirstWithPatternedMdat"/>: a moov-FIRST MP4 whose
     /// chunk-offset tables are <b>co64</b> (64-bit) rather than stco. This is the ONLY coverage of
-    /// the writer rewriting a 64-bit offset table when moov growth shifts mdat — no real pristine
+    /// the writer rewriting a 64-bit offset table when moov growth shifts mdat, no real pristine
     /// clip is both moov-first AND co64 (the co64 real clips are all mdat-first, where offsets
     /// never move), and CI runs clip-less. Identical patterned-mdat / two-track / two-pass scheme
     /// as the stco builder; see its remarks. Parameters mirror it exactly.
@@ -339,7 +339,7 @@ internal static class MinimalMp4Builder
 
     /// <summary>
     /// A moov-FIRST MP4 whose mdat carries a 64-bit <b>largesize</b> header (16-byte header, not
-    /// 8). Uses ordinary 32-bit stco offsets — the point is the box HEADER, not the offset table:
+    /// 8). Uses ordinary 32-bit stco offsets, the point is the box HEADER, not the offset table:
     /// when moov grows and shifts the mdat, the writer must correctly parse and relocate a box
     /// whose own size is encoded as a 64-bit largesize. No real pristine clip is moov-first with a
     /// largesize mdat (the real largesize clips are all mdat-first, where the box never moves), so

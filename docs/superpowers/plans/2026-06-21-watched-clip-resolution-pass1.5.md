@@ -12,7 +12,7 @@
 
 - **.NET 10**, solution `peckworks-clipmeta.slnx`. Build: `dotnet build --nologo -v q` → **0 warnings, 0 errors** (incl. CA1416). Test: `dotnet test`.
 - **Zero external NuGet packages** in production projects. BCL/SDK only. MSTest is the test-project-only exception.
-- **CLIs/MCP are thin shells** — resolution logic stays in `clipmeta.core`.
+- **CLIs/MCP are thin shells**, resolution logic stays in `clipmeta.core`.
 - **No directory searching anywhere.** A foreign-folder string may come ONLY from the player's own title; never enumerate or probe outside the configured library root.
 - **No-fabrication invariant (pass 1):** every returned path must be a clip enumerated under the library root.
 - **Collision guard applies to bare-name matches only.** Full-path (MPC) matches stay `high` regardless of lock state.
@@ -22,16 +22,16 @@
 
 ## File Structure (namespace `ClipMetaCore.Watching` unless noted)
 
-- `clipmeta.core/Watching/PlayerTitleResolution.cs` — NEW: `PlayerMatch` record + `For(WatchContext)` helper (single source of truth for player-title resolution).
-- `clipmeta.core/Watching/SignalHit.cs` — MODIFY: add optional `TitleExtractionKind? MatchKind`.
-- `clipmeta.core/Watching/PlayerTitleSignal.cs` — MODIFY: resolve via the helper, set `MatchKind`.
-- `clipmeta.core/Watching/LockProbe.cs` — NEW: cloud-safe `IsInUse(path)`.
-- `clipmeta.core/Watching/WatchingCandidate.cs` — MODIFY: add `string? Note`.
-- `clipmeta.core/Watching/WatchDiagnostics.cs` — NEW: `UnresolvedPlayer` + `WatchDiagnostics` records.
-- `clipmeta.core/Watching/WatchingResult.cs` — NEW: `WatchingResult` record.
-- `clipmeta.core/Watching/WatchingResolver.cs` — MODIFY: return `WatchingResult`; collision guard, diagnostics, suppression; use `LockProbe` + `PlayerTitleResolution`.
-- `clipmetamcp/Tools/ReadTools.cs` — MODIFY: `Watching` handler renders `warning` + candidate `note`.
-- `clipmetascribe/Commands/WatchingCommand.cs` — MODIFY: print warning + note.
+- `clipmeta.core/Watching/PlayerTitleResolution.cs`, NEW: `PlayerMatch` record + `For(WatchContext)` helper (single source of truth for player-title resolution).
+- `clipmeta.core/Watching/SignalHit.cs`, MODIFY: add optional `TitleExtractionKind? MatchKind`.
+- `clipmeta.core/Watching/PlayerTitleSignal.cs`, MODIFY: resolve via the helper, set `MatchKind`.
+- `clipmeta.core/Watching/LockProbe.cs`, NEW: cloud-safe `IsInUse(path)`.
+- `clipmeta.core/Watching/WatchingCandidate.cs`, MODIFY: add `string? Note`.
+- `clipmeta.core/Watching/WatchDiagnostics.cs`, NEW: `UnresolvedPlayer` + `WatchDiagnostics` records.
+- `clipmeta.core/Watching/WatchingResult.cs`, NEW: `WatchingResult` record.
+- `clipmeta.core/Watching/WatchingResolver.cs`, MODIFY: return `WatchingResult`; collision guard, diagnostics, suppression; use `LockProbe` + `PlayerTitleResolution`.
+- `clipmetamcp/Tools/ReadTools.cs`, MODIFY: `Watching` handler renders `warning` + candidate `note`.
+- `clipmetascribe/Commands/WatchingCommand.cs`, MODIFY: print warning + note.
 - Tests: `clipmetascribe.Tests/PlayerTitleResolutionTests.cs`, `LockProbeTests.cs`, and additions/edits to `WatchSignalsTests.cs` + `WatchingResolverTests.cs`; `clipmetamcp.Tests/LibraryWatchingToolTests.cs` additions.
 
 ---
@@ -137,7 +137,7 @@ public class PlayerTitleResolutionTests
 }
 ```
 
-Add this assertion to an existing bare-name test in `clipmetascribe.Tests/WatchSignalsTests.cs` — inside `PlayerTitle_BareNameInLibrary_UnambiguousHit`, after the existing asserts:
+Add this assertion to an existing bare-name test in `clipmetascribe.Tests/WatchSignalsTests.cs`, inside `PlayerTitle_BareNameInLibrary_UnambiguousHit`, after the existing asserts:
 
 ```csharp
         Assert.AreEqual(TitleExtractionKind.BareName, hits[0].MatchKind);
@@ -146,11 +146,11 @@ Add this assertion to an existing bare-name test in `clipmetascribe.Tests/WatchS
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~PlayerTitleResolutionTests" --nologo`
-Expected: FAIL — `PlayerTitleResolution` / `PlayerMatch` do not exist; `SignalHit.MatchKind` does not exist.
+Expected: FAIL, `PlayerTitleResolution` / `PlayerMatch` do not exist; `SignalHit.MatchKind` does not exist.
 
 - [ ] **Step 3: Add `MatchKind` to `SignalHit`**
 
-Modify `clipmeta.core/Watching/SignalHit.cs` — add the trailing optional parameter (default keeps every existing construction site, e.g. `AccessTimeSignal`, compiling):
+Modify `clipmeta.core/Watching/SignalHit.cs`, add the trailing optional parameter (default keeps every existing construction site, e.g. `AccessTimeSignal`, compiling):
 
 ```csharp
 namespace ClipMetaCore.Watching;
@@ -159,7 +159,7 @@ namespace ClipMetaCore.Watching;
 /// One signal's evidence that a particular clip is the one being watched. Several signals may emit
 /// a hit for the same clip; the resolver groups hits by path and scores confidence by corroboration.
 /// </summary>
-/// <param name="ClipPath">Path of an enumerated library clip — never a fabricated path.</param>
+/// <param name="ClipPath">Path of an enumerated library clip, never a fabricated path.</param>
 /// <param name="Source">The emitting signal's name (also used as the candidate source).</param>
 /// <param name="Player">Process name when the evidence came from a player; otherwise null.</param>
 /// <param name="Ambiguous">True when this signal alone could not disambiguate the clip.</param>
@@ -226,7 +226,7 @@ public static class PlayerTitleResolution
 
 - [ ] **Step 5: Refactor `PlayerTitleSignal` to use the helper and set `MatchKind`**
 
-Replace the body of `clipmeta.core/Watching/PlayerTitleSignal.cs` (keep the class/`SourceName`/`Name` as-is). The `Resolve` private method is removed — its logic now lives in `PlayerTitleResolution`:
+Replace the body of `clipmeta.core/Watching/PlayerTitleSignal.cs` (keep the class/`SourceName`/`Name` as-is). The `Resolve` private method is removed, its logic now lives in `PlayerTitleResolution`:
 
 ```csharp
     /// <inheritdoc/>
@@ -273,7 +273,7 @@ git commit -m "refactor(core): extract PlayerTitleResolution + carry MatchKind o
 - Test: `clipmetascribe.Tests/LockProbeTests.cs` (new)
 
 **Interfaces:**
-- Produces: `public static class LockProbe { static bool IsInUse(string path); }` — true when the file has an exclusive-denying open handle; false when free, inaccessible, or offline; never opens an offline/placeholder file.
+- Produces: `public static class LockProbe { static bool IsInUse(string path); }`, true when the file has an exclusive-denying open handle; false when free, inaccessible, or offline; never opens an offline/placeholder file.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -346,7 +346,7 @@ public class LockProbeTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~LockProbeTests" --nologo`
-Expected: FAIL — `LockProbe` does not exist.
+Expected: FAIL, `LockProbe` does not exist.
 
 - [ ] **Step 3: Create `LockProbe`**
 
@@ -356,10 +356,10 @@ Create `clipmeta.core/Watching/LockProbe.cs`:
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// Best-effort check of whether a file currently has an open handle that denies exclusive access —
+/// Best-effort check of whether a file currently has an open handle that denies exclusive access, 
 /// the signal that a media player is actively reading it. Cloud-safe: an offline/placeholder file
 /// (Dropbox/OneDrive online-only) is reported not-in-use WITHOUT being opened, so the probe can
-/// never trigger a hydration download. Never throws — any failure reports not-in-use.
+/// never trigger a hydration download. Never throws, any failure reports not-in-use.
 /// </summary>
 public static class LockProbe
 {
@@ -368,14 +368,14 @@ public static class LockProbe
     {
         try
         {
-            // Never open an offline/placeholder file — opening would force a download. An
+            // Never open an offline/placeholder file, opening would force a download. An
             // un-hydrated file is not the one a player is actively reading, so treat it not-in-use.
             if ((File.GetAttributes(path) & FileAttributes.Offline) != 0)
                 return false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return false; // missing/inaccessible/invalid path — not lockable
+            return false; // missing/inaccessible/invalid path, not lockable
         }
 
         try
@@ -397,7 +397,7 @@ public static class LockProbe
 
 - [ ] **Step 4: Point the resolver at `LockProbe`**
 
-In `clipmeta.core/Watching/WatchingResolver.cs`, replace the call in the post-take probe loop — change `ProbeInUse(ranked[i].Path)` to `LockProbe.IsInUse(ranked[i].Path)` — and **delete** the private `ProbeInUse` method entirely (it is now `LockProbe`). The current loop is:
+In `clipmeta.core/Watching/WatchingResolver.cs`, replace the call in the post-take probe loop, change `ProbeInUse(ranked[i].Path)` to `LockProbe.IsInUse(ranked[i].Path)`, and **delete** the private `ProbeInUse` method entirely (it is now `LockProbe`). The current loop is:
 
 ```csharp
         for (int i = 0; i < ranked.Count; i++)
@@ -407,9 +407,9 @@ In `clipmeta.core/Watching/WatchingResolver.cs`, replace the call in the post-ta
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `dotnet build --nologo -v q && dotnet test --filter "FullyQualifiedName~LockProbeTests|FullyQualifiedName~WatchingResolverTests" --nologo`
-Expected: PASS — `LockProbeTests` green, and the pass-1 `WatchingResolverTests` still green (non-offline probe behavior unchanged).
+Expected: PASS, `LockProbeTests` green, and the pass-1 `WatchingResolverTests` still green (non-offline probe behavior unchanged).
 
-> If `IsInUse_OfflineFile_ReturnsFalseWithoutOpening` is flaky because the OS strips `FileAttributes.Offline`, STOP and report it — do not delete the assertion; we will adjust how the placeholder state is simulated.
+> If `IsInUse_OfflineFile_ReturnsFalseWithoutOpening` is flaky because the OS strips `FileAttributes.Offline`, STOP and report it, do not delete the assertion; we will adjust how the placeholder state is simulated.
 
 - [ ] **Step 6: Commit**
 
@@ -420,7 +420,7 @@ git commit -m "feat(core): cloud-safe LockProbe (never opens offline/placeholder
 
 ---
 
-### Task 3: Return-type plumbing — `WatchingResult` + `WatchingCandidate.Note` (behavior preserved)
+### Task 3: Return-type plumbing, `WatchingResult` + `WatchingCandidate.Note` (behavior preserved)
 
 **Files:**
 - Create: `clipmeta.core/Watching/WatchDiagnostics.cs`, `clipmeta.core/Watching/WatchingResult.cs`
@@ -445,12 +445,12 @@ In `clipmetascribe.Tests/WatchingResolverTests.cs`, the helper currently returns
         resolver.Resolve(dir, limit, fallback).Candidates;
 ```
 
-Then replace each `<resolver>.Resolve(_tempDir, limit: X, includeAccessFallback: Y)` expression in the test bodies with `Candidates(<resolver>, _tempDir, X, Y)`. (Every existing assertion — `result[0]`, `result.Count`, `.Single(...)`, `.All(...)` — then operates on the candidate list exactly as before.)
+Then replace each `<resolver>.Resolve(_tempDir, limit: X, includeAccessFallback: Y)` expression in the test bodies with `Candidates(<resolver>, _tempDir, X, Y)`. (Every existing assertion, `result[0]`, `result.Count`, `.Single(...)`, `.All(...)`, then operates on the candidate list exactly as before.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchingResolverTests" --nologo`
-Expected: FAIL to compile — `Resolve(...)` still returns a list (no `.Candidates`); `WatchingResult` does not exist yet.
+Expected: FAIL to compile, `Resolve(...)` still returns a list (no `.Candidates`); `WatchingResult` does not exist yet.
 
 - [ ] **Step 3: Create the result types**
 
@@ -463,7 +463,7 @@ namespace ClipMetaCore.Watching;
 /// <param name="Player">Process name of the player.</param>
 /// <param name="ReferencedName">The file the title named (full path or bare name).</param>
 /// <param name="ForeignDirectory">
-/// The folder the player is reading from — populated ONLY when the title gave a full path (MPC).
+/// The folder the player is reading from, populated ONLY when the title gave a full path (MPC).
 /// Null for bare-name titles: we genuinely do not know where the file is, and will not search.
 /// </param>
 public sealed record UnresolvedPlayer(string Player, string ReferencedName, string? ForeignDirectory);
@@ -471,7 +471,7 @@ public sealed record UnresolvedPlayer(string Player, string ReferencedName, stri
 /// <summary>Side-band findings from a resolution pass, beyond the ranked candidates.</summary>
 /// <param name="UnresolvedPlayers">
 /// Players open on files outside the library. Non-empty means "you may be playing from the wrong
-/// folder" — surfaces should warn and not tag.
+/// folder", surfaces should warn and not tag.
 /// </param>
 public sealed record WatchDiagnostics(IReadOnlyList<UnresolvedPlayer> UnresolvedPlayers);
 ```
@@ -489,7 +489,7 @@ public sealed record WatchingResult(IReadOnlyList<WatchingCandidate> Candidates,
 
 - [ ] **Step 4: Add `Note` to `WatchingCandidate`**
 
-Modify `clipmeta.core/Watching/WatchingCandidate.cs` — append the trailing optional parameter and document it:
+Modify `clipmeta.core/Watching/WatchingCandidate.cs`, append the trailing optional parameter and document it:
 
 ```csharp
 /// <param name="Note">
@@ -542,7 +542,7 @@ Change it to:
         IReadOnlyList<WatchingCandidate> candidates = result.Candidates;
 ```
 
-(The rest of the handler — building the `candidates` JSON array and the response — is unchanged in this task.)
+(The rest of the handler, building the `candidates` JSON array and the response, is unchanged in this task.)
 
 In `clipmetascribe/Commands/WatchingCommand.cs`, change
 `IReadOnlyList<WatchingCandidate> candidates = resolver.Resolve(libraryDir, limit, includeAccessFallback);`
@@ -556,7 +556,7 @@ to:
 - [ ] **Step 7: Run the full watching + surface suites to verify behavior is preserved**
 
 Run: `dotnet build --nologo -v q && dotnet test --filter "FullyQualifiedName~WatchingResolverTests|FullyQualifiedName~WatchingCommandTests|FullyQualifiedName~LibraryWatchingToolTests" --nologo`
-Expected: PASS — every pass-1 assertion still holds (only the return shape changed).
+Expected: PASS, every pass-1 assertion still holds (only the return shape changed).
 
 - [ ] **Step 8: Commit**
 
@@ -583,7 +583,7 @@ git commit -m "refactor(core): Resolve returns WatchingResult (candidates + diag
 
 In `clipmetascribe.Tests/WatchingResolverTests.cs`:
 
-(a) `Resolve_SingleUnambiguousPlayerHit_IsHighAndFirst` currently uses a VLC bare-name title on a free file and expects `high`. Switch it to an **MPC full-path** title (full-path stays `high` regardless of lock, preserving the test's intent — "a confident hit ranks first"). Replace its `Resolver(...)` window with a full-path one built from the clip path:
+(a) `Resolve_SingleUnambiguousPlayerHit_IsHighAndFirst` currently uses a VLC bare-name title on a free file and expects `high`. Switch it to an **MPC full-path** title (full-path stays `high` regardless of lock, preserving the test's intent, "a confident hit ranks first"). Replace its `Resolver(...)` window with a full-path one built from the clip path:
 
 ```csharp
     [TestMethod]
@@ -727,7 +727,7 @@ Now add the new state-table tests (append to the class):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchingResolverTests" --nologo`
-Expected: FAIL — the new collision/diagnostic/suppression behavior isn't implemented (e.g. `BareNameNotLocked_DemotedToLowWithNote` sees `high`; `PlayerOnForeignFile...` sees access-time candidates and empty diagnostics).
+Expected: FAIL, the new collision/diagnostic/suppression behavior isn't implemented (e.g. `BareNameNotLocked_DemotedToLowWithNote` sees `high`; `PlayerOnForeignFile...` sees access-time candidates and empty diagnostics).
 
 - [ ] **Step 3: Implement the new resolver flow**
 
@@ -736,7 +736,7 @@ Replace the body of `Resolve` in `clipmeta.core/Watching/WatchingResolver.cs` wi
 ```csharp
     /// <summary>The caveat attached to a bare-name match whose file is not currently locked.</summary>
     private const string NotLockedNote =
-        "not currently locked — may be a same-named file elsewhere; confirm before tagging";
+        "not currently locked, may be a same-named file elsewhere; confirm before tagging";
 
     public WatchingResult Resolve(string libraryRoot, int limit, bool includeAccessFallback)
     {
@@ -803,7 +803,7 @@ Replace the body of `Resolve` in `clipmeta.core/Watching/WatchingResolver.cs` wi
             working.Add(new WorkingCandidate(candidate, hasPlayer, bareNameUnambiguous));
         }
 
-        // Collision guard: probe player-hit candidates now (there are at most a few — one per open
+        // Collision guard: probe player-hit candidates now (there are at most a few, one per open
         // player), so a bare-name high hit whose file is NOT locked is demoted to low + note. This
         // is the only probing done before the cap; access-time candidates are still probed after it.
         for (int i = 0; i < working.Count; i++)
@@ -851,7 +851,7 @@ Replace the body of `Resolve` in `clipmeta.core/Watching/WatchingResolver.cs` wi
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `dotnet build --nologo -v q && dotnet test --filter "FullyQualifiedName~WatchingResolverTests" --nologo`
-Expected: PASS — all updated + new state-table tests green.
+Expected: PASS, all updated + new state-table tests green.
 
 - [ ] **Step 5: Commit**
 
@@ -890,7 +890,7 @@ Add to `clipmetamcp.Tests/LibraryWatchingToolTests.cs` (the class already has `_
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `dotnet test clipmetamcp.Tests --filter "FullyQualifiedName~LibraryWatchingToolTests" --nologo`
-Expected: FAIL to compile or assert — `Structured(result)["warning"]` referenced before the handler is updated (compiles, but the test is new; run to confirm green/red baseline). If it passes trivially, proceed — the substantive change is the handler emitting `warning` only when diagnostics exist.
+Expected: FAIL to compile or assert, `Structured(result)["warning"]` referenced before the handler is updated (compiles, but the test is new; run to confirm green/red baseline). If it passes trivially, proceed, the substantive change is the handler emitting `warning` only when diagnostics exist.
 
 - [ ] **Step 3: Update the `Watching` handler**
 
@@ -951,7 +951,7 @@ Update the tool's description string (the `registry.Register("library_watching",
 
 ```
 "If the response includes a 'warning' (type 'player_outside_library'), a player is showing a file " +
-"that is not in the configured library — tell the user they may be playing from the wrong folder " +
+"that is not in the configured library, tell the user they may be playing from the wrong folder " +
 "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
 "has a 'note', mention it and confirm with the user before tagging. " +
 ```
@@ -959,7 +959,7 @@ Update the tool's description string (the `registry.Register("library_watching",
 - [ ] **Step 4: Run tests to verify they pass (incl. purity)**
 
 Run: `dotnet build --nologo -v q && dotnet test clipmetamcp.Tests --filter "FullyQualifiedName~LibraryWatchingToolTests|FullyQualifiedName~StdoutPurityTests" --nologo`
-Expected: PASS — including `StdoutPurityTests` (the tool still runs cleanly via `ExampleArguments`).
+Expected: PASS, including `StdoutPurityTests` (the tool still runs cleanly via `ExampleArguments`).
 
 - [ ] **Step 5: Commit**
 
@@ -990,7 +990,7 @@ Add to `clipmetascribe.Tests/WatchingCommandTests.cs`:
     {
         // A free (unlocked) bare-name-resolvable clip is demoted with a note; the CLI surfaces it.
         // We can't inject a player from the test, so drive the command's Core path indirectly:
-        // a clip exists and an access-time candidate prints — assert the command runs and the
+        // a clip exists and an access-time candidate prints, assert the command runs and the
         // note column is wired by checking a demoted candidate's note appears when present.
         // (Behavioral player cases are covered in WatchingResolverTests; here we assert formatting.)
         File.WriteAllBytes(Path.Combine(_tempDir, "clip.mp4"), Array.Empty<byte>());
@@ -1025,7 +1025,7 @@ In `clipmetascribe/Commands/WatchingCommand.cs`, after obtaining `WatchingResult
                 string where = up.ForeignDirectory is null ? "" : $" from \"{up.ForeignDirectory}\"";
                 output.WriteLine(
                     $"WARNING: {up.Player} is playing \"{up.ReferencedName}\"{where}, which is not in this " +
-                    "library — you may be in the wrong folder. Do not tag until you've confirmed.");
+                    "library, you may be in the wrong folder. Do not tag until you've confirmed.");
             }
             output.WriteLine();
         }
@@ -1081,19 +1081,19 @@ Run: `dotnet test --nologo --no-build -v q` → expect all pass (multi-minute sc
 Add under the existing 2026-06-21 watched-clip section (or a new dated subsection):
 
 ```markdown
-### 2026-06-21 — Watched-clip resolution, pass 1.5 (wrong-directory honesty)
+### 2026-06-21, Watched-clip resolution, pass 1.5 (wrong-directory honesty)
 
 - **VLC bare-name matches can collide.** VLC reports only the file name, so a library `clip001.mp4`
   matches even when you're watching a *different* `clip001.mp4` elsewhere. Guard: a bare-name match
   is `high` only when the library file is **locked** (`LockProbe.IsInUse`); otherwise it is demoted
   to `low` with a confirm note. Full-path (MPC) matches are exact and stay `high` regardless of lock.
-- **Pause/stop releases the lock — accepted trade-off.** If a player releases the file handle while
+- **Pause/stop releases the lock, accepted trade-off.** If a player releases the file handle while
   paused, a *correct* bare-name match reads not-locked and is demoted to "confirm" (friction, not a
   wrong tag). MPC (full path) is unaffected. Revisit the trust policy after dogfooding tells us how
   MPC/VLC behave with the lock on stop vs. next vs. close.
 - **Never lock-probe an offline/placeholder file.** Opening a Dropbox/OneDrive online-only file
   hydrates (downloads) it. `LockProbe` checks `FileAttributes.Offline` and reports not-locked WITHOUT
-  opening — so a bare-name match to an un-downloaded library file stays `low` (correct: it isn't the
+  opening, so a bare-name match to an un-downloaded library file stays `low` (correct: it isn't the
   file being played).
 - **A player open with no readable filename is NOT a wrong-directory signal.** Only a title that
   names an `.mp4` absent from the library warns; a metadata-title/idle player stays quiet.
@@ -1120,8 +1120,8 @@ git commit -m "docs: pass-1.5 wrong-directory honesty (PITFALLS, CLAUDE.md count
 
 **Spec coverage:** §1 state table → Task 4 tests (rows 1-8 each have a test or are pass-1 regressions); §2 collision guard → Tasks 1 (MatchKind), 2 (LockProbe), 4 (demote rule); §2 cloud-safe probe → Task 2; §3 warning + suppression → Task 4 (diagnostics + suppress) and the `PlayerTitleResolution` helper from Task 1; §4 types → Tasks 1/3; §5 surfaces → Tasks 5 (MCP) + 6 (CLI); §6 tests → each task's test step + Task 7 gate; §7 risks → covered (offline probe T2, demote-not-drop T4, return-type churn confined to T3, idle-player quiet T4). §8 DoD → Task 7.
 
-**Placeholder scan:** no TBD/TODO; every code step shows complete code; every run step has a command + expected result. The CLI Task-6 test is deliberately a formatting/no-crash assertion (the player-driven warning/note is covered behaviorally in Task 4) — this is stated, not a gap.
+**Placeholder scan:** no TBD/TODO; every code step shows complete code; every run step has a command + expected result. The CLI Task-6 test is deliberately a formatting/no-crash assertion (the player-driven warning/note is covered behaviorally in Task 4), this is stated, not a gap.
 
 **Type consistency:** `WatchingResult.Candidates`/`.Diagnostics`, `WatchDiagnostics.UnresolvedPlayers`, `UnresolvedPlayer(Player, ReferencedName, ForeignDirectory)`, `WatchingCandidate.Note`, `SignalHit.MatchKind`, `PlayerMatch(Window, Kind, ReferencedValue, Matches)`, `PlayerTitleResolution.For`, `LockProbe.IsInUse`, `WorkingCandidate(Candidate, IsPlayerHit, BareNameUnambiguous)`, and the `"high"`/`"low"` constants are used identically across tasks. The behavior change to bare-name confidence is called out explicitly in Task 4 with the two existing tests it updates.
 
-**Note on test runs:** `--filter` keeps the loop fast; the Task-7 `dotnet test` runs the full suite (multi-minute scribe integration) — budget a long timeout.
+**Note on test runs:** `--filter` keeps the loop fast; the Task-7 `dotnet test` runs the full suite (multi-minute scribe integration), budget a long timeout.

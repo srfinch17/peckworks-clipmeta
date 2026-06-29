@@ -22,7 +22,7 @@ public sealed class FileLogger : IClipMetaLogger
     {
         _logPath = logPath;
         Level = level;
-        // Path.GetDirectoryName("clipmeta.log") returns "" not null — guard before CreateDirectory.
+        // Path.GetDirectoryName("clipmeta.log") returns "" not null, guard before CreateDirectory.
         string? dir = Path.GetDirectoryName(logPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
     }

@@ -81,8 +81,8 @@ public class StdoutPurityTests
         // (an early error would mean the happy path never actually executed).
         Assert.AreEqual(requests.Count, responses.Count, "every request must get a response");
         foreach (JsonObject response in responses.Skip(1))
-            Assert.IsNull(response["result"]?["isError"], "tool errored — happy path not exercised");
+            Assert.IsNull(response["result"]?["isError"], "tool errored, happy path not exercised");
         Assert.AreEqual(string.Empty, stray,
-            "a serve-path component wrote to Console.Out — this would corrupt the MCP channel");
+            "a serve-path component wrote to Console.Out, this would corrupt the MCP channel");
     }
 }

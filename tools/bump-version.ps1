@@ -8,7 +8,7 @@
     Directory.Build.props); the installed .mcpb picks it up only after tools/pack-mcpb.ps1 and a
     Desktop reinstall. Run tools/check-version.ps1 afterward to confirm.
 
-    A bump is deliberate — run this when shipping, not on every commit. Bumping does not rebuild,
+    A bump is deliberate, run this when shipping, not on every commit. Bumping does not rebuild,
     repack, or reinstall anything; it only changes the source of truth.
 
 .PARAMETER Part
@@ -58,7 +58,7 @@ else {
 Set-Content -Path $versionPath -Value $next -NoNewline
 
 # Re-stamp the manifest with a targeted text edit (preserves the hand-formatted layout). Matches
-# the standalone "version" key only — "manifest_version" has a non-quote char before it.
+# the standalone "version" key only, "manifest_version" has a non-quote char before it.
 $manifestText = (Get-Content $manifestPath -Raw) -replace '("version"\s*:\s*")[^"]*(")', "`${1}$next`${2}"
 Set-Content -Path $manifestPath -Value $manifestText -NoNewline
 

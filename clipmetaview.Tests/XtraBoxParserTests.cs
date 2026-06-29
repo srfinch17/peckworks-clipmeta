@@ -27,7 +27,7 @@ public class XtraBoxParserTests
         var xtraNode = FindBoxByType(root, "Xtra");
 
         if (xtraNode == null)
-            Assert.Inconclusive("No Xtra box found — clip may not have Windows metadata.");
+            Assert.Inconclusive("No Xtra box found, clip may not have Windows metadata.");
 
         var categoryNode = xtraNode.Children.FirstOrDefault(c => c.Type == "WM/Category");
         Assert.IsNotNull(categoryNode, "Expected WM/Category child under Xtra node");

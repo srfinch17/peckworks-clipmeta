@@ -5,13 +5,13 @@ namespace ClipMetaCore.Watching;
 /// Rather than extract a token from arbitrary title text and require it to equal a library key
 /// (the old approach, which MPC-HC's timecode-prefixed titles silently defeated), this asks the
 /// inverse question: which KNOWN library basename appears inside the title? That is immune to
-/// every title-format quirk — playback-position prefixes, OSD text, paused state, custom formats —
+/// every title-format quirk, playback-position prefixes, OSD text, paused state, custom formats, 
 /// because the candidates are ground truth, not a guess.
 /// </summary>
 public static class LibraryTitleMatcher
 {
     // Characters that cannot occur inside a Windows file name (plus the separators that bound one).
-    // A match preceded/followed by one of these — or by whitespace, or by a string edge — sits at a
+    // A match preceded/followed by one of these, or by whitespace, or by a string edge, sits at a
     // genuine file-name boundary; a match flanked by ordinary file-name characters is a substring of
     // a DIFFERENT, longer name (e.g. "clip.mp4" inside "myclip.mp4") and must be rejected.
     private const string BoundaryChars = "\\/:*?\"<>|";

@@ -9,7 +9,7 @@ using ClipMetaMcp.Tools;
 namespace ClipMetaMcp;
 
 /// <summary>
-/// Entry point. With no arguments, serves MCP over stdio — the mode MCP hosts use.
+/// Entry point. With no arguments, serves MCP over stdio, the mode MCP hosts use.
 /// <c>--selftest</c> runs the spawn-and-handshake diagnostic. This file only wires streams and
 /// arguments; protocol logic lives in Protocol/, tool plumbing in Tools/, business logic in
 /// clipmeta.core (thin-shell rule).
@@ -84,8 +84,8 @@ internal static class Program
         {
             // ── Stdout lockdown (THE IRON RULE, spec §2) ───────────────────────────────
             // The raw stdout stream becomes the protocol channel, owned by exactly one
-            // writer. Console.Out is then nulled so any stray Console.WriteLine — current
-            // or future code — vanishes instead of corrupting the channel. UTF-8 *without
+            // writer. Console.Out is then nulled so any stray Console.WriteLine, current
+            // or future code, vanishes instead of corrupting the channel. UTF-8 *without
             // BOM*: a BOM would be three stray bytes ahead of the first response, exactly
             // the corruption this rule exists to prevent.
             var protocolOutput = new StreamWriter(
@@ -181,7 +181,7 @@ internal static class Program
     /// Rotating file logger under <c>%LOCALAPPDATA%\clipmeta\mcp.log</c>, wrapped in
     /// <see cref="SafeLogger"/> so per-line failures (cross-process log contention, AV locks)
     /// can never escape into the session. Falls back to no logging rather than failing
-    /// startup — a broken log path must not take the server down.
+    /// startup, a broken log path must not take the server down.
     /// </summary>
     private static IClipMetaLogger CreateLogger()
     {

@@ -2,7 +2,7 @@ using System.IO.Enumeration;
 
 namespace ClipMetaCore.Read;
 
-/// <summary>One clip file found by a library listing — file facts only, no parsing.</summary>
+/// <summary>One clip file found by a library listing, file facts only, no parsing.</summary>
 public record ClipFileInfo(
     /// <summary>Full path to the MP4 file.</summary>
     string FilePath,
@@ -12,7 +12,7 @@ public record ClipFileInfo(
     DateTimeOffset LastModified);
 
 /// <summary>
-/// Enumerates the MP4 files of a clips library by file name — the discovery primitive for
+/// Enumerates the MP4 files of a clips library by file name, the discovery primitive for
 /// "what clips do I have?" questions, as opposed to the metadata-driven search in
 /// <see cref="ClipMetaFinder"/>/<see cref="ClipMetaSearch"/>. Deliberately does NOT parse any
 /// file: listing a 500-clip library must cost 500 stat calls, not 500 MP4 parses.
@@ -24,7 +24,7 @@ public static class ClipMetaLibrary
     /// "show me my recent clips"). <paramref name="namePattern"/> is a simple wildcard
     /// expression matched case-insensitively against the file NAME only (e.g. "*2026.01*",
     /// "tf2*.mp4"); null/blank means all. Because the pattern is applied to names after a
-    /// fixed "*.mp4" directory enumeration, it cannot influence WHICH directories are walked —
+    /// fixed "*.mp4" directory enumeration, it cannot influence WHICH directories are walked, 
     /// no path separators or traversal sequences have any effect.
     /// </summary>
     /// <param name="directory">Directory to list.</param>

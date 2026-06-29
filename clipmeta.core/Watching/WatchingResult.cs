@@ -4,7 +4,7 @@ namespace ClipMetaCore.Watching;
 /// <param name="Candidates">Ranked watched-clip candidates, best first (may be empty).</param>
 /// <param name="Diagnostics">Wrong-directory and related findings (see <see cref="WatchDiagnostics"/>).</param>
 /// <param name="AnyLiveTarget">
-/// True when at least one returned candidate is genuinely live — it has a player-title hit, its lock
+/// True when at least one returned candidate is genuinely live, it has a player-title hit, its lock
 /// probe reported in-use, OR it is a history-confirmed review-mode corrected bind. False means every
 /// candidate is an unverified recency guess (e.g. the access-time fallback with nothing open):
 /// callers must NOT auto-tag without confirming the path.

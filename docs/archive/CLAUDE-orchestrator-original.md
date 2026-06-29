@@ -1,4 +1,4 @@
-# CLAUDE.md — clipmetaview Orchestration Instructions
+# CLAUDE.md, clipmetaview Orchestration Instructions
 
 ## Project Overview
 
@@ -6,47 +6,47 @@ You are building **clipmetaview**, a C# command-line application that reads an `
 
 **Solution root:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`
 **CLI project name:** `clipmetaview`
-**Target framework:** .NET 8 (or whatever is present in the stub .csproj — do not downgrade)
+**Target framework:** .NET 8 (or whatever is present in the stub .csproj, do not downgrade)
 **External packages:** NONE. Zero. Only types from the Microsoft base SDK and BCL. No NuGet packages beyond what ships with the SDK.
-**Test clips:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta\testclips\` — real `.mp4` files are available here for integration testing and manual validation. Always use files from this folder when you need a real MP4. Do not hardcode any specific filename; enumerate the folder at test time so new clips added later are picked up automatically.
+**Test clips:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta\testclips\`, real `.mp4` files are available here for integration testing and manual validation. Always use files from this folder when you need a real MP4. Do not hardcode any specific filename; enumerate the folder at test time so new clips added later are picked up automatically.
 
 ---
 
-## Orchestrator Pattern — How You Will Work
+## Orchestrator Pattern, How You Will Work
 
 You are the **Orchestrator**. You will coordinate five roles in sequence. Each role is a focused pass over the work. Do not blend roles. Complete each one before starting the next.
 
 ```
 ORCHESTRATOR
-├── ROLE 1 — ARCHITECT     (design decisions, file layout, type definitions)
-├── ROLE 2 — CODER         (write all implementation files)
-├── ROLE 3 — TESTER        (write xUnit-free test validation, use MSTest)
-├── ROLE 4 — REVIEWER      (read every file you wrote, self-critique, fix issues)
-└── ROLE 5 — DOCUMENTER    (XML doc comments, README.md, usage examples)
+├── ROLE 1, ARCHITECT     (design decisions, file layout, type definitions)
+├── ROLE 2, CODER         (write all implementation files)
+├── ROLE 3, TESTER        (write xUnit-free test validation, use MSTest)
+├── ROLE 4, REVIEWER      (read every file you wrote, self-critique, fix issues)
+└── ROLE 5, DOCUMENTER    (XML doc comments, README.md, usage examples)
 ```
 
 Announce each role transition with a header line, e.g.:
 ```
-=== ROLE 2: CODER — beginning implementation ===
+=== ROLE 2: CODER, beginning implementation ===
 ```
 
 ---
 
-## Role 1 — ARCHITECT
+## Role 1, ARCHITECT
 
 Before writing any code, produce a short design document in your response covering:
 
-1. **File layout** — list every `.cs` file you will create, one sentence on its purpose.
-2. **Public API surface** — the key types and their responsibilities.
-3. **Tree rendering strategy** — how you will produce the ASCII tree output.
-4. **Error handling contract** — what happens on bad files, missing files, non-mp4 input.
-5. **Extension seams** — how this codebase will be extended later by `clipmetaedit` (the write/edit tool). Make types easy to reuse.
+1. **File layout**, list every `.cs` file you will create, one sentence on its purpose.
+2. **Public API surface**, the key types and their responsibilities.
+3. **Tree rendering strategy**, how you will produce the ASCII tree output.
+4. **Error handling contract**, what happens on bad files, missing files, non-mp4 input.
+5. **Extension seams**, how this codebase will be extended later by `clipmetaedit` (the write/edit tool). Make types easy to reuse.
 
 Do not write any `.cs` files during this role.
 
 ---
 
-## Role 2 — CODER
+## Role 2, CODER
 
 Implement the application by creating or editing files inside the `clipmetaview` project folder. Follow every constraint below precisely.
 
@@ -92,9 +92,9 @@ Static utility. Must implement at minimum:
 - `ReadUInt16(BinaryReader)`
 - `ReadUInt32(BinaryReader)`
 - `ReadUInt64(BinaryReader)`
-- `ReadFourCC(BinaryReader)` — reads 4 bytes, returns ASCII string
-- `ReadBoxHeader(BinaryReader)` — handles size==1 (extended) and size==0 (to-EOF) cases
-- `ReadFullBoxHeader(BinaryReader)` — reads box header + 1 version byte + 3 flag bytes
+- `ReadFourCC(BinaryReader)`, reads 4 bytes, returns ASCII string
+- `ReadBoxHeader(BinaryReader)`, handles size==1 (extended) and size==0 (to-EOF) cases
+- `ReadFullBoxHeader(BinaryReader)`, reads box header + 1 version byte + 3 flag bytes
 
 #### `Mp4/BoxNode.cs`
 An in-memory tree node representing a parsed box:
@@ -119,7 +119,7 @@ public class BoxNode
 
 #### `Mp4/Mp4Parser.cs`
 Core parser. Must implement:
-- `ParseFile(string path) : BoxNode` — returns root node whose children are the top-level boxes
+- `ParseFile(string path) : BoxNode`, returns root node whose children are the top-level boxes
 - `ParseContainerBox(BinaryReader, BoxHeader, long fileOffset) : BoxNode`
 - `ParseBoxes(BinaryReader, long start, long end) : IEnumerable<BoxNode>`
 - Recursion into all known container types (see list below)
@@ -142,7 +142,7 @@ Core parser. Must implement:
 - `©gen` = Genre
 - `trkn` = Track Number (integer)
 - `desc` = Description
-- `covr` = Cover Art (binary — display as `[JPEG image, N bytes]` or `[PNG image, N bytes]`)
+- `covr` = Cover Art (binary, display as `[JPEG image, N bytes]` or `[PNG image, N bytes]`)
 - Any unknown box inside `ilst` → mark `IsEditable = true`, display as `[unknown key]`
 
 **Data box parsing (inside ilst items):**
@@ -181,7 +181,7 @@ Renders a `BoxNode` tree to the console using box-drawing characters. Must:
 - For editable nodes, append `  ← [EDITABLE]` in a contrasting color (use `Console.ForegroundColor`)
 - For nodes with a `DisplayValue`, show the value on the same line: `©nam  Title  "My Video Title"  ← [EDITABLE]`
 - For `covr`, show `[JPEG image, 14532 bytes]` instead of the raw value
-- For `mdat`, do NOT recurse — just show it as a leaf with its size (it is raw media bytes)
+- For `mdat`, do NOT recurse, just show it as a leaf with its size (it is raw media bytes)
 - Emit a legend at the bottom explaining the `[EDITABLE]` marker and what it means
 - Reset console color to default before exiting
 
@@ -211,9 +211,9 @@ Legend:
 
 ---
 
-## Role 3 — TESTER
+## Role 3, TESTER
 
-Create a test project `clipmetaview.Tests` inside the solution using MSTest (the Microsoft testing framework — this ships with the SDK, no external packages needed).
+Create a test project `clipmetaview.Tests` inside the solution using MSTest (the Microsoft testing framework, this ships with the SDK, no external packages needed).
 
 ### Test Coverage Required
 
@@ -240,7 +240,7 @@ Create a test project `clipmetaview.Tests` inside the solution using MSTest (the
    - A node with DisplayValue shows the value in output
    - Nested children render with correct indentation
 
-5. **`ProgramIntegrationTests`** — backed by real files from the `testclips` folder
+5. **`ProgramIntegrationTests`**, backed by real files from the `testclips` folder
    - Missing file → exit code 1
    - Wrong extension → exit code 1
    - Each `.mp4` in `testclips\` parses without throwing an exception
@@ -248,7 +248,7 @@ Create a test project `clipmetaview.Tests` inside the solution using MSTest (the
    - Each `.mp4` in `testclips\` contains a `moov` box at the top level
    - Any file in `testclips\` that has an `ilst` box has at least one child node marked `IsEditable = true`
 
-   **Test clip path helper — add this to the test project:**
+   **Test clip path helper, add this to the test project:**
    ```csharp
    internal static class TestClips
    {
@@ -315,25 +315,25 @@ public class BigEndianReaderTests
 
 ---
 
-## Role 4 — REVIEWER
+## Role 4, REVIEWER
 
 Read every file you have written. Check each item on this list and fix any violations:
 
 ### Code Quality Checklist
 - [ ] No external NuGet packages referenced in any `.csproj`
-- [ ] All multi-byte reads go through `BigEndianReader` — no raw `BinaryReader.ReadInt32()` calls in parser code
+- [ ] All multi-byte reads go through `BigEndianReader`, no raw `BinaryReader.ReadInt32()` calls in parser code
 - [ ] `FileStream` is properly disposed in all paths (use `using`)
 - [ ] Exit codes are set correctly (0/1/2)
 - [ ] No `Console.WriteLine` calls inside library classes (only in `Program.cs` and `TreeRenderer.cs`)
-- [ ] `mdat` is NOT recursed into — it must be treated as a leaf
+- [ ] `mdat` is NOT recursed into, it must be treated as a leaf
 - [ ] Console colors are reset after rendering (use `try/finally`)
-- [ ] `BoxNode.Children` is never null — initialized to `new List<BoxNode>()`
-- [ ] The `©` prefix (0xA9) is handled correctly — FourCC parsing must handle non-ASCII bytes
+- [ ] `BoxNode.Children` is never null, initialized to `new List<BoxNode>()`
+- [ ] The `©` prefix (0xA9) is handled correctly, FourCC parsing must handle non-ASCII bytes
 - [ ] FullBox 4-byte skip is applied correctly to `meta` and all other FullBox types
 - [ ] When `size == 0`, the box correctly extends to end of file/container
 - [ ] Parser does not crash on files where `udta`/`meta`/`ilst` are absent (graceful no-metadata display)
 - [ ] All public types have XML doc comments
-- [ ] No magic numbers — all constants are named
+- [ ] No magic numbers, all constants are named
 
 ### Self-Critique Format
 After reviewing, produce a short list:
@@ -348,7 +348,7 @@ NO ISSUES FOUND IN:
 
 ---
 
-## Role 5 — DOCUMENTER
+## Role 5, DOCUMENTER
 
 ### XML Doc Comments
 Every `public` type, method, and property must have a `<summary>` doc comment. For complex methods, add `<param>` and `<returns>` tags.
@@ -378,7 +378,7 @@ Displays the internal box/atom structure of an MP4 file as a tree. Editable meta
 | 2    | File parse error |
 
 ## Technical Notes
-- Pure native C# — zero external dependencies
+- Pure native C#, zero external dependencies
 - Reads only box headers; never loads media data (mdat) into memory
 - Big-endian byte order handled throughout
 - Designed as the foundation for clipmetaedit (add/update/delete metadata)
@@ -435,7 +435,7 @@ moov → udta → meta (FullBox) → ilst → [©nam, ©ART, ...] → data (Full
 ```
 
 ### The © Prefix
-The `©` character is byte `0xA9` (169). `©nam` is bytes `A9 6E 61 6D`. When reading FourCCs, use `Encoding.Latin1` (ISO-8859-1) not ASCII to preserve this byte. When comparing to known keys, compare the raw string — `"\u00A9nam"` equals the parsed string.
+The `©` character is byte `0xA9` (169). `©nam` is bytes `A9 6E 61 6D`. When reading FourCCs, use `Encoding.Latin1` (ISO-8859-1) not ASCII to preserve this byte. When comparing to known keys, compare the raw string, `"\u00A9nam"` equals the parsed string.
 
 ### Big-Endian Requirement
 Every multi-byte integer in MP4 is big-endian. Use this pattern:
@@ -451,8 +451,8 @@ return BitConverter.ToUInt32(bytes, 0);
 
 Design with these future needs in mind (do not implement them now, just do not block them):
 
-1. `BoxNode.FileOffset` must be accurate — the editor will seek to these positions.
-2. `BoxNode.Size` must include the header — the editor needs to know the full span of each box.
+1. `BoxNode.FileOffset` must be accurate, the editor will seek to these positions.
+2. `BoxNode.Size` must include the header, the editor needs to know the full span of each box.
 3. `Mp4Parser` should be in a separate project/assembly (`ClipMetaView.Core`) if that structure exists, so the editor can reference it.
 4. `IsEditable` and `EditableKey` on `BoxNode` are the hooks the editor will use to find targetable fields.
 5. Avoid `sealed` on any class the editor might subclass.

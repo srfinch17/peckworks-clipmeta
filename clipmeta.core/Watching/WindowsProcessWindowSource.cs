@@ -29,7 +29,7 @@ public sealed class WindowsProcessWindowSource : IProcessWindowSource
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
-                // Process exited mid-enumeration, or its window is inaccessible — skip it.
+                // Process exited mid-enumeration, or its window is inaccessible, skip it.
             }
             finally
             {

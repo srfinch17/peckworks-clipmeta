@@ -69,7 +69,7 @@ public class ClipMetaFinderTests
         string clip = PrepareClipWithFields("clip.mp4",
             new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
 
-        // Field name searched as uppercase — should still match
+        // Field name searched as uppercase, should still match
         var results = ClipMetaFinder.Find(_tempDir, "GAME", "Team Fortress 2").ToList();
 
         CollectionAssert.Contains(results, clip);
@@ -81,7 +81,7 @@ public class ClipMetaFinderTests
         string clip = PrepareClipWithFields("clip.mp4",
             new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
 
-        // Value searched lowercase — substring match, case-insensitive
+        // Value searched lowercase, substring match, case-insensitive
         var results = ClipMetaFinder.Find(_tempDir, "game", "team fortress").ToList();
 
         CollectionAssert.Contains(results, clip);

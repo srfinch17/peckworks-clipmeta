@@ -55,10 +55,10 @@ Legend:
 
 ## Technical Notes
 
-- Pure native C# — zero external dependencies beyond the .NET 10 BCL
+- Pure native C#, zero external dependencies beyond the .NET 10 BCL
 - Reads only box headers; never loads media data (`mdat`) into memory
 - Big-endian byte order handled throughout via `BigEndianReader`
-- All file I/O through `FileStream` with seeking — constant memory use regardless of file size
+- All file I/O through `FileStream` with seeking, constant memory use regardless of file size
 - Designed as the foundation for `clipmetaedit` (add/update/delete metadata)
 - `BoxNode.FileOffset` and `BoxNode.Size` are accurate so the editor can seek directly to any box
 

@@ -6,7 +6,7 @@ namespace ClipMetaMcp.Tests;
 
 /// <summary>
 /// Fixture-config tests for the --install / --uninstall fallback. Everything runs against
-/// throwaway files in a temp directory — never the machine's real Claude Desktop config.
+/// throwaway files in a temp directory, never the machine's real Claude Desktop config.
 /// The contract under test: other people's config survives us byte-meaning-identical,
 /// corrupt JSON is refused (never "repaired"), and every change leaves a timestamped backup.
 /// </summary>

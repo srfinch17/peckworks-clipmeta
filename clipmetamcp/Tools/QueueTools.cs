@@ -10,7 +10,7 @@ namespace ClipMetaMcp.Tools;
 /// <summary>
 /// Registers the deferred-tag queue tools. A clip that is playing is locked against our write, so
 /// these persist a CONFIRMED tag and drain the queue as locks clear. The queue never resolves or
-/// guesses — the caller passes an already-resolved path (from library_watching, confirmed with the
+/// guesses, the caller passes an already-resolved path (from library_watching, confirmed with the
 /// user when confidence was low). Every drain runs under the shared <see cref="WriteGate"/> so it
 /// can never race a direct write at <c>File.Replace</c>.
 /// </summary>
@@ -19,7 +19,7 @@ public static class QueueTools
     /// <summary>
     /// Registers the queue tools against the given sandbox. When <paramref name="pump"/> is supplied,
     /// each enqueue wakes it so the background drain lands the tag the moment the player's lock clears
-    /// (zero-touch flush for the last clip); null disables that — the queue still drains
+    /// (zero-touch flush for the last clip); null disables that, the queue still drains
     /// opportunistically on the next watched-clip call and via library_flush_queue. When
     /// <paramref name="journal"/> is supplied, <c>library_flush_queue</c> and <c>library_queue_status</c>
     /// surface any tags the background pump auto-flushed since the last call as <c>autoFlushed</c>
@@ -36,10 +36,10 @@ public static class QueueTools
             "library_queue_tag",
             "Queues a metadata tag for a clip that is currently being played (and therefore locked " +
             "against writing). Pass the clip 'path' you already resolved with library_watching and " +
-            "confirmed — this tool does NOT resolve or guess. 'fields' maps field names to string " +
+            "confirmed, this tool does NOT resolve or guess. 'fields' maps field names to string " +
             "values (empty string deletes), exactly like clip_set_fields. For searchability, put " +
             "people in 'players' and searchable nouns/moments (objects, places, events) in 'tags' " +
-            "rather than burying them in free-text 'notes' — those three fields ACCUMULATE across " +
+            "rather than burying them in free-text 'notes', those three fields ACCUMULATE across " +
             "re-tags of the same clip (notes join as prose; tags/players merge), while game/rating " +
             "replace. The tag is written " +
             "automatically the next time you call a watched-clip tool after the player advances " +
@@ -55,7 +55,7 @@ public static class QueueTools
 
         registry.Register(new ToolDefinition(
             "library_flush_queue",
-            "Writes every queued deferred tag whose clip is no longer locked — use after you stop " +
+            "Writes every queued deferred tag whose clip is no longer locked, use after you stop " +
             "and close the player on the LAST clip, when there is no next watched-clip call to drain " +
             "the queue. Returns what was written, what is still locked (will retry), and what was " +
             "dropped because the clip is gone. Requires a configured library.",
@@ -143,7 +143,7 @@ public static class QueueTools
         DrainReport drain = DrainUnderGate(root);   // opportunistic: land anything already freed
         TagQueue.Enqueue(root, fullPath, mutation, confidence: "high");
 
-        // Wake the background pump ONLY for a clip that is currently LOCKED — that is the case the
+        // Wake the background pump ONLY for a clip that is currently LOCKED, that is the case the
         // pump exists for (zero-touch landing when the player closes). An UNLOCKED queued tag is left
         // for the foreground drain (the next watched-clip call or an explicit library_flush_queue) so
         // it reports under `written`, not `autoFlushed`. The pump idles on an event, so not waking it
@@ -197,7 +197,7 @@ public static class QueueTools
 
     /// <summary>
     /// Builds the <c>autoFlushed</c> array from the journal: tags the background pump wrote
-    /// since the last foreground call. Report-once — <see cref="DrainJournal.TakePending"/> clears.
+    /// since the last foreground call. Report-once, <see cref="DrainJournal.TakePending"/> clears.
     /// Called from both queue tools and <see cref="ReadTools.Watching"/> (DRY single source of shape).
     /// <c>agoSeconds</c> is clamped to ≥ 0 so a sub-millisecond race never emits -0.0.
     /// </summary>

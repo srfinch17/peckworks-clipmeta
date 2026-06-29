@@ -6,7 +6,7 @@ namespace ClipMetaScribe.Tests;
 /// <summary>
 /// Keeps <c>testclips/PRISTINE-MANIFEST.md</c> in lockstep with the actual
 /// <c>testclips/pristine/</c> folder, so the documented corpus can't silently drift from what is
-/// on disk — a clip added without a manifest row, or a row left behind after a clip is removed,
+/// on disk, a clip added without a manifest row, or a row left behind after a clip is removed,
 /// fails here. Graceful-skips on clip-less machines (CI), like the other real-clip tests.
 /// </summary>
 [TestClass]
@@ -16,7 +16,7 @@ public class PristineCorpusManifestTests
     public void Manifest_ListsExactlyTheClipsOnDisk()
     {
         if (!TestClipsLocator.PristineClipsPresent())
-            Assert.Inconclusive("No pristine clips present — manifest-drift check skipped (CI runs clip-less).");
+            Assert.Inconclusive("No pristine clips present, manifest-drift check skipped (CI runs clip-less).");
 
         string pristineDir = TestClipsLocator.FindPristinePath();
         string manifestPath = Path.Combine(Directory.GetParent(pristineDir)!.FullName, "PRISTINE-MANIFEST.md");

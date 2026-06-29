@@ -7,8 +7,8 @@ using ClipMetaMcp.Tools;
 namespace ClipMetaMcp.Tests.Helpers;
 
 /// <summary>
-/// Drives a complete <see cref="McpSession"/> in-process over string streams — no child process,
-/// no Claude — and returns the parsed response lines in order.
+/// Drives a complete <see cref="McpSession"/> in-process over string streams, no child process,
+/// no Claude, and returns the parsed response lines in order.
 /// </summary>
 internal static class McpHarness
 {
@@ -55,7 +55,7 @@ internal static class McpHarness
     /// <summary>
     /// Like <see cref="Run"/>, but wires a shared <paramref name="ledger"/> into both
     /// <see cref="ReadTools"/> and <see cref="WriteTools"/>. Use this when a test needs to
-    /// verify that a write marks the ledger and a subsequent watch call honours that mark —
+    /// verify that a write marks the ledger and a subsequent watch call honours that mark, 
     /// the same instance must back both, mirroring <c>Program.cs</c> production wiring.
     /// </summary>
     public static IReadOnlyList<JsonObject> RunWithLedger(
@@ -80,7 +80,7 @@ internal static class McpHarness
     /// <summary>
     /// Like <see cref="Run"/>, but wires a shared <paramref name="journal"/> into
     /// <see cref="ReadTools"/> so <c>library_watching</c> surfaces pump auto-flushes as
-    /// <c>autoFlushed</c> (report-once). Use this to verify drain-visibility behaviour —
+    /// <c>autoFlushed</c> (report-once). Use this to verify drain-visibility behaviour, 
     /// the same journal instance must back both the pump and the tool registration, mirroring
     /// <c>Program.cs</c> production wiring.
     /// </summary>

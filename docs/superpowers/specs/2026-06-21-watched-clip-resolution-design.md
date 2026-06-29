@@ -1,4 +1,4 @@
-# Watched-Clip Resolution + Deferred-Tag Queue — Design Spec
+# Watched-Clip Resolution + Deferred-Tag Queue, Design Spec
 **Date:** 2026-06-21
 **Status:** Approved for planning (brainstorm complete)
 **Author:** Peckworks Lab
@@ -9,7 +9,7 @@
 
 The whole point of ClipMeta is to tag clips *while you watch them* (or right after you capture them) so a large library becomes searchable later. The metadata engine, search, index, copy, and batch all exist. The missing piece is the bridge between "a human is watching a clip in a media player" and "ClipMeta knows *which file* that is, so it can tag it."
 
-The target experience: you open a clip in MPC-HC or VLC, watch it, and say to Claude "tag this — rocket jump, market garden kill." Claude asks ClipMeta *which clip is playing*, gets a confident answer, and applies the tags — without you ever typing or pasting a path. The same resolution also serves the capture-time flow ("Claude, tag that last clip 'uber chain'").
+The target experience: you open a clip in MPC-HC or VLC, watch it, and say to Claude "tag this, rocket jump, market garden kill." Claude asks ClipMeta *which clip is playing*, gets a confident answer, and applies the tags, without you ever typing or pasting a path. The same resolution also serves the capture-time flow ("Claude, tag that last clip 'uber chain'").
 
 This spec covers **resolution** (which clip, with what confidence) and the **deferred-tag queue** that lets you tag clips faster than the filesystem lock will allow a write to land. It does **not** cover the higher tagging-session/payload workflow (see §13).
 
@@ -18,7 +18,7 @@ This spec covers **resolution** (which clip, with what confidence) and the **def
 ## Why this is hard (the two intrinsic constraints)
 
 1. **No single signal is certain.** A window title tells us a filename; last-access-time tells us recency; a file lock tells us *something* is open. Each is individually fallible (titles can show metadata instead of a filename; access time is bumped by indexers/AV/our own reads; locks are released by some players mid-playback). Certainty comes from **corroboration** across signals, not from any one.
-2. **A playing file is locked against our write.** `File.Replace` deletes-and-swaps the target, which fails with a sharing violation unless every open handle was opened with `FILE_SHARE_DELETE` — which media players do not grant. So we generally **cannot write to the clip while it is playing**; the player must advance to the next clip or close. This is not a bug to fix; it is a constraint to design around (and the basis for the deferred-tag queue).
+2. **A playing file is locked against our write.** `File.Replace` deletes-and-swaps the target, which fails with a sharing violation unless every open handle was opened with `FILE_SHARE_DELETE`, which media players do not grant. So we generally **cannot write to the clip while it is playing**; the player must advance to the next clip or close. This is not a bug to fix; it is a constraint to design around (and the basis for the deferred-tag queue).
 
 Both constraints point at the same architecture: **a pluggable set of confidence signals feeding a resolver, and a write step that defers when the target is busy.**
 
@@ -26,7 +26,7 @@ Both constraints point at the same architecture: **a pluggable set of confidence
 
 ## Scope
 
-**In scope — Pass 1 (resolution):**
+**In scope, Pass 1 (resolution):**
 - `IWatchSignal` seam + `WatchContext` + corroboration-based confidence scoring, in `clipmeta.core`.
 - Two producing signals: **player window title** (Windows) and **last access time** (cross-platform).
 - **Lock-probe enrichment** (`inUse`) used as a tiebreaker and a pre-write warning, never as a sole basis.
@@ -34,7 +34,7 @@ Both constraints point at the same architecture: **a pluggable set of confidence
 - **Access-time hardening:** stop ClipMeta's own reads from polluting the access-time signal, at the single parse choke point.
 - Surfaces: MCP tool `library_watching`; CLI `clipmetascribe "<libraryDir>" --watching`.
 
-**In scope — Pass 2 (deferred-tag queue):**
+**In scope, Pass 2 (deferred-tag queue):**
 - Durable, library-root-resident tag queue keyed by clip path.
 - Opportunistic drain on each watched-clip call + explicit flush (MCP tool + CLI `--flush-queue`).
 - Surfaces for enqueue/flush/status.
@@ -83,7 +83,7 @@ clipmetascribe/Commands/
 
 ## 2. The Cross-Platform Process Seam (the only thing that must be faked)
 
-Resolution touches the filesystem directly (enumeration, access time, lock probe), which tests exercise against real temp files exactly as the existing integration tests do. The **only** dependency that cannot run in CI is reading live process window titles — so that is the one seam.
+Resolution touches the filesystem directly (enumeration, access time, lock probe), which tests exercise against real temp files exactly as the existing integration tests do. The **only** dependency that cannot run in CI is reading live process window titles, so that is the one seam.
 
 ```csharp
 /// <summary>One process's main-window title, as seen at a moment in time.</summary>
@@ -95,15 +95,15 @@ public interface IProcessWindowSource
     /// <summary>
     /// Returns (process name, main-window title) for every running process whose name matches
     /// one of <paramref name="processNames"/> (case-insensitive) and has a non-empty title.
-    /// Implementations must never throw for a single inaccessible process — skip and continue.
+    /// Implementations must never throw for a single inaccessible process, skip and continue.
     /// </summary>
     IReadOnlyList<ProcessWindow> GetPlayerWindows(IReadOnlyCollection<string> processNames);
 }
 ```
 
-- `WindowsProcessWindowSource` — `[SupportedOSPlatform("windows")]`; enumerates `Process.GetProcesses()`, matches names, reads `MainWindowTitle` inside a per-process `try/catch` (access-denied/exited processes are skipped). Reading titles only for *matched* processes keeps it cheap.
-- `EmptyProcessWindowSource` — returns an empty list; the default on non-Windows and whenever a real source isn't wired.
-- `ProcessWindowSource.ForCurrentPlatform()` — returns the Windows source when `OperatingSystem.IsWindows()`, else `EmptyProcessWindowSource`. Centralizes the OS guard so neither surface repeats it, and CI on Linux cleanly falls through to the access-time signal. CA1416 stays satisfied via the platform annotation + guard (preserves the zero-warning rule).
+- `WindowsProcessWindowSource`, `[SupportedOSPlatform("windows")]`; enumerates `Process.GetProcesses()`, matches names, reads `MainWindowTitle` inside a per-process `try/catch` (access-denied/exited processes are skipped). Reading titles only for *matched* processes keeps it cheap.
+- `EmptyProcessWindowSource`, returns an empty list; the default on non-Windows and whenever a real source isn't wired.
+- `ProcessWindowSource.ForCurrentPlatform()`, returns the Windows source when `OperatingSystem.IsWindows()`, else `EmptyProcessWindowSource`. Centralizes the OS guard so neither surface repeats it, and CI on Linux cleanly falls through to the access-time signal. CA1416 stays satisfied via the platform annotation + guard (preserves the zero-warning rule).
 
 The **player-name list lives in `MediaPlayers.cs`** (resolver-owned constant, not in the platform source), so it is unit-testable and trivially extensible:
 `mpc-hc, mpc-hc64, mpc-be, vlc, mpv, wmplayer, PotPlayer` (documented as "append here to support a new player").
@@ -112,7 +112,7 @@ The **player-name list lives in `MediaPlayers.cs`** (resolver-owned constant, no
 
 ## 3. The Signal Seam (corroboration, open for extension)
 
-Resolution is not "primary signal, then fallback." It is **N signals contributing evidence; the resolver aggregates per clip and scores confidence from how many independent signals agree.** Adding a player or a detection method later = register a new `IWatchSignal`, with zero edits to the resolver — the same open/closed discipline as `IMediaParser`.
+Resolution is not "primary signal, then fallback." It is **N signals contributing evidence; the resolver aggregates per clip and scores confidence from how many independent signals agree.** Adding a player or a detection method later = register a new `IWatchSignal`, with zero edits to the resolver, the same open/closed discipline as `IMediaParser`.
 
 ```csharp
 /// <summary>
@@ -134,7 +134,7 @@ public interface IWatchSignal
 
     /// <summary>
     /// Emits zero or more evidence hits for the current moment. MUST only reference clips present
-    /// in <see cref="WatchContext.LibraryClips"/> — a signal selects among already-enumerated clips,
+    /// in <see cref="WatchContext.LibraryClips"/>, a signal selects among already-enumerated clips,
     /// it never constructs a path from external input. MUST NOT throw for ordinary failures
     /// (player closed, file vanished, registry/file unreadable): emit nothing instead.
     /// </summary>
@@ -142,7 +142,7 @@ public interface IWatchSignal
 }
 ```
 
-### `WatchContext` — enumerate the library once, share it
+### `WatchContext`, enumerate the library once, share it
 
 ```csharp
 /// <summary>Shared inputs for one resolution pass, so signals don't each re-scan the library.</summary>
@@ -162,7 +162,7 @@ public sealed class WatchContext
 }
 ```
 
-**Security property (no fabrication):** because every `SignalHit.ClipPath` must come from `LibraryClips` — files actually enumerated under the library root — a malicious or accidental window title like `C:\Windows\evil.mp4` simply matches nothing and is dropped. The title *selects*; it never *constructs*. This is why Core does not need `LibrarySandbox`: candidates are inherently library-contained. (The MCP surface still calls `sandbox.RequireRoot()` to obtain the root and refuse when unconfigured.)
+**Security property (no fabrication):** because every `SignalHit.ClipPath` must come from `LibraryClips`, files actually enumerated under the library root, a malicious or accidental window title like `C:\Windows\evil.mp4` simply matches nothing and is dropped. The title *selects*; it never *constructs*. This is why Core does not need `LibrarySandbox`: candidates are inherently library-contained. (The MCP surface still calls `sandbox.RequireRoot()` to obtain the root and refuse when unconfigured.)
 
 ---
 
@@ -196,7 +196,7 @@ A lock probe cannot *name* a clip, so it is not an `IWatchSignal`; it **enriches
 
 ---
 
-## 5. `WatchingResolver` — aggregation & confidence
+## 5. `WatchingResolver`, aggregation & confidence
 
 ```csharp
 public sealed record WatchingCandidate(
@@ -235,13 +235,13 @@ The corroboration model is deliberately conservative: **a write is only auto-saf
 
 ## 6. Access-Time Hardening (bounded sub-workstream)
 
-ClipMeta's own reads must not bump the very signal §4c depends on. Every read funnels through **one** choke point — `Mp4Parser.ParseFile` (`clipmeta.core/Mp4/Mp4Parser.cs`, the only place a clip is opened for reading) — so the fix is one site, not an N-call-site audit.
+ClipMeta's own reads must not bump the very signal §4c depends on. Every read funnels through **one** choke point, `Mp4Parser.ParseFile` (`clipmeta.core/Mp4/Mp4Parser.cs`, the only place a clip is opened for reading), so the fix is one site, not an N-call-site audit.
 
 ```csharp
 /// <summary>
 /// Captures a file's LastAccessTimeUtc on construction and restores it on Dispose, best-effort.
 /// Restoring is itself a metadata write that can fail (file locked by a player, read-only,
-/// removed): such failures are swallowed — preserving the signal must never break a read.
+/// removed): such failures are swallowed, preserving the signal must never break a read.
 /// </summary>
 public readonly struct AccessTimeGuard : IDisposable { /* GetLastAccessTimeUtc / SetLastAccessTimeUtc */ }
 ```
@@ -269,7 +269,7 @@ This constraint is the justification for pass 2.
 - **Root:** `sandbox.RequireRoot()` (refuses cleanly when no library configured).
 - **Source:** `ProcessWindowSource.ForCurrentPlatform()`.
 - **Returns:** ranked array; each entry `{ path, name, source, player, lastAccessTimeUtc, secondsSinceAccess, inUse, confidence }`.
-- **Description (to the model):** "Resolve 'the clip I'm watching / just watched.' A `player_title` hit resolved to a library path is **high** confidence — prefer it. If only access-time candidates exist, or multiple players are open, confidence is **low** — confirm with the user before tagging. To tag, call the existing write tool with the chosen `path`."
+- **Description (to the model):** "Resolve 'the clip I'm watching / just watched.' A `player_title` hit resolved to a library path is **high** confidence, prefer it. If only access-time candidates exist, or multiple players are open, confidence is **low**, confirm with the user before tagging. To tag, call the existing write tool with the chosen `path`."
 - **`ExampleArguments`** ignores the clip path (returns `{}` or `{ "limit": 5 }`); the stdout-purity harness drives it cross-platform (Linux → access-time only, still pure to stdout).
 
 ### 8b. CLI `clipmetascribe "<libraryDir>" --watching [--limit N] [--no-access-fallback]`
@@ -280,16 +280,16 @@ This constraint is the justification for pass 2.
 
 ---
 
-## 9. Pass 2 — Deferred-Tag Queue
+## 9. Pass 2, Deferred-Tag Queue
 
-The lock constraint creates a natural pump: when you advance to the next clip, the previous clip's handle frees. Your *next* spoken command is an MCP call arriving at the server — so the server **drains the queue opportunistically on each watched-clip call** (write entries whose locks have cleared), then resolves/enqueues the current clip. No background daemon, no polling.
+The lock constraint creates a natural pump: when you advance to the next clip, the previous clip's handle frees. Your *next* spoken command is an MCP call arriving at the server, so the server **drains the queue opportunistically on each watched-clip call** (write entries whose locks have cleared), then resolves/enqueues the current clip. No background daemon, no polling.
 
 - **Durable store:** a small JSON queue in the **library root** (same pattern as the index), so spoken tags survive an MCP-host restart or crash and a write that can't land yet simply stays queued.
 - **Entry:** `{ clipPath, mutation (MetadataMutation), enqueuedAtUtc, confidence }`. Keyed by clip full-path.
-- **Merge semantics:** re-tagging an already-queued clip layers onto its pending payload using the existing mutation rules (set last-wins, append accumulates) — never a duplicate entry.
+- **Merge semantics:** re-tagging an already-queued clip layers onto its pending payload using the existing mutation rules (set last-wins, append accumulates), never a duplicate entry.
 - **Drain (opportunistic):** on each watched-clip call, before resolving the current clip, attempt each queued entry whose `inUse` probe now reads false, via the normal temp-file → `File.Replace` engine. Still-locked → leave queued, retry next tick. Vanished/moved clip → drop with a note.
-- **Drain (explicit):** an MCP **flush** tool and CLI `clipmetascribe "<libraryDir>" --flush-queue`, for the **last** clip — when you stop and there is no "next" command to pump the drain. Optionally a flush attempt on MCP-server shutdown.
-- **Safety:** drain is single-threaded (no two writes race the same file; the write engine is already per-file safe — we simply never drain concurrently). Low-confidence resolutions are *held for confirmation*, not silently enqueued.
+- **Drain (explicit):** an MCP **flush** tool and CLI `clipmetascribe "<libraryDir>" --flush-queue`, for the **last** clip, when you stop and there is no "next" command to pump the drain. Optionally a flush attempt on MCP-server shutdown.
+- **Safety:** drain is single-threaded (no two writes race the same file; the write engine is already per-file safe, we simply never drain concurrently). Low-confidence resolutions are *held for confirmation*, not silently enqueued.
 
 **UX consequence (honest):** "tag this clip" almost always lands the moment you advance; you only ever wait on the final clip until a flush.
 
@@ -299,7 +299,7 @@ Pass-2 surfaces (sketch, finalized in the pass-2 plan): MCP `library_queue_tag` 
 
 ## 10. Test Strategy
 
-Core logic is tested **through** `clipmetascribe.Tests` (its CLI exposes the engine), MCP shape through `clipmetamcp.Tests` — matching the existing convention (no standalone Core test project).
+Core logic is tested **through** `clipmetascribe.Tests` (its CLI exposes the engine), MCP shape through `clipmetamcp.Tests`, matching the existing convention (no standalone Core test project).
 
 **Pure parser (`PlayerTitleParser`)**
 - MPC full-path title → exact path.
@@ -343,7 +343,7 @@ Core logic is tested **through** `clipmetascribe.Tests` (its CLI exposes the eng
 | VLC recent MRL | Recently-played list w/ recency, **survives close** | high | Read `%APPDATA%\vlc\vlc-qt-interface.ini` `[RecentsMRL]` (`.conf` Linux, `.plist` macOS) | Timestamps in ms (Win/Linux) |
 | MPC recent list | Last-played full path, survives close | high | Registry `HKCU\Software\MPC-HC\...\Recent File List` (or `.ini` portable) | Windows |
 | Metadata-title match | When a title has no filename, match it against indexed clip title/name metadata | low alone (good corroborator) | index lookup | Realizes the "VLC embedded-title" idea as corroboration |
-| Open-handle enumeration | Exact file a process holds open | very high | `NtQuerySystemInformation` P/Invoke | **Rejected for now** — undocumented, version-fragile; below this codebase's robustness bar |
+| Open-handle enumeration | Exact file a process holds open | very high | `NtQuerySystemInformation` P/Invoke | **Rejected for now**, undocumented, version-fragile; below this codebase's robustness bar |
 
 Each lands as a new `IWatchSignal` registered alongside the pass-1 two, strengthening corroboration with no edits to the resolver.
 
@@ -354,7 +354,7 @@ Each lands as a new `IWatchSignal` registered alongside the pass-1 two, strength
 | # | Risk | Mitigation |
 |---|---|---|
 | 1 | `MainWindowTitle` throws for some processes | Per-process try/catch in the Windows source; skip and continue |
-| 2 | Restoring access time fails (clip locked by the player) | `AccessTimeGuard` is best-effort; swallow — a read never fails over it |
+| 2 | Restoring access time fails (clip locked by the player) | `AccessTimeGuard` is best-effort; swallow, a read never fails over it |
 | 3 | VLC shows an embedded metadata title, not the filename | No `.mp4` → no player candidate → fall through to access-time (and, later, the metadata-title signal) |
 | 4 | A window title names a real `.mp4` outside the library | Candidates only come from enumerated library clips; out-of-library paths match nothing → dropped |
 | 5 | Cross-platform build / CI | OS-guarded factory + `[SupportedOSPlatform]`; non-Windows uses `EmptyProcessWindowSource` |
@@ -367,18 +367,18 @@ Each lands as a new `IWatchSignal` registered alongside the pass-1 two, strength
 
 ## 13. Future (recorded for continuity)
 
-- **Tagging sessions / predefined payloads** — a "run profile" (e.g. `game=Team Fortress 2` auto-applied) plus spoken-tag composition, so "rocket jump market garden kill" becomes a full mutation. Mostly an agent/conversation + small profile-store concern; sits *above* resolution and the queue. Its own brainstorm/spec.
-- **ClipMeta self-mark** — an internal "ClipMeta last touched this clip" marker to help the session layer distinguish already-processed clips from genuinely-untagged ones during a run.
-- **Roadmap signals (§11)** — MPC web interface, VLC/MPC recents, metadata-title match.
-- **Mac/Linux player probes** — implement `IProcessWindowSource` (and platform recents signals) for non-Windows.
+- **Tagging sessions / predefined payloads**, a "run profile" (e.g. `game=Team Fortress 2` auto-applied) plus spoken-tag composition, so "rocket jump market garden kill" becomes a full mutation. Mostly an agent/conversation + small profile-store concern; sits *above* resolution and the queue. Its own brainstorm/spec.
+- **ClipMeta self-mark**, an internal "ClipMeta last touched this clip" marker to help the session layer distinguish already-processed clips from genuinely-untagged ones during a run.
+- **Roadmap signals (§11)**, MPC web interface, VLC/MPC recents, metadata-title match.
+- **Mac/Linux player probes**, implement `IProcessWindowSource` (and platform recents signals) for non-Windows.
 
 ---
 
 ## Definition of Done
 
 **Pass 1:**
-1. `dotnet build` — zero warnings, zero errors, all projects (incl. CA1416 platform correctness).
-2. `dotnet test` — all pass, including the resolver/parser tests and the access-time-preservation test, on Windows **and** clip-less CI.
+1. `dotnet build`, zero warnings, zero errors, all projects (incl. CA1416 platform correctness).
+2. `dotnet test`, all pass, including the resolver/parser tests and the access-time-preservation test, on Windows **and** clip-less CI.
 3. `library_watching` returns correctly-shaped, correctly-ranked candidates; `--watching` prints them; both resolve-only.
 4. A `high` candidate corresponds to an unambiguous player-title hit resolved inside the library; nothing out-of-library is ever returned.
 5. Reading a clip does not change its `LastAccessTimeUtc`.

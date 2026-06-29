@@ -11,7 +11,7 @@ namespace ClipMetaScribe.Tests;
 /// <summary>
 /// Provenance stamp (spec B §2): every write that stores a user field also stamps
 /// <c>tagged_by: Peckworks ClipMeta</c>. It lives in the file (and the raw atom list) but is
-/// internal — excluded from the curated user-field surfaces — and can be opted out of.
+/// internal, excluded from the curated user-field surfaces, and can be opted out of.
 /// Clip-less: uses a synthetic writable .mp4 so no pristine corpus is needed.
 /// </summary>
 [TestClass]
@@ -65,7 +65,7 @@ public class ProvenanceStampTests
 
         var user = ClipMetaReader.GetUserFields(Mp4Parser.ParseFile(clip));
         Assert.IsFalse(user.Any(f => f.Field == ClipMetaSchema.TaggedBy),
-            "provenance is internal — present in the file but not a curated user field");
+            "provenance is internal, present in the file but not a curated user field");
     }
 
     [TestMethod]
@@ -84,7 +84,7 @@ public class ProvenanceStampTests
     {
         // The PRIMARY watch-and-tag path always queues (the player holds the lock) then drains. The
         // drain reconstructs the mutation with the default StampProvenance=true, so a drained tag must
-        // carry tagged_by. (Untested before — the gap that let a dogfood log wrongly claim the queue
+        // carry tagged_by. (Untested before, the gap that let a dogfood log wrongly claim the queue
         // path stamps nothing, because clip_get_metadata hides the internal field.)
         string clip = MakeClip();
         var m = new MetadataMutation();

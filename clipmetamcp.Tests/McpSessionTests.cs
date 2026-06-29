@@ -136,7 +136,7 @@ public class McpSessionTests
             """{"jsonrpc":"2.0","method":"notifications/whatever"}""",
             McpHarness.Request(2, "ping"));
 
-        // Only the initialize and ping responses — nothing for the notification.
+        // Only the initialize and ping responses, nothing for the notification.
         Assert.AreEqual(2, responses.Count);
         Assert.AreEqual(2, responses[1]["id"]?.GetValue<int>());
     }

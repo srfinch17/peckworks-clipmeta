@@ -74,7 +74,7 @@ public static class TreeRenderer
         ResetColor(useColor);
         writer.WriteLine();
 
-        // mdat is never recursed — raw media bytes, not boxes.
+        // mdat is never recursed, raw media bytes, not boxes.
         if (node.Type == "mdat" || node.Children.Count == 0)
             return;
 
@@ -94,7 +94,7 @@ public static class TreeRenderer
 
         string sizeAndOffset = $"[{node.Size:N0} bytes @ 0x{node.FileOffset:X}]";
 
-        string extra = node.Type == "mdat" ? "  (raw media — not expanded)" : string.Empty;
+        string extra = node.Type == "mdat" ? "  (raw media, not expanded)" : string.Empty;
 
         if (!string.IsNullOrEmpty(node.DisplayValue))
         {
@@ -132,7 +132,7 @@ public static class TreeRenderer
         writer.WriteLine(Rule);
 
         SetColor(ConsoleColor.White, useColor);
-        writer.WriteLine(" LEGEND  —  clipmetaview MP4 structure viewer");
+        writer.WriteLine(" LEGEND, clipmetaview MP4 structure viewer");
 
         SetColor(ConsoleColor.DarkGray, useColor);
         writer.WriteLine(Rule);
@@ -150,8 +150,8 @@ public static class TreeRenderer
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Cyan,      "  Structural container  ", "organizes child boxes (moov, trak, mdia…)");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Green,     "  Header / info box     ", "parseable technical value shown inline");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkGray,  "  Technical / codec     ", "internal sample-table or codec structure");
-        WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkCyan,  "  Media data (mdat)     ", "raw encoded audio/video bytes — not expanded");
-        WriteLegendColorSwatch(writer, useColor, ConsoleColor.Yellow,    "  iTunes metadata       ", "iTunes tag field (©nam, ©ART, covr…) — editable with clipmetaedit");
+        WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkCyan,  "  Media data (mdat)     ", "raw encoded audio/video bytes, not expanded");
+        WriteLegendColorSwatch(writer, useColor, ConsoleColor.Yellow,    "  iTunes metadata       ", "iTunes tag field (©nam, ©ART, covr…), editable with clipmetaedit");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkYellow,"  Windows Media (WM/)   ", "attribute written by Windows File Explorer (Tags, Director…)");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Magenta,   "  ← [EDITABLE] marker  ", "appears on every field that can be modified");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Gray,      "  Unknown / vendor      ", "unrecognized or vendor-specific extension box");
@@ -187,7 +187,7 @@ public static class TreeRenderer
         WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "hdlr", "Handler Ref",      "declares media type: Video / Sound / Timecode / Text");
         WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "vmhd", "Video Media Hdr",  "marks track as video; holds compositing mode");
         WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "smhd", "Sound Media Hdr",  "marks track as audio; holds balance value");
-        WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "name", "Name",             "track or handler name string — user-editable label");
+        WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "name", "Name",             "track or handler name string, user-editable label");
         WriteLegendBoxRow(writer, useColor, BoxCategory.Header, "elst", "Edit List",        "maps presentation timeline to media timeline");
 
         writer.WriteLine();
@@ -207,13 +207,13 @@ public static class TreeRenderer
 
         // Media
         WriteLegendBoxRow(writer, useColor, BoxCategory.Media, "mdat", "Media Data",
-            "raw encoded audio and video samples — not expanded by this tool");
+            "raw encoded audio and video samples, not expanded by this tool");
 
         writer.WriteLine();
         SetColor(ConsoleColor.DarkGray, useColor);
         writer.WriteLine(Rule);
         SetColor(ConsoleColor.White, useColor);
-        writer.WriteLine(" EDITABLE METADATA FIELDS  (add/update/delete with clipmetaedit — coming soon)");
+        writer.WriteLine(" EDITABLE METADATA FIELDS  (add/update/delete with clipmetaedit, coming soon)");
         SetColor(ConsoleColor.DarkGray, useColor);
         writer.WriteLine(Rule);
         ResetColor(useColor);
@@ -409,7 +409,7 @@ public static class TreeRenderer
                     other.Add(child);
             }
 
-            // Always recurse — metadata can be deeply nested.
+            // Always recurse, metadata can be deeply nested.
             CollectMetadataNodes(child, itunes, windowsMedia, other);
         }
     }

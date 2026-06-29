@@ -1,4 +1,4 @@
-# Index stale-cache warnings — Design Spec
+# Index stale-cache warnings, Design Spec
 
 **Date:** 2026-06-15
 **Status:** Approved (brainstorming) → implementing
@@ -10,7 +10,7 @@
 `ClipMetaIndex` records each clip's `FileSizeBytes` and `LastModified` at build time, but
 `--index-search` never compares them against the files on disk. A clip that was retagged,
 replaced, or deleted after the index was built still shows up with its **old** metadata and no
-indication the result is out of date. The stored size/mtime exist precisely to detect this —
+indication the result is out of date. The stored size/mtime exist precisely to detect this, 
 they were just never used.
 
 ## Scope
@@ -22,7 +22,7 @@ they were just never used.
 
 ### Out (YAGNI)
 - Auto-refresh, a standalone `--index --check` audit of the whole library, content hashing.
-- Whole-library staleness scanning — the check is scoped to the results actually shown.
+- Whole-library staleness scanning, the check is scoped to the results actually shown.
 
 ## Design
 
@@ -46,13 +46,13 @@ After `ClipMetaSearch.Find`, for each match call `CheckEntry`, append a marker, 
 
 ```
   clipB.mp4  [changed since index]
-  clipC.mp4  [missing — file no longer exists]
+  clipC.mp4  [missing, file no longer exists]
 ```
 Then, if any match is stale, a footer:
 ```
 Warning: N result(s) changed or were removed since the index was built (YYYY-MM-DD HH:mm UTC). Run --index to refresh.
 ```
-The check is **scoped to matched results** — the warning is about what the user is looking at,
+The check is **scoped to matched results**, the warning is about what the user is looking at,
 and it costs one `FileInfo` per match. Staleness is **advisory**: it prints with the results and
 **the exit code stays 0**.
 
@@ -83,7 +83,7 @@ and it costs one `FileInfo` per match. Staleness is **advisory**: it prints with
 
 ## Definition of Done
 
-1. `dotnet build` — 0 warnings / 0 errors.
-2. `dotnet test` — all pass incl. new Core + command tests.
+1. `dotnet build`, 0 warnings / 0 errors.
+2. `dotnet test`, all pass incl. new Core + command tests.
 3. Zero NuGet; CLI stays thin; exit codes unchanged (staleness is advisory).
 4. Public `CheckEntry`/`StaleReason` documented.

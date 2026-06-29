@@ -1,4 +1,4 @@
-# CopyTags — Design Spec
+# CopyTags, Design Spec
 
 **Date:** 2026-06-15
 **Status:** Approved (brainstorming) → implementing
@@ -24,10 +24,10 @@ built entirely on the existing, mature read and write engines.
 ### Out (YAGNI for v1)
 - Field selection (`--fields game,tags`).
 - `--replace` (exact mirror); achievable today via `--clear-all` first.
-- Copying into a whole folder — that is the **batch** feature (feature 3), where
+- Copying into a whole folder, that is the **batch** feature (feature 3), where
   batch-copy will reuse this command's Core helper.
 
-## Semantics — merge
+## Semantics, merge
 
 Every clipmeta **user** field on the source becomes a `SetFields` entry for the dest.
 Dest fields the source does not carry are left untouched. Example: source has
@@ -37,7 +37,7 @@ destroys existing metadata. The internal `schema` field is never copied
 (`ClipMetaReader.GetUserFields` already excludes it); the dest receives its own schema
 stamp through the normal value-storing write path.
 
-Pipe-delimited multi-value fields (`tags`,`players`,`timecode`) copy as whole values —
+Pipe-delimited multi-value fields (`tags`,`players`,`timecode`) copy as whole values, 
 a per-field set replaces the dest's value for that field.
 
 ## Architecture
@@ -89,7 +89,7 @@ Source is opened read-only. Dest goes through the unchanged, proven write-safety
 
 ## Definition of Done
 
-1. `dotnet build` — 0 warnings / 0 errors.
-2. `dotnet test` — all pass, including new Core + integration + arg tests; media-integrity green.
+1. `dotnet build`, 0 warnings / 0 errors.
+2. `dotnet test`, all pass, including new Core + integration + arg tests; media-integrity green.
 3. Zero NuGet added; CLI stays a thin shell; `BuildCopyMutation` is pure (no IO).
 4. `--copy-from` documented in `PrintUsage`; public types XML-documented; any new gotcha → PITFALLS.

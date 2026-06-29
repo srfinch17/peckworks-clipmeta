@@ -4,7 +4,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaScribe.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="MetadataPreview.Predict"/> — the dry-run preview's predicted-field
+/// Unit tests for <see cref="MetadataPreview.Predict"/>, the dry-run preview's predicted-field
 /// computation. Pure, clip-less. The end-to-end "preview == real write" guarantee is pinned by
 /// WriteToolsTests; these cover the per-rule behavior (set/append/delete/clear-all/normalization).
 /// </summary>

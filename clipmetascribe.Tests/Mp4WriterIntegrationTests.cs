@@ -106,9 +106,9 @@ public class Mp4WriterIntegrationTests
 
         // Count foreign (non-clipmeta) atoms across EVERY ilst in the file, not just the first.
         // A real clip can carry more than one metadata container: 2022-02-01 21.50.02.mp4 has a
-        // moov-level mdta/keys `meta` (Apple/QuickTime keyed atoms — make/model/GPS-style data)
+        // moov-level mdta/keys `meta` (Apple/QuickTime keyed atoms, make/model/GPS-style data)
         // that is a SIBLING of udta. When clipmeta writes, it leaves that foreign meta untouched
-        // and creates its own iTunes-style udta→meta→ilst for its `----` atoms — so the file now
+        // and creates its own iTunes-style udta→meta→ilst for its `----` atoms, so the file now
         // has TWO ilst boxes. Inspecting only the first ilst would compare the writer's brand-new
         // (foreign-free) ilst against the original foreign one and spuriously report the foreign
         // atoms as "lost" when they are in fact fully preserved in the other meta box. (Diverse

@@ -74,7 +74,7 @@ public class IndexSearchCommandTests
     [TestMethod]
     public void Run_NoIndexFile_ReturnsOne()
     {
-        // No index built — directory exists but .clipmeta-index doesn't
+        // No index built, directory exists but .clipmeta-index doesn't
         using var writer = new StringWriter();
 
         int exitCode = IndexSearchCommand.Run(_tempDir, "game", "TF2", writer);
@@ -97,7 +97,7 @@ public class IndexSearchCommandTests
 
     /// <summary>Writes a hand-built single-entry index whose recorded size is
     /// <paramref name="recordedSize"/> (pass the real byte count for a "fresh" entry, a different
-    /// number for a "changed" one). No real clip needed — staleness is judged from size/mtime.</summary>
+    /// number for a "changed" one). No real clip needed, staleness is judged from size/mtime.</summary>
     private void WriteIndexFor(string fileName, byte[] fileBytes, long recordedSize, string field, string value)
     {
         string clip = Path.Combine(_tempDir, fileName);
@@ -118,7 +118,7 @@ public class IndexSearchCommandTests
         int code = IndexSearchCommand.Run(_tempDir, "game", "TF2", writer);
         string output = writer.ToString();
 
-        Assert.AreEqual(0, code, "staleness is advisory — exit code stays 0");
+        Assert.AreEqual(0, code, "staleness is advisory, exit code stays 0");
         StringAssert.Contains(output, "[changed since index]");
         StringAssert.Contains(output, "Run --index to refresh");
     }

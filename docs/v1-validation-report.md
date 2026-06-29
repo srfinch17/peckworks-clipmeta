@@ -16,7 +16,7 @@ held up cleanly across the run. The edge cases encountered all resolved into one
 buckets: working as designed, or a documented and gracefully-degrading limitation. None
 corrupts data or writes silently to the wrong target on the normal path.
 
-The final open item — behavior and responsiveness at production scale — was smoke-tested
+The final open item, behavior and responsiveness at production scale, was smoke-tested
 at the end of the session: a single `library_watching` call against ~3,700 files returned
 one high-confidence `recent_write` candidate with no fallback clutter and a fast turnaround,
 and the write landed correctly.
@@ -67,7 +67,7 @@ players and watching the same `recent_write` resolve clean at high confidence.
 **Disposition:** Acceptable known limitation. The failure mode is graceful: the tool
 reports "too ambiguous, confirm the path" rather than binding the wrong clip or writing
 silently. The assistant degrades to asking for an explicit path. This is the intended
-interaction of two prior fixes — the pass-6 `multiplePlayersActive` confidence cap (≥2 open
+interaction of two prior fixes, the pass-6 `multiplePlayersActive` confidence cap (≥2 open
 players ⇒ confirm) correctly takes precedence over Policy A's single-fresh-save survival.
 Not a ship blocker.
 
@@ -84,25 +84,25 @@ so the outside-library signal is not fully masked. Does not affect data integrit
 ### Finding 3: forged NTFS creation-time surfaces a clip as `recent_write` (works as intended)
 
 Gaming-mode freshness (`RecentWriteSignal`) keys on **NTFS creation time**, not write time.
-A deliberate test bumped an already-tagged clip's timestamps to "now" with PowerShell —
-including `$item.CreationTime = Get-Date` — and clip 168.DVR_6 then surfaced as a
+A deliberate test bumped an already-tagged clip's timestamps to "now" with PowerShell, 
+including `$item.CreationTime = Get-Date`, and clip 168.DVR_6 then surfaced as a
 high-confidence `recent_write`.
 
 This is correct behavior, not a bug. A file whose creation time genuinely reads "now" is,
-by the signal's definition, indistinguishable from a fresh save — so it *should* surface.
+by the signal's definition, indistinguishable from a fresh save, so it *should* surface.
 Three layers were verified to explain it:
 
 - `RecentWriteSignal` reads only `CreationTimeUtc`; there is no write-time ("mtime") path to
   invert. The signal classified a created-now file as fresh.
 - ClipMeta's own tag write goes through `File.Replace`, which **preserves the destination's
-  original creation time** — so tagging _6 never made it look fresh; only the manual forge did.
+  original creation time**, so tagging _6 never made it look fresh; only the manual forge did.
 - The `SelfActionLedger` (which masks clips ClipMeta itself wrote for ~5 minutes) had
   legitimately expired by the time of the re-resolve, and it guards ClipMeta's own actions,
   not an external `touch`-style edit by the user.
 
 **Disposition:** Works as intended. No code change. The trigger requires a manual
 creation-time forge that does not occur in normal recording. *(An earlier "mtime-inversion"
-read of this finding was a misdiagnosis — the test set `CreationTime`, which is the field the
+read of this finding was a misdiagnosis, the test set `CreationTime`, which is the field the
 signal actually uses.)*
 
 ### Finding 4: overwrite guard and `hasMetadata` candidate flag (considered, dropped)
@@ -110,7 +110,7 @@ signal actually uses.)*
 A guard against writing onto an already-tagged live target was evaluated and rejected. The
 "live target already has tags" state is reachable through normal re-tagging (for example,
 adding a second player to a clip moments after the first tag), and in that case writing to
-the tagged clip is the correct, intended behavior — tag accumulation handles it by design.
+the tagged clip is the correct, intended behavior, tag accumulation handles it by design.
 A blocking check would interrupt a legitimate and common flow.
 
 **Disposition:** Works as intended. No guard added. The optional `hasMetadata` flag on

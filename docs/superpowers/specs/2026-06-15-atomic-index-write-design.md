@@ -1,4 +1,4 @@
-# Atomic index-write — Design Spec
+# Atomic index-write, Design Spec
 
 **Date:** 2026-06-15
 **Status:** Approved (brainstorming) → implementing
@@ -10,8 +10,8 @@
 
 `ClipMetaIndex.WriteToFile` opens the destination with `new StreamWriter(filePath,
 append: false, …)`, which **truncates the target the instant it opens**. If the
-process is interrupted between that open and the final flush — a crash, power loss,
-disk-full, or an exception while serializing — the existing `.clipmeta-index` is left
+process is interrupted between that open and the final flush, a crash, power loss,
+disk-full, or an exception while serializing, the existing `.clipmeta-index` is left
 truncated or empty. The user loses a built index to a partial write. This contradicts
 the project's safety-first discipline, which everywhere else mutates via a temp file
 and an atomic swap (see `Mp4Writer`).
@@ -27,8 +27,8 @@ and an atomic swap (see `Mp4Writer`).
 
 ### Out
 - The format, the `Write`/`Read` (TextWriter/TextReader) APIs, and the on-disk
-  encoding (UTF-8 with BOM) are unchanged — round-trip compatibility is preserved.
-- Stale-cache warnings (FileSizeBytes/LastModified comparison) — a separate deferred item.
+  encoding (UTF-8 with BOM) are unchanged, round-trip compatibility is preserved.
+- Stale-cache warnings (FileSizeBytes/LastModified comparison), a separate deferred item.
 
 ## Design
 
@@ -36,11 +36,11 @@ and an atomic swap (see `Mp4Writer`).
 
 1. Serialize to `tempPath = "{filePath}.{guid}.tmp"` via the existing `Write` + a
    `StreamWriter` using the **same `Encoding.UTF8`** as today.
-2. Atomically swap: `File.Move(tempPath, filePath, overwrite: true)` — on Windows,
+2. Atomically swap: `File.Move(tempPath, filePath, overwrite: true)`, on Windows,
    same-volume `MoveFileEx(REPLACE_EXISTING)` is atomic and works whether or not the
    target already exists (no TOCTOU `Exists` branch). The temp and target are in the
    same directory, hence the same volume.
-3. Wrap the swap in `Mp4Writer.RetryOnTransientLock` (5 attempts, 100 ms × attempt) —
+3. Wrap the swap in `Mp4Writer.RetryOnTransientLock` (5 attempts, 100 ms × attempt), 
    the temp is already fully written, so retrying the atomic swap weakens nothing; it
    only tolerates a transient AV/indexer lock, exactly as the MP4 writer's swap does.
 4. On ANY exception, delete the temp (best-effort) and rethrow. The original index is
@@ -49,7 +49,7 @@ and an atomic swap (see `Mp4Writer`).
 `RetryOnTransientLock` is an `internal static` helper already living in `Mp4Writer`
 and unit-tested; it is a general file-lock utility, so `ClipMetaIndex` (same assembly)
 reuses it rather than duplicating the retry loop. (If a third consumer appears, extract
-it to a neutral home — not yet, YAGNI.)
+it to a neutral home, not yet, YAGNI.)
 
 ## Error handling
 
@@ -71,7 +71,7 @@ it to a neutral home — not yet, YAGNI.)
 
 ## Definition of Done
 
-1. `dotnet build` — 0 warnings / 0 errors.
-2. `dotnet test` — all pass, including the new atomic-write tests; no regressions.
+1. `dotnet build`, 0 warnings / 0 errors.
+2. `dotnet test`, all pass, including the new atomic-write tests; no regressions.
 3. Zero NuGet; format/encoding unchanged; `ClipMetaIndex` stays the only file touched in Core.
 4. PITFALLS updated with the truncate-on-open → temp-then-swap lesson.

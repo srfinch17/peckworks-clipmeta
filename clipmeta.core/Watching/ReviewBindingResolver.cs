@@ -3,13 +3,13 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Pure heuristic that decides which recorded title the user is describing. The core rule: if the
 /// currently-open clip only JUST started (under <see cref="DefaultStableThreshold"/>), the user has
-/// already advanced and is describing the PREVIOUS clip they actually watched — so bind that instead.
+/// already advanced and is describing the PREVIOUS clip they actually watched, so bind that instead.
 /// This is the entire fix for the poll-at-call-time binding race; it depends only on segment timing,
 /// never on when the tool happened to be called.
 /// </summary>
 public static class ReviewBindingResolver
 {
-    /// <summary>A clip open for less than this is treated as "just advanced to" — not the subject.</summary>
+    /// <summary>A clip open for less than this is treated as "just advanced to", not the subject.</summary>
     public static readonly TimeSpan DefaultStableThreshold = TimeSpan.FromSeconds(2);
 
     /// <summary>Applies the previous-stable rule and derives review flags from the segment sequence.</summary>
@@ -20,7 +20,7 @@ public static class ReviewBindingResolver
     /// <param name="spokenAt">
     /// AC2: when supplied, bind the segment whose play window covers this instant (the moment the user
     /// actually dictated), bypassing the timing heuristic for an exact hit. Falls back to the heuristic
-    /// — flagged <see cref="ReviewFlag.TypeTimestampUnmatched"/> — when no segment covers it.
+    ///, flagged <see cref="ReviewFlag.TypeTimestampUnmatched"/>, when no segment covers it.
     /// </param>
     public static ReviewBinding Resolve(
         IReadOnlyList<TitleSegment> segments, long lastBoundId, DateTimeOffset now,
@@ -80,7 +80,7 @@ public static class ReviewBindingResolver
         TitleSegment current = ordered[^1];
 
         // Ambiguity (#2): two or more distinct players currently have an OPEN segment. Any such
-        // overlap is too ambiguous to bind — independent of when each started (the old near-
+        // overlap is too ambiguous to bind, independent of when each started (the old near-
         // simultaneous-start rule missed players opened seconds apart, the common case).
         List<TitleSegment> openSegments = ordered.Where(s => s.EndedAt is null).ToList();
         int openPlayers = openSegments
@@ -141,6 +141,6 @@ public static class ReviewBindingResolver
     private static IReadOnlyList<string> NamesOf(IEnumerable<TitleSegment> segs) =>
         segs.Select(Display).ToList();
 
-    /// <summary>Best display string for a segment — its raw title (which contains the file name).</summary>
+    /// <summary>Best display string for a segment, its raw title (which contains the file name).</summary>
     private static string Display(TitleSegment s) => s.RawTitle;
 }

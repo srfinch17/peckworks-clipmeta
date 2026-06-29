@@ -1,4 +1,4 @@
-# Batch write operations — Design Spec
+# Batch write operations, Design Spec
 
 **Date:** 2026-06-15
 **Status:** Approved (brainstorming) → implementing
@@ -47,10 +47,10 @@ per-file failures so one bad clip never aborts the run.
 | `BatchCommand.Run(files, mutationFor, logger, output?)` | `clipmetascribe/Commands/` | Iterate files; for each, get its mutation (or `null` = skip), apply via `Mp4Writer`, isolate user-error exceptions, tally, print summary, return aggregate exit code. |
 | `Program` batch dispatch | `clipmetascribe/` | Detect directory + write op; enumerate files; build the per-file `mutationFor` delegate for the specific op; handle `--clear-all` confirmation once; parse a `--copy-from` source once. |
 
-`mutationFor` is `Func<string, MetadataMutation?>` — a fresh mutation **per file** (so the
+`mutationFor` is `Func<string, MetadataMutation?>`, a fresh mutation **per file** (so the
 writer's in-place normalization/schema-stamp never leaks between files), returning `null` to
-skip (batch-copy's source). This keeps `BatchCommand` ignorant of *which* op it runs — it just
-applies mutations and isolates failures — while `Program` owns op-specific construction.
+skip (batch-copy's source). This keeps `BatchCommand` ignorant of *which* op it runs, it just
+applies mutations and isolates failures, while `Program` owns op-specific construction.
 
 Per-op `mutationFor`:
 - `--set`/`--append`/`--clear`: `BuildMutation(args, file, dryRun, backup)` (fresh; per-file backup path).
@@ -82,7 +82,7 @@ atomic swap). Batch adds only iteration, isolation, and reporting.
   `ArgumentException`, `InvalidOperationException`, `UnauthorizedAccessException`) are caught,
   reported as `FAILED <file>: <message>`, counted, and the run continues.
 - A failure in building a file's mutation (e.g. a bad value) is isolated the same way.
-- Unexpected (non-user) exceptions are NOT swallowed — they propagate (a real bug should not be
+- Unexpected (non-user) exceptions are NOT swallowed, they propagate (a real bug should not be
   hidden as a per-file "failure").
 
 ## Testing (TDD)
@@ -97,7 +97,7 @@ atomic swap). Batch adds only iteration, isolation, and reporting.
 
 ## Definition of Done
 
-1. `dotnet build` — 0 warnings / 0 errors.
-2. `dotnet test` — all pass incl. new batch unit + integration; media-integrity green.
+1. `dotnet build`, 0 warnings / 0 errors.
+2. `dotnet test`, all pass incl. new batch unit + integration; media-integrity green.
 3. Zero NuGet; CLIs stay thin; the single-file write path is unchanged.
 4. `PrintUsage` documents directory write usage; new gotchas → PITFALLS if any.

@@ -8,7 +8,7 @@ public record ClipMetaFieldStats(
     IReadOnlyList<string> SetFields,
     /// <summary>Well-known fields (see <see cref="ClipMetaSchema.KnownFields"/>) not present.</summary>
     IReadOnlyList<string> KnownUnset,
-    /// <summary>Fields present that are not well-known — user-invented custom names.</summary>
+    /// <summary>Fields present that are not well-known, user-invented custom names.</summary>
     IReadOnlyList<string> CustomFields);
 
 /// <summary>
@@ -19,7 +19,7 @@ public static class ClipMetaStats
 {
     /// <summary>
     /// Categorizes <paramref name="userFields"/> (typically from
-    /// <see cref="ClipMetaReader.GetUserFields"/> — internal fields must already be excluded).
+    /// <see cref="ClipMetaReader.GetUserFields"/>, internal fields must already be excluded).
     /// </summary>
     /// <param name="userFields">User-facing (Field, Value) pairs in document order.</param>
     /// <returns>The categorized field names.</returns>

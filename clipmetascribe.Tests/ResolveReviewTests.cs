@@ -36,7 +36,7 @@ public class ResolveReviewTests
     private static WatchingResolver ResolverWithLive(params ProcessWindow[] live) =>
         WatchingResolver.CreateDefault(new FakeProcessWindowSource(live));
 
-    // A title naming a file that is NOT in the test library — an "outside the library" player.
+    // A title naming a file that is NOT in the test library, an "outside the library" player.
     private const string ForeignTitle =
         @"C:\Outside\Team Fortress 2 2026.01.20 - 21.41.04.189.DVR.mp4 - VLC media player";
 
@@ -119,7 +119,7 @@ public class ResolveReviewTests
     [TestMethod]
     public void ResolveReview_MultiPlayer_CapsConfidenceAndNotLive()
     {
-        // #2 cap: when multiplePlayersActive fires, the caller must confirm — anyLiveTarget is false
+        // #2 cap: when multiplePlayersActive fires, the caller must confirm, anyLiveTarget is false
         // and no candidate is high, even if a clip is locked.
         string a = Touch("a.mp4");
         string b = Touch("b.mp4");
@@ -241,7 +241,7 @@ public class ResolveReviewTests
     [TestMethod]
     public void ResolveReview_ForeignPlayerClosed_FreshSave_NoGhostWarning()
     {
-        // §4.2a (ghost): the foreign player is CLOSED — it survives only as a closed segment in history,
+        // §4.2a (ghost): the foreign player is CLOSED, it survives only as a closed segment in history,
         // with NO live window. It must not be replayed as an open player; the fresh save still surfaces.
         string saved = Touch("saved.mp4");
         var closedForeign = new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, T0.AddSeconds(5)) };

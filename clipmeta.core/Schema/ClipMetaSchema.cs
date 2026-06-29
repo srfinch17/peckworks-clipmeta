@@ -41,7 +41,7 @@ public static class ClipMetaSchema
         new HashSet<string> { Players, Tags, Timecode };
 
     /// <summary>
-    /// Free-text fields appended as prose — joined with a space, case preserved, no dedup — rather
+    /// Free-text fields appended as prose, joined with a space, case preserved, no dedup, rather
     /// than as deduplicated pipe lists. Drives the append join in <c>Normalizer.AppendValue</c>.
     /// </summary>
     public static readonly IReadOnlySet<string> ProseFields = new HashSet<string> { Notes };

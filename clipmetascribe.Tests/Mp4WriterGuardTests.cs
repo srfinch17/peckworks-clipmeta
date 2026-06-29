@@ -59,7 +59,7 @@ public class Mp4WriterGuardTests
 
         // Simulate a recorder: a live handle with WRITE access (sharing Read, as encoders
         // typically do so players can preview the growing file). Our writer opens with
-        // FileShare.Read — which denies existing writers — so this must fail immediately.
+        // FileShare.Read, which denies existing writers, so this must fail immediately.
         using (var recorder = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read))
         {
             var mutation = new MetadataMutation();
@@ -90,7 +90,7 @@ public class Mp4WriterGuardTests
                 new Mp4Writer().WriteMetadata(path, mutation, NullLogger.Instance));
         }
 
-        // Handle released — now it must work.
+        // Handle released, now it must work.
         new Mp4Writer().WriteMetadata(path, mutation, NullLogger.Instance);
     }
 
@@ -100,7 +100,7 @@ public class Mp4WriterGuardTests
     public void PreexistingTmpFile_NotOverwrittenByWrite()
     {
         // Before the unique-name scheme, the writer used exactly "<file>.tmp" with
-        // FileMode.Create — so a real user file named clip.mp4.tmp would be destroyed by
+        // FileMode.Create, so a real user file named clip.mp4.tmp would be destroyed by
         // tagging clip.mp4. Now the temp name embeds a GUID and can never collide.
         string path = Save(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat(Domain, "tags", "x"));
         string usersOwnTmp = path + ".tmp";
@@ -143,7 +143,7 @@ public class Mp4WriterGuardTests
         // The atom's data box says "type 13 = JPEG". The parser displays it as a placeholder
         // like "[JPEG image, N bytes]". The old append path blindly stripped the first and
         // last character of whatever the display string was and stored the rest as the new
-        // value — writing placeholder text over binary data. Now it must refuse.
+        // value, writing placeholder text over binary data. Now it must refuse.
         string path = Save(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat(
             Domain, "tags", "fake-jpeg-bytes", seedDataType: 13));
         byte[] before = File.ReadAllBytes(path);
@@ -180,7 +180,7 @@ public class Mp4WriterGuardTests
     [TestMethod]
     public void AppendToAbsentAtom_BehavesAsSet()
     {
-        // Appending where nothing exists yet is just a set — must not throw.
+        // Appending where nothing exists yet is just a set, must not throw.
         string path = Save(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
 
         var mutation = new MetadataMutation();

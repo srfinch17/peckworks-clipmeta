@@ -10,7 +10,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaMcp.Tools;
 
 /// <summary>
-/// Registers the read-only tools. Every handler delegates to an already-tested Core operation —
+/// Registers the read-only tools. Every handler delegates to an already-tested Core operation, 
 /// the thin-shell rule applies to this MCP server exactly as it does to the CLIs.
 /// Two kinds of tool live here:
 /// single-clip reads (<c>clip_get_metadata</c>, <c>clip_get_stats</c>) that take a path, and
@@ -61,7 +61,7 @@ public static class ReadTools
             "values, file size, which well-known fields are unset, and which set fields are " +
             "custom names. 'path' must be an existing .mp4 file inside the configured clips " +
             "library; relative paths resolve against the library root. " + PipeFieldsSentence +
-            " For MANY clips, do NOT call this per file — library_export returns every clip's " +
+            " For MANY clips, do NOT call this per file, library_export returns every clip's " +
             "metadata in one call, and library_search_index answers field queries in one call.",
             SinglePathSchema(),
             args => GetMetadata(args, sandbox, ledger),
@@ -69,7 +69,7 @@ public static class ReadTools
 
         registry.Register(new ToolDefinition(
             "library_list",
-            "Lists MP4 clip files in the clips library by file name (no metadata is read — " +
+            "Lists MP4 clip files in the clips library by file name (no metadata is read, " +
             "to see every clip's metadata in one call use library_export; to query by field " +
             "use library_find or library_search_index). Newest first. Optional 'pattern' " +
             "is a wildcard on the file name (e.g. '*2026.01*'), optional 'subfolder' restricts " +
@@ -83,7 +83,7 @@ public static class ReadTools
             "library_find",
             "Searches every clip in the library for a metadata field whose value contains the " +
             "given text (case-insensitive substring) and returns the matching file paths. " +
-            "This parses each MP4, so it can take a while on large libraries — prefer " +
+            "This parses each MP4, so it can take a while on large libraries, prefer " +
             "library_search_index for repeated queries. Requires a configured clips library. " +
             PipeFieldsSentence,
             FieldValueSchema(
@@ -95,7 +95,7 @@ public static class ReadTools
         registry.Register(new ToolDefinition(
             "library_vocab",
             "Lists every distinct value used for one metadata field across the whole library, " +
-            "with the number of clips using each value — e.g. all tags ever used, or all game " +
+            "with the number of clips using each value, e.g. all tags ever used, or all game " +
             "names. Multi-value fields are split into individual items first. Requires a " +
             "configured clips library.",
             FieldOnlySchema(),
@@ -105,7 +105,7 @@ public static class ReadTools
         registry.Register(new ToolDefinition(
             "library_export",
             "Exports the metadata of every clip in the library (or one subfolder) as " +
-            "structured records ('json', the default) or CSV text ('csv' — same columns as " +
+            "structured records ('json', the default) or CSV text ('csv', same columns as " +
             "the clipmetascribe --export command; custom fields become extra columns after the " +
             "known ones). Ordered alphabetically by path (note: library_list orders newest " +
             "first). Requires a configured clips library.",
@@ -117,7 +117,7 @@ public static class ReadTools
             "library_search_index",
             "Fast metadata search backed by an index file stored in the library root. " +
             "Results reflect the index as of 'indexBuilt'; the response's 'staleClipCount' " +
-            "says how many files changed since — pass rebuild:true when it is above zero. " +
+            "says how many files changed since, pass rebuild:true when it is above zero. " +
             "With 'field' (and optional 'value' substring) returns matching clips; without, " +
             "returns an index summary. Requires a configured clips library.",
             SearchIndexSchema(),
@@ -128,31 +128,31 @@ public static class ReadTools
             "library_watching",
             "Resolves 'the clip I'm watching / just watched' by inspecting open media players. " +
             "Returns ranked candidates, best first. A 'player_title' candidate resolved to a library " +
-            "path with confidence 'high' is the file an open player is showing — prefer it and you " +
+            "path with confidence 'high' is the file an open player is showing, prefer it and you " +
             "may tag it. If only 'access_time' candidates exist, or confidence is 'low' (multiple " +
             "players open, or an ambiguous file name), confirm with the user before tagging. " +
             "A 'recent_write' candidate with confidence 'high' is a clip just SAVED to the library while no " +
-            "player was open (gaming mode — the user clipped a moment from a game); it is a live target you " +
+            "player was open (gaming mode, the user clipped a moment from a game); it is a live target you " +
             "may tag. 'recent_write' 'low' means several clips were saved at once, so confirm which one. " +
-            "IMPORTANT: when 'anyLiveTarget' is false, NOTHING is actually open or locked — every " +
+            "IMPORTANT: when 'anyLiveTarget' is false, NOTHING is actually open or locked, every " +
             "candidate is just an unverified most-recently-touched guess (and 'access_time' is only " +
             "an advisory recency hint, easily skewed by other apps), so do NOT tag without the user " +
             "confirming the exact path. To tag, " +
             "call the write tool with the chosen 'path'. Note: a clip cannot be written while a " +
-            "player still holds it open ('inUse' true) — it frees when the player advances or closes. " +
+            "player still holds it open ('inUse' true), it frees when the player advances or closes. " +
             "Optional 'limit' (default " + DefaultWatchingLimit + ") and 'include_access_fallback' " +
             "(default true). " +
             "If the response includes a 'warning' (type 'player_outside_library'), a player is showing a file " +
-            "that is not in the configured library — tell the user they may be playing from the wrong folder " +
+            "that is not in the configured library, tell the user they may be playing from the wrong folder " +
             "(name the player and, if 'foreignDirectory' is given, the folder) and do NOT tag. If a candidate " +
             "has a 'note', mention it and confirm with the user before tagging. " +
             "Requires a configured clips library. " +
             "In review mode the recommended top candidate reflects the clip you were watching when you " +
             "spoke, even if the player has since advanced (it may be unlocked and directly writable). " +
-            "For an EXACT bind — and to clear a backlog of several dictations — pass 'spoken_at' (the time " +
+            "For an EXACT bind, and to clear a backlog of several dictations, pass 'spoken_at' (the time " +
             "the user dictated); see that argument. A " +
             "'review' array may list non-blocking advisories (autoCorrected, sameClipTwice, sequenceSkip, " +
-            "multiplePlayersActive, timestampUnmatched) to mention to the user and reconcile later — never block the run to ask. " +
+            "multiplePlayersActive, timestampUnmatched) to mention to the user and reconcile later, never block the run to ask. " +
             "Calling this also writes any previously queued tags whose clips have since been freed (see library_queue_tag).",
             WatchingSchema(),
             args => Watching(args, sandbox, watcher, ledger, journal),
@@ -305,7 +305,7 @@ public static class ReadTools
             {
                 ["type"] = "string",
                 ["description"] = "ISO-8601/RFC-3339 timestamp of WHEN THE USER ACTUALLY DICTATED this " +
-                                  "tag (e.g. '2026-06-26T18:25:03Z'). Pass it whenever you know it — the " +
+                                  "tag (e.g. '2026-06-26T18:25:03Z'). Pass it whenever you know it, the " +
                                   "clip whose playback covered that instant is bound exactly, instead of " +
                                   "guessing from when this call happens to run. Essential for clearing a " +
                                   "backlog: issue one call per pending dictation, OLDEST FIRST, each with " +
@@ -321,7 +321,7 @@ public static class ReadTools
     /// One call, the whole picture. Field-report driven (2026-06-12): the first consumer agent
     /// needed values AND set/unset/custom categorization for one clip and had to make two calls
     /// (clip_get_metadata + the since-removed clip_get_stats), each a full MP4 parse. The file
-    /// is already parsed here — return everything. When <paramref name="ledger"/> is non-null,
+    /// is already parsed here, return everything. When <paramref name="ledger"/> is non-null,
     /// marks the path as read so access-time signals can subtract self-reads; internal utility
     /// calls (e.g. ground-truth read-back in ExecuteWrite) pass null and are not marked.
     /// </summary>
@@ -334,7 +334,7 @@ public static class ReadTools
         // GetUserFields already excludes internal bookkeeping fields. It can legitimately return
         // the same field name more than once (a file holding duplicate clipmeta atoms, e.g.
         // written by another tagger): keep the FIRST occurrence and report the conflict, rather
-        // than silently last-wins — the model must not present one value as authoritative when
+        // than silently last-wins, the model must not present one value as authoritative when
         // the file disagrees with itself.
         IReadOnlyList<(string Field, string Value)> userFields = ClipMetaReader.GetUserFields(root);
         var fields = new JsonObject();
@@ -350,7 +350,7 @@ public static class ReadTools
             fields[field] = value;
         }
 
-        // Same categorization Core gives the CLI --stats command — one definition of
+        // Same categorization Core gives the CLI --stats command, one definition of
         // set/unset/custom for every surface.
         ClipMetaFieldStats stats = ClipMetaStats.Categorize(userFields);
 
@@ -426,7 +426,7 @@ public static class ReadTools
 
         VocabResult vocab = ClipMetaVocab.Enumerate(root, field);
 
-        // Most-used first, then alphabetical — the order a human (or model) summarizing
+        // Most-used first, then alphabetical, the order a human (or model) summarizing
         // "what tags do I use?" actually wants. Dictionary order would be arbitrary.
         var values = new JsonObject();
         foreach (var pair in vocab.Counts
@@ -463,7 +463,7 @@ public static class ReadTools
 
         if (format == "csv")
         {
-            // Core's writer — byte-identical to clipmetascribe --export --format csv.
+            // Core's writer, byte-identical to clipmetascribe --export --format csv.
             using var csv = new StringWriter();
             ClipMetaExporter.WriteCsv(records, csv);
             return new JsonObject
@@ -508,7 +508,7 @@ public static class ReadTools
             catch (Exception ex) when (ex is IOException or FormatException or ArgumentException)
             {
                 // A corrupt or unreadable index self-heals with a rescan instead of wedging
-                // the tool — the index is a cache, never the source of truth.
+                // the tool, the index is a cache, never the source of truth.
                 data = RebuildIndex(root, indexPath);
                 rebuilt = true;
             }
@@ -526,13 +526,13 @@ public static class ReadTools
             ["clipCount"] = data.Entries.Count,
             // Field-report driven (2026-06-12): the agent had no way to know whether the index
             // still matched the filesystem and had to guess about rebuild:true. This costs one
-            // stat call per file — no parsing — and makes the decision mechanical.
+            // stat call per file, no parsing, and makes the decision mechanical.
             ["staleClipCount"] = CountStaleClips(root, data),
         };
 
         string? field = GetOptionalString(args, "field");
         if (field is null)
-            return result; // summary only — the model asked about the index, not a query
+            return result; // summary only, the model asked about the index, not a query
 
         // Empty/absent value means "every clip that has this field" (ClipMetaSearch semantics).
         string value = GetOptionalString(args, "value") ?? string.Empty;
@@ -566,7 +566,7 @@ public static class ReadTools
         string root = sandbox.RequireRoot();
 
         // Opportunistic drain (pass 2): land any queued tags whose locks have cleared before
-        // resolving. The queue is opportunistic state, never a hard dependency — a persistence
+        // resolving. The queue is opportunistic state, never a hard dependency, a persistence
         // failure here (e.g. the queue file is momentarily locked) must NOT fail a watched-clip
         // READ, so degrade to "nothing drained" and let resolution proceed; the next call retries.
         DrainReport drained;
@@ -644,7 +644,7 @@ public static class ReadTools
                 response["warning"] = new JsonObject
                 {
                     ["type"] = "multiple_players_active",
-                    ["message"] = "More than one media player is active — too ambiguous to bind a clip " +
+                    ["message"] = "More than one media player is active, too ambiguous to bind a clip " +
                                   "safely. Confirm the exact path with the user before tagging.",
                 };
         }
@@ -669,13 +669,13 @@ public static class ReadTools
                     ["unresolvedPlayers"] = players,
                 };
             else
-                // #1: a fresh in-library save was detected — the gaming candidate is the live target,
+                // #1: a fresh in-library save was detected, the gaming candidate is the live target,
                 // so the foreign player is informational only (never "do not tag").
                 response["advisory"] = new JsonObject
                 {
                     ["type"] = "player_outside_library_ignored",
                     ["message"] = "A media player is showing a file outside the library, but a fresh " +
-                                  "in-library save was detected — the gaming candidate below is the live " +
+                                  "in-library save was detected, the gaming candidate below is the live " +
                                   "target. The foreign player was ignored.",
                     ["unresolvedPlayers"] = players,
                 };
@@ -694,7 +694,7 @@ public static class ReadTools
 
         // P0-1: surface tags the BACKGROUND pump auto-flushed since the last call (it writes the
         // last clip when its player closes but reports to no one). Report-once: TakePending clears.
-        // Shape is built by QueueTools.AutoFlushedJson — single source so queue tools and watching
+        // Shape is built by QueueTools.AutoFlushedJson, single source so queue tools and watching
         // emit identical path/fields/agoSeconds entries (agoSeconds is clamped ≥ 0 there).
         response["autoFlushed"] = QueueTools.AutoFlushedJson(journal);
 
@@ -736,7 +736,7 @@ public static class ReadTools
             }
         }
 
-        // Indexed entries whose files are gone are stale too — searches would return ghosts.
+        // Indexed entries whose files are gone are stale too, searches would return ghosts.
         stale += indexed.Keys.Count(path => !seen.Contains(path));
         return stale;
     }
@@ -746,7 +746,7 @@ public static class ReadTools
     /// <summary>
     /// Whether an open foreign player should be reported as a BLOCKING "do not tag" warning. False
     /// when the candidate list already contains a gaming target (a <c>recent_write</c> candidate): a
-    /// foreign lock is on a file you cannot tag anyway, so it must not block a valid in-library save —
+    /// foreign lock is on a file you cannot tag anyway, so it must not block a valid in-library save, 
     /// it demotes to a non-blocking advisory instead (#1).
     /// </summary>
     internal static bool ForeignNoticeIsBlocking(IReadOnlyList<WatchingCandidate> candidates) =>
@@ -799,7 +799,7 @@ public static class ReadTools
     /// </summary>
     /// <summary>
     /// Parses the optional 'spoken_at' timestamp leniently: a missing, wrong-typed, or unparseable
-    /// value yields null so a watched-clip READ never fails on this convenience argument — it simply
+    /// value yields null so a watched-clip READ never fails on this convenience argument, it simply
     /// falls back to the live heuristic.
     /// </summary>
     private static DateTimeOffset? ParseSpokenAt(JsonObject? args)

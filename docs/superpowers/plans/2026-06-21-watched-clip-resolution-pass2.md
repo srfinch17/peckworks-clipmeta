@@ -1,21 +1,21 @@
-# Watched-Clip Resolution — Pass 2 (Deferred-Tag Queue) Implementation Plan
+# Watched-Clip Resolution, Pass 2 (Deferred-Tag Queue) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Persist confirmed metadata tags for clips that are locked by a playing media player, then drain them to the files as the locks clear — so you can tag faster than writes can land.
+**Goal:** Persist confirmed metadata tags for clips that are locked by a playing media player, then drain them to the files as the locks clear, so you can tag faster than writes can land.
 
-**Architecture:** A new Core `TagQueue` engine persists a JSON queue (`.clipmeta-queue`) in the library root, with corruption-tolerant load, atomic temp-swap save, merge-enqueue, and a single-threaded drain that writes each entry whose lock has cleared through the existing `Mp4Writer`. The MCP server gains `library_queue_tag` / `library_flush_queue` / `library_queue_status` and drains opportunistically on every watched-clip call; the CLI gains `--flush-queue` and a pending-count footer on `--watching`. The queue stores only already-resolved, confirmed paths — it never resolves or guesses.
+**Architecture:** A new Core `TagQueue` engine persists a JSON queue (`.clipmeta-queue`) in the library root, with corruption-tolerant load, atomic temp-swap save, merge-enqueue, and a single-threaded drain that writes each entry whose lock has cleared through the existing `Mp4Writer`. The MCP server gains `library_queue_tag` / `library_flush_queue` / `library_queue_status` and drains opportunistically on every watched-clip call; the CLI gains `--flush-queue` and a pending-count footer on `--watching`. The queue stores only already-resolved, confirmed paths, it never resolves or guesses.
 
 **Tech Stack:** C# / .NET 10, `System.Text.Json` (BCL), MSTest. Design spec: `docs/superpowers/specs/2026-06-21-watched-clip-resolution-pass2-design.md`.
 
 ## Global Constraints
 
 - **.NET 10**; solution `peckworks-clipmeta.slnx`.
-- **Zero external NuGet packages** in production projects (`clipmeta.core`, `clipmetascribe`, `clipmetamcp`). `System.Text.Json` is BCL — allowed. Test projects may use MSTest only.
-- **CLIs/MCP are thin shells** — no business logic in `Program.cs` or a tool handler; delegate to Core.
-- **Big-endian MP4 IO** stays inside the write engine; pass-2 never touches box bytes directly — it calls `Mp4Writer.WriteMetadata`.
+- **Zero external NuGet packages** in production projects (`clipmeta.core`, `clipmetascribe`, `clipmetamcp`). `System.Text.Json` is BCL, allowed. Test projects may use MSTest only.
+- **CLIs/MCP are thin shells**, no business logic in `Program.cs` or a tool handler; delegate to Core.
+- **Big-endian MP4 IO** stays inside the write engine; pass-2 never touches box bytes directly, it calls `Mp4Writer.WriteMetadata`.
 - **Build:** `dotnet build --nologo -v q` → 0 warnings, 0 errors.
-- **Test:** `dotnet test --nologo --no-build -v q` → all pass. `clipmetascribe.Tests` takes a few minutes (real-clip integration) — use a long timeout; not a hang.
+- **Test:** `dotnet test --nologo --no-build -v q` → all pass. `clipmetascribe.Tests` takes a few minutes (real-clip integration), use a long timeout; not a hang.
 - **XML doc comments** on every public type/method; named constants, no magic numbers.
 - **Changed the MCP tool surface → run the FULL `clipmetamcp.Tests` project, not a `--filter`.** `ToolsList_ContainsTheFullToolSurface` asserts the exact tool set and order.
 - New gotchas → `docs/PITFALLS.md`. Tool-count + repack note → `MEMORY.md` / memory store.
@@ -25,26 +25,26 @@
 
 ## File Structure
 
-**Create (Core — `clipmeta.core/Watching/`):**
-- `QueuedMutation.cs` — durable mutation DTO + mapping to/from `MetadataMutation`.
-- `QueuedTag.cs` — one queue entry record.
-- `TagQueueData.cs` — queue file model (version + entries).
-- `DrainReport.cs` — result of a drain (written / still-queued / dropped).
-- `QueueStatusEntry.cs` — one status row.
-- `TagQueue.cs` — the engine: file path, load, save, enqueue, drain, status.
+**Create (Core, `clipmeta.core/Watching/`):**
+- `QueuedMutation.cs`, durable mutation DTO + mapping to/from `MetadataMutation`.
+- `QueuedTag.cs`, one queue entry record.
+- `TagQueueData.cs`, queue file model (version + entries).
+- `DrainReport.cs`, result of a drain (written / still-queued / dropped).
+- `QueueStatusEntry.cs`, one status row.
+- `TagQueue.cs`, the engine: file path, load, save, enqueue, drain, status.
 
-**Create (MCP — `clipmetamcp/Tools/`):**
-- `WriteGate.cs` — shared single-flight gate (extracted from `WriteTools`).
-- `QueueTools.cs` — registers `library_queue_tag` / `library_flush_queue` / `library_queue_status`.
+**Create (MCP, `clipmetamcp/Tools/`):**
+- `WriteGate.cs`, shared single-flight gate (extracted from `WriteTools`).
+- `QueueTools.cs`, registers `library_queue_tag` / `library_flush_queue` / `library_queue_status`.
 
-**Create (CLI — `clipmetascribe/Commands/`):**
-- `FlushQueueCommand.cs` — thin shell → `TagQueue.Drain`, prints the report.
+**Create (CLI, `clipmetascribe/Commands/`):**
+- `FlushQueueCommand.cs`, thin shell → `TagQueue.Drain`, prints the report.
 
 **Modify:**
-- `clipmetamcp/Tools/WriteTools.cs` — use the shared `WriteGate` instead of its private semaphore.
-- `clipmetamcp/Program.cs` (or wherever `RegisterAll` is called) — call `QueueTools.RegisterAll`.
-- `clipmetamcp.Tests/Phase2ReadToolsTests.cs` — extend `ToolsList_ContainsTheFullToolSurface` with the 3 new names.
-- `clipmetascribe/Program.cs` — route `--flush-queue`; add `--flush-queue` to known flags + help; add the pending footer to the `--watching` branch.
+- `clipmetamcp/Tools/WriteTools.cs`, use the shared `WriteGate` instead of its private semaphore.
+- `clipmetamcp/Program.cs` (or wherever `RegisterAll` is called), call `QueueTools.RegisterAll`.
+- `clipmetamcp.Tests/Phase2ReadToolsTests.cs`, extend `ToolsList_ContainsTheFullToolSurface` with the 3 new names.
+- `clipmetascribe/Program.cs`, route `--flush-queue`; add `--flush-queue` to known flags + help; add the pending footer to the `--watching` branch.
 
 **Test files:**
 - `clipmetascribe.Tests/TagQueueTests.cs` (Core engine, through the scribe test project per convention).
@@ -60,7 +60,7 @@
 - Test: `clipmetascribe.Tests/QueuedMutationTests.cs`
 
 **Interfaces:**
-- Consumes: `ClipMetaCore.Write.MetadataMutation` (existing — `SetFields: Dictionary<string,string?>`, `AppendFields: Dictionary<string,string>`, `DeleteFields: HashSet<string>`, `ClearAll: bool`, plus transient `DryRun`/`BackupPath`).
+- Consumes: `ClipMetaCore.Write.MetadataMutation` (existing, `SetFields: Dictionary<string,string?>`, `AppendFields: Dictionary<string,string>`, `DeleteFields: HashSet<string>`, `ClearAll: bool`, plus transient `DryRun`/`BackupPath`).
 - Produces: `QueuedMutation` record with `From(MetadataMutation)` and `ToMutation()`.
 
 - [ ] **Step 1: Write the failing test**
@@ -110,7 +110,7 @@ public class QueuedMutationTests
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter QueuedMutationTests`
-Expected: FAIL — `QueuedMutation` does not exist (compile error).
+Expected: FAIL, `QueuedMutation` does not exist (compile error).
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -121,7 +121,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// The durable subset of a <see cref="MetadataMutation"/> — the field changes worth persisting in
+/// The durable subset of a <see cref="MetadataMutation"/>, the field changes worth persisting in
 /// the deferred-tag queue. Deliberately omits the transient write-time flags (<c>DryRun</c>,
 /// <c>BackupPath</c>) so the on-disk queue schema is independent of how a write is executed.
 /// </summary>
@@ -148,7 +148,7 @@ public sealed record QueuedMutation(
 
     /// <summary>
     /// Rebuilds a <see cref="MetadataMutation"/> for the write engine. <c>DryRun</c> is false and
-    /// <c>BackupPath</c> is null — a drained tag is a real write and backups are a per-call policy
+    /// <c>BackupPath</c> is null, a drained tag is a real write and backups are a per-call policy
     /// concern, not a durable one.
     /// </summary>
     public MetadataMutation ToMutation()
@@ -176,17 +176,17 @@ git commit -m "feat(core): QueuedMutation durable DTO for the deferred-tag queue
 
 ---
 
-### Task 2: Queue records — `QueuedTag`, `TagQueueData`, `DrainReport`, `QueueStatusEntry`
+### Task 2: Queue records, `QueuedTag`, `TagQueueData`, `DrainReport`, `QueueStatusEntry`
 
 **Files:**
 - Create: `clipmeta.core/Watching/QueuedTag.cs`, `clipmeta.core/Watching/TagQueueData.cs`, `clipmeta.core/Watching/DrainReport.cs`, `clipmeta.core/Watching/QueueStatusEntry.cs`
-- Test: (covered by Task 3's serialization test — these are plain records; no standalone test)
+- Test: (covered by Task 3's serialization test, these are plain records; no standalone test)
 
 **Interfaces:**
 - Consumes: `QueuedMutation` (Task 1).
 - Produces: `QueuedTag(string ClipPath, QueuedMutation Mutation, DateTimeOffset EnqueuedAtUtc, string Confidence)`; `TagQueueData(int Version, IReadOnlyList<QueuedTag> Entries)`; `DrainReport(IReadOnlyList<string> Written, IReadOnlyList<string> StillQueued, IReadOnlyList<string> Dropped)`; `QueueStatusEntry(string ClipPath, IReadOnlyList<string> ChangedFields, double AgeSeconds, bool Locked)`.
 
-- [ ] **Step 1: Write the records (no separate test — exercised by Task 3)**
+- [ ] **Step 1: Write the records (no separate test, exercised by Task 3)**
 
 ```csharp
 // clipmeta.core/Watching/QueuedTag.cs
@@ -271,8 +271,8 @@ git commit -m "feat(core): deferred-tag queue record types"
 - Produces:
   - `const string TagQueue.QueueFileName = ".clipmeta-queue"`
   - `static string TagQueue.QueuePath(string libraryDir)`
-  - `static TagQueueData TagQueue.Load(string libraryDir)` — empty queue on missing/corrupt, never throws.
-  - `static void TagQueue.Save(TagQueueData data, string libraryDir)` — atomic temp-swap.
+  - `static TagQueueData TagQueue.Load(string libraryDir)`, empty queue on missing/corrupt, never throws.
+  - `static void TagQueue.Save(TagQueueData data, string libraryDir)`, atomic temp-swap.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -342,7 +342,7 @@ public class TagQueueTests
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter TagQueueTests`
-Expected: FAIL — `TagQueue` does not exist (compile error).
+Expected: FAIL, `TagQueue` does not exist (compile error).
 
 - [ ] **Step 3: Write minimal implementation (load/save only)**
 
@@ -357,7 +357,7 @@ namespace ClipMetaCore.Watching;
 /// Durable deferred-tag queue stored in a library root. A clip that is playing is locked against
 /// our write (<see cref="System.IO.File.Replace(string, string, string?)"/> needs a delete-share
 /// the player does not grant), so spoken tags are persisted here and written as the locks clear.
-/// The queue stores only confirmed, already-resolved paths — it never resolves or guesses.
+/// The queue stores only confirmed, already-resolved paths, it never resolves or guesses.
 /// </summary>
 public static class TagQueue
 {
@@ -374,7 +374,7 @@ public static class TagQueue
 
     /// <summary>
     /// Reads the queue. A missing OR unreadable/corrupt file yields an empty queue and never
-    /// throws — the queue is opportunistic state on a watched-clip call, never a hard dependency.
+    /// throws, the queue is opportunistic state on a watched-clip call, never a hard dependency.
     /// </summary>
     public static TagQueueData Load(string libraryDir)
     {
@@ -397,7 +397,7 @@ public static class TagQueue
 
     /// <summary>
     /// Writes the queue atomically: serialize to a sibling temp file, then swap it into place with
-    /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c> — a crash
+    /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c>, a crash
     /// mid-write leaves the previous queue intact, never a half-written file.
     /// </summary>
     public static void Save(TagQueueData data, string libraryDir)
@@ -421,7 +421,7 @@ public static class TagQueue
 }
 ```
 
-> **Note on deserialization:** `System.Text.Json` populates the get-only collection properties of `QueuedMutation` (it has a positional constructor, so STJ binds the records by constructor parameter name — `SetFields`, `AppendFields`, `DeleteFields`, `ClearAll`, etc. — which is why the property names must match the JSON exactly; they do, since we serialize with the same type).
+> **Note on deserialization:** `System.Text.Json` populates the get-only collection properties of `QueuedMutation` (it has a positional constructor, so STJ binds the records by constructor parameter name, `SetFields`, `AppendFields`, `DeleteFields`, `ClearAll`, etc., which is why the property names must match the JSON exactly; they do, since we serialize with the same type).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -444,7 +444,7 @@ git commit -m "feat(core): TagQueue atomic, corruption-tolerant load/save"
 - Test: `clipmetascribe.Tests/TagQueueTests.cs` (add cases)
 
 **Interfaces:**
-- Produces: `static void TagQueue.Enqueue(string libraryDir, string clipPath, MetadataMutation mutation, string confidence)` — merges onto an existing entry for the same path (set last-wins, append accumulates, delete unions, ClearAll ORs); one entry per clip; persists via `Save`.
+- Produces: `static void TagQueue.Enqueue(string libraryDir, string clipPath, MetadataMutation mutation, string confidence)`, merges onto an existing entry for the same path (set last-wins, append accumulates, delete unions, ClearAll ORs); one entry per clip; persists via `Save`.
 
 - [ ] **Step 1: Write the failing test (add to `TagQueueTests`)**
 
@@ -482,7 +482,7 @@ git commit -m "feat(core): TagQueue atomic, corruption-tolerant load/save"
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter TagQueueTests`
-Expected: FAIL — `Enqueue` not defined.
+Expected: FAIL, `Enqueue` not defined.
 
 - [ ] **Step 3: Add the implementation to `TagQueue.cs`**
 
@@ -560,10 +560,10 @@ git commit -m "feat(core): TagQueue.Enqueue with per-clip merge semantics"
 
 **Files:**
 - Modify: `clipmeta.core/Watching/TagQueue.cs`
-- Test: `clipmetascribe.Tests/TagQueueTests.cs` (add cases — these use the real `Mp4Writer` against a real small clip)
+- Test: `clipmetascribe.Tests/TagQueueTests.cs` (add cases, these use the real `Mp4Writer` against a real small clip)
 
 **Interfaces:**
-- Consumes: `IMediaWriter` (`Mp4Writer` implements it — `WriteMetadata(string, MetadataMutation, IClipMetaLogger)`); `IClipMetaLogger` (`NullLogger.Instance` from `ClipMetaCore.Logging`); a lock predicate.
+- Consumes: `IMediaWriter` (`Mp4Writer` implements it, `WriteMetadata(string, MetadataMutation, IClipMetaLogger)`); `IClipMetaLogger` (`NullLogger.Instance` from `ClipMetaCore.Logging`); a lock predicate.
 - Produces:
   - `static DrainReport TagQueue.Drain(string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string,bool> isInUse)`
   - `static IReadOnlyList<QueueStatusEntry> TagQueue.Status(string libraryDir, Func<string,bool> isInUse)`
@@ -572,7 +572,7 @@ git commit -m "feat(core): TagQueue.Enqueue with per-clip merge semantics"
 - `isInUse` is injected (not a hard call to `LockProbe`) so tests drive lock state deterministically; production callers pass `LockProbe.IsInUse`.
 - A drained entry whose clip **no longer exists** → drop into `Dropped` (do not call the writer).
 - An entry that is **in use** → leave queued (`StillQueued`).
-- Otherwise → `writer.WriteMetadata(...)`; on success drop from the queue (`Written`). A write failure (`IOException`/`InvalidDataException`/etc.) leaves the entry queued under `StillQueued` (retry next pass) — never crash the drain.
+- Otherwise → `writer.WriteMetadata(...)`; on success drop from the queue (`Written`). A write failure (`IOException`/`InvalidDataException`/etc.) leaves the entry queued under `StillQueued` (retry next pass), never crash the drain.
 - Persist the surviving queue once at the end.
 
 - [ ] **Step 1: Write the failing test (add to `TagQueueTests`)**
@@ -649,7 +649,7 @@ git commit -m "feat(core): TagQueue.Enqueue with per-clip merge semantics"
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter TagQueueTests`
-Expected: FAIL — `Drain`/`Status` not defined.
+Expected: FAIL, `Drain`/`Status` not defined.
 
 - [ ] **Step 3: Add the implementation to `TagQueue.cs`**
 
@@ -748,7 +748,7 @@ git commit -m "feat(core): TagQueue.Drain and Status (lock-aware, injectable pro
 **Interfaces:**
 - Produces: `internal static class WriteGate` with `static void Enter()` / `static void Exit()` wrapping a process-wide `SemaphoreSlim(1,1)`.
 
-This is a pure refactor so the drain (Task 8) can share the write tools' single-flight discipline — a drain must not race a direct `clip_set_fields` at `File.Replace`.
+This is a pure refactor so the drain (Task 8) can share the write tools' single-flight discipline, a drain must not race a direct `clip_set_fields` at `File.Replace`.
 
 - [ ] **Step 1: Create the shared gate**
 
@@ -757,7 +757,7 @@ This is a pure refactor so the drain (Task 8) can share the write tools' single-
 namespace ClipMetaMcp.Tools;
 
 /// <summary>
-/// Process-wide single-flight latch for every operation that mutates a clip file — the direct
+/// Process-wide single-flight latch for every operation that mutates a clip file, the direct
 /// write tools AND the deferred-queue drain. Two concurrent rewrites of the same file would race
 /// at <c>File.Replace</c>; serializing all writes here retires that race permanently (spec risk
 /// R2/R8). The session loop is single-threaded today, so this is insurance against a future
@@ -807,7 +807,7 @@ git commit -m "refactor(mcp): extract shared WriteGate single-flight latch"
 
 **Interfaces:**
 - Consumes: `TagQueue.Drain`, `TagQueue.Status`, `LockProbe.IsInUse`, `Mp4Writer`, `NullLogger.Instance`.
-- Produces: `static int FlushQueueCommand.Run(string libraryDir, TextWriter? output = null, IMediaWriter? writer = null, Func<string,bool>? isInUse = null)` (trailing injectables default to real impls — the "testable surface" convention).
+- Produces: `static int FlushQueueCommand.Run(string libraryDir, TextWriter? output = null, IMediaWriter? writer = null, Func<string,bool>? isInUse = null)` (trailing injectables default to real impls, the "testable surface" convention).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -853,7 +853,7 @@ public class FlushQueueCommandTests
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter FlushQueueCommandTests`
-Expected: FAIL — `FlushQueueCommand` not defined.
+Expected: FAIL, `FlushQueueCommand` not defined.
 
 - [ ] **Step 3: Implement `FlushQueueCommand`**
 
@@ -867,7 +867,7 @@ using ClipMetaCore.Write;
 namespace ClipMetaScribe.Commands;
 
 /// <summary>
-/// Drains the deferred-tag queue for a library — writing every queued tag whose clip is no longer
+/// Drains the deferred-tag queue for a library, writing every queued tag whose clip is no longer
 /// locked. Used for the final clip of a session, after the player has closed and there is no
 /// "next" watched-clip call to pump the drain.
 /// </summary>
@@ -936,7 +936,7 @@ Add `"--flush-queue"` to the known-flags array (line ~361) so it is recognized, 
                                       (use with a clips directory).
 ```
 
-And in the `--watching` branch, after the resolver runs, print the pending footer — implemented inside `WatchingCommand.Run` in Step 5 so the MCP and CLI stay parallel.
+And in the `--watching` branch, after the resolver runs, print the pending footer, implemented inside `WatchingCommand.Run` in Step 5 so the MCP and CLI stay parallel.
 
 - [ ] **Step 5: Add the pending footer to `WatchingCommand.Run`**
 
@@ -966,7 +966,7 @@ git commit -m "feat(scribe): --flush-queue command and --watching pending footer
 
 **Files:**
 - Create: `clipmetamcp/Tools/QueueTools.cs`
-- Modify: the registration call site (where `ReadTools.RegisterAll` / `WriteTools.RegisterAll` are invoked — `clipmetamcp/Program.cs` or a session builder) to call `QueueTools.RegisterAll`.
+- Modify: the registration call site (where `ReadTools.RegisterAll` / `WriteTools.RegisterAll` are invoked, `clipmetamcp/Program.cs` or a session builder) to call `QueueTools.RegisterAll`.
 - Modify: `clipmetamcp.Tests/Phase2ReadToolsTests.cs` (extend the surface assertion)
 - Test: `clipmetamcp.Tests/QueueToolsTests.cs`
 
@@ -975,7 +975,7 @@ git commit -m "feat(scribe): --flush-queue command and --watching pending footer
 - Produces: `static void QueueTools.RegisterAll(ToolRegistry registry, LibrarySandbox sandbox)`.
 
 **Behavior:**
-- `library_queue_tag(path, fields)`: resolve `path` via `sandbox.ResolveWritePath` (must exist, in-library, .mp4 — this is the "dumb queue" library-sandbox check). Build a `MetadataMutation` from `fields` exactly like `clip_set_fields` (empty string = delete). **Drain first** (under `WriteGate`), then `TagQueue.Enqueue`. Return the enqueue confirmation + what the opportunistic drain landed.
+- `library_queue_tag(path, fields)`: resolve `path` via `sandbox.ResolveWritePath` (must exist, in-library, .mp4, this is the "dumb queue" library-sandbox check). Build a `MetadataMutation` from `fields` exactly like `clip_set_fields` (empty string = delete). **Drain first** (under `WriteGate`), then `TagQueue.Enqueue`. Return the enqueue confirmation + what the opportunistic drain landed.
 - `library_flush_queue()`: `RequireRoot`, drain under `WriteGate`, return the `DrainReport`.
 - `library_queue_status()`: `RequireRoot`, return `TagQueue.Status`.
 - The drain helper is shared by `queue_tag` and `flush_queue`.
@@ -1019,12 +1019,12 @@ public class QueueToolsTests
 }
 ```
 
-> Fill these in against the actual `McpHarness` API used by `LibraryWatchingToolTests.cs` and `WriteToolsTests.cs` — match how they create `_lib`, hold a file open to simulate `inUse`, and assert `isError`/structured content. Do NOT invent a new harness.
+> Fill these in against the actual `McpHarness` API used by `LibraryWatchingToolTests.cs` and `WriteToolsTests.cs`, match how they create `_lib`, hold a file open to simulate `inUse`, and assert `isError`/structured content. Do NOT invent a new harness.
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q --filter QueueToolsTests`
-Expected: FAIL — `QueueTools` not defined.
+Expected: FAIL, `QueueTools` not defined.
 
 - [ ] **Step 3: Implement `QueueTools`**
 
@@ -1041,7 +1041,7 @@ namespace ClipMetaMcp.Tools;
 /// <summary>
 /// Registers the deferred-tag queue tools. A clip that is playing is locked against our write, so
 /// these persist a CONFIRMED tag and drain the queue as locks clear. The queue never resolves or
-/// guesses — the caller passes an already-resolved path (from library_watching, confirmed with the
+/// guesses, the caller passes an already-resolved path (from library_watching, confirmed with the
 /// user when confidence was low). Every drain runs under the shared <see cref="WriteGate"/> so it
 /// can never race a direct write at <c>File.Replace</c>.
 /// </summary>
@@ -1057,7 +1057,7 @@ public static class QueueTools
             "library_queue_tag",
             "Queues a metadata tag for a clip that is currently being played (and therefore locked " +
             "against writing). Pass the clip 'path' you already resolved with library_watching and " +
-            "confirmed — this tool does NOT resolve or guess. 'fields' maps field names to string " +
+            "confirmed, this tool does NOT resolve or guess. 'fields' maps field names to string " +
             "values (empty string deletes), exactly like clip_set_fields. The tag is written " +
             "automatically the next time you call a watched-clip tool after the player advances " +
             "(the lock clears), or immediately via library_flush_queue. Requires a configured library.",
@@ -1071,7 +1071,7 @@ public static class QueueTools
 
         registry.Register(new ToolDefinition(
             "library_flush_queue",
-            "Writes every queued deferred tag whose clip is no longer locked — use after you stop " +
+            "Writes every queued deferred tag whose clip is no longer locked, use after you stop " +
             "and close the player on the LAST clip, when there is no next watched-clip call to drain " +
             "the queue. Returns what was written, what is still locked (will retry), and what was " +
             "dropped because the clip is gone. Requires a configured library.",
@@ -1225,9 +1225,9 @@ In `clipmetamcp.Tests/Phase2ReadToolsTests.cs`, update `ToolsList_ContainsTheFul
 - [ ] **Step 6: Run the FULL MCP test project (surface + behavior)**
 
 Run: `dotnet build --nologo -v q && dotnet test clipmetamcp.Tests --nologo --no-build -v q`
-Expected: PASS — including the updated `ToolsList_ContainsTheFullToolSurface`, the stdout-purity harness (which now drives the 3 new tools via their `ExampleArguments`), and `QueueToolsTests`.
+Expected: PASS, including the updated `ToolsList_ContainsTheFullToolSurface`, the stdout-purity harness (which now drives the 3 new tools via their `ExampleArguments`), and `QueueToolsTests`.
 
-> If the stdout-purity test fails because `library_queue_tag`'s example path isn't writable, ensure the harness's example-clip setup creates a real `.mp4` (it already does for the write tools — the same `ExampleArguments(clipPath)` contract applies).
+> If the stdout-purity test fails because `library_queue_tag`'s example path isn't writable, ensure the harness's example-clip setup creates a real `.mp4` (it already does for the write tools, the same `ExampleArguments(clipPath)` contract applies).
 
 - [ ] **Step 7: Commit**
 
@@ -1241,7 +1241,7 @@ git commit -m "feat(mcp): library_queue_tag/flush_queue/queue_status with opport
 ### Task 9: Wire opportunistic drain into `library_watching` + full verification + docs
 
 **Files:**
-- Modify: `clipmetamcp/Tools/ReadTools.cs` (`Watching` handler — drain before resolving)
+- Modify: `clipmetamcp/Tools/ReadTools.cs` (`Watching` handler, drain before resolving)
 - Modify: `docs/PITFALLS.md`, `MEMORY.md` (+ memory store), `README` if it lists tool counts
 - Test: full `dotnet test`
 
@@ -1290,19 +1290,19 @@ Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors.
 
 Run: `dotnet test --nologo --no-build -v q`
-Expected: ALL pass (give `clipmetascribe.Tests` a long timeout — minutes; not a hang).
+Expected: ALL pass (give `clipmetascribe.Tests` a long timeout, minutes; not a hang).
 
 - [ ] **Step 4: Update docs**
 
-`docs/PITFALLS.md` — append a pass-2 entry:
+`docs/PITFALLS.md`, append a pass-2 entry:
 
 ```markdown
-## 2026-06-21 — Deferred-tag queue: a playing clip is locked against File.Replace
+## 2026-06-21, Deferred-tag queue: a playing clip is locked against File.Replace
 A clip a media player is showing cannot be written (File.Replace needs FILE_SHARE_DELETE, which
 players don't grant). Pass-2 queues the tag (.clipmeta-queue, JSON, library root) and drains it
-when the lock clears — on the next library_watching/library_queue_tag call, or library_flush_queue
+when the lock clears, on the next library_watching/library_queue_tag call, or library_flush_queue
 / scribe --flush-queue for the last clip. Drains share the MCP WriteGate so they never race a
-direct write. Per-player lock-release on next/stop/close is still a dogfooding TODO — record
+direct write. Per-player lock-release on next/stop/close is still a dogfooding TODO, record
 observed behavior here when measured.
 ```
 
@@ -1329,7 +1329,7 @@ git commit -m "feat(mcp): drain queue opportunistically on library_watching; doc
 - §8 tests: every listed case mapped to a Task 3/5/8 test. ✓
 - Definition of Done: full build/test (Task 9 Step 3), zero NuGet (System.Text.Json is BCL), docs (Task 9 Step 4). ✓
 
-**2. Placeholder scan:** The only deferred specifics are the MCP test bodies in Task 8 Step 1, which explicitly instruct mirroring the existing `McpHarness`/`LibraryWatchingToolTests` patterns rather than inventing an API — the surrounding production code and assertions are fully specified. The `TestClips.CopyPristineToScratch` helper name in Task 5 is flagged to match the project's actual pristine-copy helper. No "TBD"/"add error handling"/"similar to" placeholders in production code.
+**2. Placeholder scan:** The only deferred specifics are the MCP test bodies in Task 8 Step 1, which explicitly instruct mirroring the existing `McpHarness`/`LibraryWatchingToolTests` patterns rather than inventing an API, the surrounding production code and assertions are fully specified. The `TestClips.CopyPristineToScratch` helper name in Task 5 is flagged to match the project's actual pristine-copy helper. No "TBD"/"add error handling"/"similar to" placeholders in production code.
 
 **3. Type consistency:** `QueuedMutation`/`QueuedTag`/`TagQueueData`/`DrainReport`/`QueueStatusEntry` signatures are identical across Tasks 1, 2, 5, 8. `TagQueue.Drain(libraryDir, IMediaWriter, IClipMetaLogger, Func<string,bool>)` and `TagQueue.Status(libraryDir, Func<string,bool>)` match between Task 5 (def), Task 7 (CLI use), Task 8 (MCP use), Task 9 (watching use). `WriteGate.Enter()`/`Exit()` consistent across Tasks 6, 8, 9. `TagQueue.QueueFileName` used in the Task 3 corrupt-file test matches the const.
 
@@ -1337,7 +1337,7 @@ git commit -m "feat(mcp): drain queue opportunistically on library_watching; doc
 
 Plan complete and saved to `docs/superpowers/plans/2026-06-21-watched-clip-resolution-pass2.md`. Two execution options:
 
-1. **Subagent-Driven (recommended)** — a fresh subagent per task, two-stage review between tasks, fast iteration.
-2. **Inline Execution** — execute tasks in this session with checkpoints for review.
+1. **Subagent-Driven (recommended)**, a fresh subagent per task, two-stage review between tasks, fast iteration.
+2. **Inline Execution**, execute tasks in this session with checkpoints for review.
 
 Which approach?

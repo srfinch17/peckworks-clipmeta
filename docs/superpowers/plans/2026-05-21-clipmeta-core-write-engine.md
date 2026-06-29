@@ -130,7 +130,7 @@ Write `ClipMeta.Core/ClipMeta.Core.csproj`:
 
 - [ ] **Step 1.2: Add ClipMeta.Core to the solution**
 
-Edit `peckworks-clipmeta.slnx` — add the Core project entry:
+Edit `peckworks-clipmeta.slnx`, add the Core project entry:
 ```xml
 <Solution>
   <Project Path="ClipMeta.Core/ClipMeta.Core.csproj" />
@@ -176,7 +176,7 @@ git commit -m "feat: add ClipMeta.Core class library project to solution"
 - Create: `ClipMeta.Core/Write/MetadataMutation.cs`
 - Create: `ClipMeta.Core/Logging/NullLogger.cs`
 
-These are data types and contracts — no behavioral tests are needed before writing them.
+These are data types and contracts, no behavioral tests are needed before writing them.
 
 - [ ] **Step 2.1: Write UnsupportedFormatException**
 
@@ -434,7 +434,7 @@ Files to copy (change namespace header in each):
 - `BigEndianReader.cs` → `using System.Text;` stays, `namespace ClipMeta.Core.Mp4;`
 - `MetadataKeys.cs` → `namespace ClipMeta.Core.Mp4;`
 
-For `Mp4Parser.cs` — copy it, update namespace to `ClipMeta.Core.Mp4`, add the interface implementation and `----` atom reading (see Steps 3.2–3.3).
+For `Mp4Parser.cs`, copy it, update namespace to `ClipMeta.Core.Mp4`, add the interface implementation and `----` atom reading (see Steps 3.2–3.3).
 
 - [ ] **Step 3.2: Add IMediaParser to Mp4Parser**
 
@@ -542,7 +542,7 @@ In `clipmetaview/Rendering/TreeRenderer.cs`, change `using ClipMetaView.Mp4;` to
 
 - [ ] **Step 3.6: Update clipmetaview.Tests to reference Core**
 
-Edit `clipmetaview.Tests/clipmetaview.Tests.csproj` — add a second ProjectReference:
+Edit `clipmetaview.Tests/clipmetaview.Tests.csproj`, add a second ProjectReference:
 ```xml
 <ItemGroup>
   <ProjectReference Include="..\clipmetaview\clipmetaview.csproj" />
@@ -568,7 +568,7 @@ In each of these files, add or change the Mp4 namespace import:
 dotnet build
 dotnet test clipmetaview.Tests/clipmetaview.Tests.csproj
 ```
-Expected: all 80 existing tests pass. If any fail, the namespace change broke a static reference — fix by checking the using directive in the failing test file.
+Expected: all 80 existing tests pass. If any fail, the namespace change broke a static reference, fix by checking the using directive in the failing test file.
 
 - [ ] **Step 3.9: Delete the now-redundant Mp4/ folder from clipmetaview**
 
@@ -618,7 +618,7 @@ Remove the now-empty old directory:
 Remove-Item -Recurse -Force "clipmetaview/testclips"
 ```
 
-**Important:** Steps 4.2 and 4.3 must be treated as a single atomic operation. Do NOT run tests between these two steps — the test suite will fail because `TestClips.cs` still references the old path (`testclips`) while the clips have already been moved. Complete both steps before running tests.
+**Important:** Steps 4.2 and 4.3 must be treated as a single atomic operation. Do NOT run tests between these two steps, the test suite will fail because `TestClips.cs` still references the old path (`testclips`) while the clips have already been moved. Complete both steps before running tests.
 
 - [ ] **Step 4.3: Update TestClips.cs to look for testclips/pristine**
 
@@ -754,7 +754,7 @@ Edit `peckworks-clipmeta.slnx`:
 
 - [ ] **Step 5.3: Write ScratchClips helper**
 
-First write `clipmetascribe.Tests/Helpers/TestClipsLocator.cs` (self-contained locator — no cross-project dependency):
+First write `clipmetascribe.Tests/Helpers/TestClipsLocator.cs` (self-contained locator, no cross-project dependency):
 
 `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`:
 ```csharp
@@ -828,9 +828,9 @@ internal static class ScratchClips
 }
 ```
 
-Note: `ScratchClips` uses `TestClipsLocator` from the same project — no cross-project `ProjectReference` needed. Do NOT use `TestClips` from `clipmetaview.Tests`.
+Note: `ScratchClips` uses `TestClipsLocator` from the same project, no cross-project `ProjectReference` needed. Do NOT use `TestClips` from `clipmetaview.Tests`.
 
-The `TestClipsLocator` file shown below is no longer needed as a separate addition — it is written above.
+The `TestClipsLocator` file shown below is no longer needed as a separate addition, it is written above.
 
 Add `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`:
 
@@ -920,7 +920,7 @@ internal static class MinimalMp4Builder
 
     /// <summary>
     /// Builds a ---- freeform atom with mean (domain), name (field), and data (UTF-8 value).
-    /// Both mean and name are FullBoxes — version+flags are 4 bytes each.
+    /// Both mean and name are FullBoxes, version+flags are 4 bytes each.
     /// </summary>
     public static byte[] FreeformAtom(string domain, string fieldName, string value)
     {
@@ -980,7 +980,7 @@ internal static class MinimalMp4Builder
     /// </summary>
     public static byte[] StblBox(byte[] stcoBox) => Box("stbl", stcoBox);
 
-    /// <summary>Wraps stbl in minf, minf in mdia, mdia in trak — minimal valid track chain.</summary>
+    /// <summary>Wraps stbl in minf, minf in mdia, mdia in trak, minimal valid track chain.</summary>
     public static byte[] TrakBox(byte[] stcoBox)
     {
         byte[] stbl = StblBox(stcoBox);
@@ -1146,7 +1146,7 @@ public class BigEndianWriterTests
 }
 ```
 
-- [ ] **Step 6.2: Run tests — expect compile failure (BigEndianWriter not yet written)**
+- [ ] **Step 6.2: Run tests, expect compile failure (BigEndianWriter not yet written)**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "BigEndianWriterTests"
@@ -1163,7 +1163,7 @@ namespace ClipMeta.Core.Mp4;
 
 /// <summary>
 /// Static utility for writing big-endian integers and MP4 structural types to a <see cref="BinaryWriter"/>.
-/// Mirrors <see cref="BigEndianReader"/> — every write is the exact inverse of a read.
+/// Mirrors <see cref="BigEndianReader"/>, every write is the exact inverse of a read.
 /// </summary>
 public static class BigEndianWriter
 {
@@ -1222,7 +1222,7 @@ public static class BigEndianWriter
 }
 ```
 
-- [ ] **Step 6.4: Run tests — expect all pass**
+- [ ] **Step 6.4: Run tests, expect all pass**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "BigEndianWriterTests"
@@ -1370,7 +1370,7 @@ public class FreeformAtomWriterTests
     {
         // Write only the ---- atom bytes (no ilst wrapper) and call ParseBoxes with inIlst:true.
         // Wrapping in an ilst box first would cause the parser to see "ilst" as nodes[0],
-        // not the "----" atom — the assertion on node.Type == "----" would always fail.
+        // not the "----" atom, the assertion on node.Type == "----" would always fail.
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
         FreeformAtomWriter.Write(bw, ClipMetaSchema.Domain, "tags", "headshot");
@@ -1390,7 +1390,7 @@ public class FreeformAtomWriterTests
 }
 ```
 
-- [ ] **Step 7.2: Run tests — expect compile failure**
+- [ ] **Step 7.2: Run tests, expect compile failure**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "FreeformAtomWriterTests"
@@ -1474,7 +1474,7 @@ public static class FreeformAtomWriter
 }
 ```
 
-- [ ] **Step 7.4: Run tests — expect all pass**
+- [ ] **Step 7.4: Run tests, expect all pass**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "FreeformAtomWriterTests"
@@ -1591,7 +1591,7 @@ public class FileLoggerTests
 }
 ```
 
-- [ ] **Step 8.2: Run tests — expect compile failure**
+- [ ] **Step 8.2: Run tests, expect compile failure**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "FileLoggerTests"
@@ -1626,7 +1626,7 @@ public sealed class FileLogger : IClipMetaLogger
     {
         _logPath = logPath;
         Level = level;
-        // Path.GetDirectoryName("clipmeta.log") returns "" not null — guard before CreateDirectory.
+        // Path.GetDirectoryName("clipmeta.log") returns "" not null, guard before CreateDirectory.
         string? dir = Path.GetDirectoryName(logPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
     }
@@ -1669,7 +1669,7 @@ public sealed class FileLogger : IClipMetaLogger
 }
 ```
 
-- [ ] **Step 8.4: Run tests — expect all pass**
+- [ ] **Step 8.4: Run tests, expect all pass**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "FileLoggerTests"
@@ -1783,12 +1783,12 @@ public class NormalizationTests
 }
 ```
 
-- [ ] **Step 9.2: Run tests — expect compile failure**
+- [ ] **Step 9.2: Run tests, expect compile failure**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "NormalizationTests"
 ```
-Expected: build fails — `Normalizer` not found.
+Expected: build fails, `Normalizer` not found.
 
 - [ ] **Step 9.3: Implement Normalizer**
 
@@ -1935,7 +1935,7 @@ public static class Normalizer
 }
 ```
 
-- [ ] **Step 9.4: Run tests — expect all pass**
+- [ ] **Step 9.4: Run tests, expect all pass**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "NormalizationTests"
@@ -1951,7 +1951,7 @@ git commit -m "feat: add Normalizer with trim/lowercase/deduplicate/timecode can
 
 ---
 
-## Task 10: Mp4Writer — Core Pipeline (TDD, 3 Scenarios)
+## Task 10: Mp4Writer, Core Pipeline (TDD, 3 Scenarios)
 
 **Files:**
 - Create: `ClipMeta.Core/Write/Mp4Writer.cs`
@@ -1962,7 +1962,7 @@ This is the most complex task. The write engine handles three scenarios, stco/co
 
 - [ ] **Step 10.1: Write unit tests for Scenario 1 (update existing `----` atom)**
 
-`clipmetascribe.Tests/Mp4WriterTests.cs` — start with just Scenario 1 tests:
+`clipmetascribe.Tests/Mp4WriterTests.cs`, start with just Scenario 1 tests:
 ```csharp
 using ClipMeta.Core.Logging;
 using ClipMeta.Core.Mp4;
@@ -2157,16 +2157,16 @@ public class Mp4WriterTests
 }
 ```
 
-- [ ] **Step 10.2: Run tests — expect compile failure (Mp4Writer not yet written)**
+- [ ] **Step 10.2: Run tests, expect compile failure (Mp4Writer not yet written)**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "Mp4WriterTests"
 ```
-Expected: build fails — `Mp4Writer` not found.
+Expected: build fails, `Mp4Writer` not found.
 
 - [ ] **Step 10.3: Implement Mp4Writer**
 
-`ClipMeta.Core/Write/Mp4Writer.cs` — this is the largest class in the project. Implement it in full:
+`ClipMeta.Core/Write/Mp4Writer.cs`, this is the largest class in the project. Implement it in full:
 
 ```csharp
 using System.Text;
@@ -2193,7 +2193,7 @@ public sealed class Mp4Writer : IMediaWriter
     {
         if (mutation.DryRun)
         {
-            logger.Log($"DRY RUN — no files will be modified: {filePath}");
+            logger.Log($"DRY RUN, no files will be modified: {filePath}");
             return;
         }
 
@@ -2495,7 +2495,7 @@ public sealed class Mp4Writer : IMediaWriter
         for (uint i = 0; i < count; i++)
         {
             ulong original = BigEndianReader.ReadUInt64(src);
-            // Cast through long to detect underflow — (ulong)(-1) would silently wrap.
+            // Cast through long to detect underflow, (ulong)(-1) would silently wrap.
             long adjusted = (long)original + delta;
             if (adjusted < 0)
                 throw new InvalidOperationException(
@@ -2539,7 +2539,7 @@ public sealed class Mp4Writer : IMediaWriter
 
     private static void WriteNewMetaChain(BinaryWriter dst, Dictionary<string, string> newFields)
     {
-        // Write meta (FullBox) → hdlr + ilst — the inner portion of WriteNewUdtaChain.
+        // Write meta (FullBox) → hdlr + ilst, the inner portion of WriteNewUdtaChain.
         using var ilstBuf = new MemoryStream();
         using var ilstWriter = new BinaryWriter(ilstBuf, Encoding.Latin1, leaveOpen: true);
         foreach (var (key, value) in newFields)
@@ -2574,7 +2574,7 @@ public sealed class Mp4Writer : IMediaWriter
         using var metaBuf = new MemoryStream();
         using var metaWriter = new BinaryWriter(metaBuf, Encoding.Latin1, leaveOpen: true);
 
-        // meta is a FullBox — write version+flags first
+        // meta is a FullBox, write version+flags first
         metaWriter.Write(meta.Version);
         metaWriter.Write((byte)(meta.Flags >> 16));
         metaWriter.Write((byte)(meta.Flags >> 8));
@@ -2604,7 +2604,7 @@ public sealed class Mp4Writer : IMediaWriter
         var writtenKeys = new HashSet<string>(StringComparer.Ordinal);
 
         // Stream-copy existing atoms; replace matching keys with updated value.
-        // Skip "free" padding boxes — they are re-added at the end as fresh padding.
+        // Skip "free" padding boxes, they are re-added at the end as fresh padding.
         foreach (var child in ilst.Children)
         {
             if (child.Type == "free") continue; // skip old padding; will be re-added below
@@ -2630,7 +2630,7 @@ public sealed class Mp4Writer : IMediaWriter
                 }
                 else
                 {
-                    // Unknown non-freeform editable atom — copy verbatim (don't corrupt it)
+                    // Unknown non-freeform editable atom, copy verbatim (don't corrupt it)
                     CopyBoxVerbatim(src, ilstWriter, child);
                 }
                 writtenKeys.Add(key);
@@ -2857,7 +2857,7 @@ public sealed class Mp4Writer : IMediaWriter
 }
 ```
 
-- [ ] **Step 10.4: Run unit tests — expect pass**
+- [ ] **Step 10.4: Run unit tests, expect pass**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "Mp4WriterTests"
@@ -3171,7 +3171,7 @@ public class SearchIndexTests
     [TestMethod]
     public void Search_WithoutIndex_FallsBackToFileScan()
     {
-        // No index built — should still return results via scan
+        // No index built, should still return results via scan
         var results = ClipMetaSearch.Find(_scratchDir,
             new Dictionary<string, string> { [ClipMetaSchema.Game] = "Team Fortress 2" });
         Assert.IsTrue(results.Any());
@@ -3179,7 +3179,7 @@ public class SearchIndexTests
 }
 ```
 
-- [ ] **Step 11.2: Run tests — expect compile failure**
+- [ ] **Step 11.2: Run tests, expect compile failure**
 
 ```powershell
 dotnet test clipmetascribe.Tests/clipmetascribe.Tests.csproj --filter "SearchIndexTests"
@@ -3255,7 +3255,7 @@ public static class ClipMetaIndex
         if (!File.Exists(path)) return false;
         var data = Load(directory);
 
-        // If new files were added after the index was built they won't have entries — stale.
+        // If new files were added after the index was built they won't have entries, stale.
         int currentCount = Directory.EnumerateFiles(directory, "*.mp4").Count();
         if (currentCount != data.Entries.Count) return false;
 
@@ -3373,7 +3373,7 @@ public static class ClipMetaSearch
         {
             if (!fields.TryGetValue(field, out string? actual)) return false;
             // Pipe-separated fields: whole-token match against each pipe-delimited item.
-            // Substring matching would cause "--find tags head" to match "headshot" — unexpected.
+            // Substring matching would cause "--find tags head" to match "headshot", unexpected.
             bool found = actual.Split('|')
                 .Any(item => item.Trim().Equals(required, StringComparison.OrdinalIgnoreCase));
             if (!found) return false;
@@ -3528,7 +3528,7 @@ public class BatchOperationTests
 }
 ```
 
-- [ ] **Step 12.2: Run tests — expect compile failure**
+- [ ] **Step 12.2: Run tests, expect compile failure**
 
 - [ ] **Step 12.3: Implement BatchOperation**
 
@@ -3706,7 +3706,7 @@ internal static class Program
         if (singleFilePath != null)
             WarnOrphanedTempFiles(Path.GetDirectoryName(singleFilePath) ?? ".");
 
-        // Dispatch — top-level catch maps unhandled exceptions to documented exit codes.
+        // Dispatch, top-level catch maps unhandled exceptions to documented exit codes.
         try
         {
             if (ContainsFlag(args, "--dir"))
@@ -3855,7 +3855,7 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("""
-            clipmetascribe — MP4 metadata tagger for game clips
+            clipmetascribe, MP4 metadata tagger for game clips
 
             Usage:
               clipmetascribe <file.mp4> --list
@@ -4263,7 +4263,7 @@ dotnet build clipmetascribe/clipmetascribe.csproj
 ```
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)`
 
-- [ ] **Step 13.7: Smoke test — run against a real clip**
+- [ ] **Step 13.7: Smoke test, run against a real clip**
 
 ```powershell
 $clip = Get-ChildItem "testclips/pristine" -Filter "*.mp4" | Select-Object -First 1 -ExpandProperty FullName
@@ -4277,7 +4277,7 @@ dotnet run --project clipmetascribe -- $clip --list
 ```
 Expected: second run shows `game: Team Fortress 2`.
 
-**Important:** These commands modify testclips/pristine — run only against a scratch copy. Update the smoke test to use scratch:
+**Important:** These commands modify testclips/pristine, run only against a scratch copy. Update the smoke test to use scratch:
 ```powershell
 $pristine = Get-ChildItem "testclips/pristine" -Filter "*.mp4" | Select-Object -First 1 -ExpandProperty FullName
 $scratch = "testclips/scratch/smoke_test.mp4"
@@ -4310,14 +4310,14 @@ git commit -m "feat: implement clipmetascribe CLI with write/list/stats/vocab/fi
 
 ## Task 14: Final Verification (Definition of Done)
 
-- [ ] **Step 14.1: Full build — zero errors, zero warnings**
+- [ ] **Step 14.1: Full build, zero errors, zero warnings**
 
 ```powershell
 dotnet build
 ```
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)` across all projects.
 
-- [ ] **Step 14.2: Full test run — all tests pass**
+- [ ] **Step 14.2: Full test run, all tests pass**
 
 ```powershell
 dotnet test --logger "console;verbosity=normal"
@@ -4381,7 +4381,7 @@ Note: `Select-String -Path "*/*.csproj"` only searches one level deep and misses
 
 ```powershell
 git add -A
-git commit -m "feat: Round 2 complete — ClipMeta.Core, Mp4Writer, clipmetascribe CLI all shipping"
+git commit -m "feat: Round 2 complete, ClipMeta.Core, Mp4Writer, clipmetascribe CLI all shipping"
 ```
 
 ---
@@ -4397,7 +4397,7 @@ Sections checked against the spec (`2026-05-21-clipmeta-core-write-engine-design
 | 3. Tag schema, domain, fields, pipe delimiter, normalization | Tasks 2, 9 |
 | 4. Write pipeline (temp file → verify → File.Replace) | Task 10 |
 | 4. Three write scenarios (update/append/create) | Task 10 |
-| 4. free box padding | Not yet a task — **see below** |
+| 4. free box padding | Not yet a task, **see below** |
 | 4. stco/co64 ALL tracks adjusted | Task 10 (Mp4Writer walks all trak) |
 | 4. Fragmented MP4 detection | Task 10 |
 | 4. File lock detection | Task 10 |
@@ -4420,7 +4420,7 @@ Sections checked against the spec (`2026-05-21-clipmeta-core-write-engine-design
 | 9. SearchIndexTests | Task 11 |
 | 10. Critical implementation notes (8 risks) | Tasks 7, 10, 9 |
 
-**Gap identified:** `free` box padding (512 bytes after ilst on first write) — spec section 4, paragraph "free Box Padding". This was omitted from the plan tasks. Adding it here:
+**Gap identified:** `free` box padding (512 bytes after ilst on first write), spec section 4, paragraph "free Box Padding". This was omitted from the plan tasks. Adding it here:
 
 ### Supplemental: free Box Padding
 
@@ -4428,7 +4428,7 @@ After writing ilst content on the first clipmeta write, append a 512-byte `free`
 
 **Two code paths require this change:**
 
-**Path 1 — Append/Update scenario (WriteIlst):** After writing all ilst atoms, check if this is a first write:
+**Path 1, Append/Update scenario (WriteIlst):** After writing all ilst atoms, check if this is a first write:
 ```csharp
 // Append free box padding on first clipmeta write to avoid future stco adjustments
 bool firstWrite = !existingIlstChildren.Any(c =>
@@ -4441,7 +4441,7 @@ if (firstWrite)
 }
 ```
 
-**Path 2 — Create scenario (WriteNewUdtaChain):** Always a first write; add free box after ilst and account for it in `ilstSize`:
+**Path 2, Create scenario (WriteNewUdtaChain):** Always a first write; add free box after ilst and account for it in `ilstSize`:
 ```csharp
 byte[] ilstBytes = ilstBuf.ToArray();
 uint ilstSize = (uint)(8 + ilstBytes.Length + FreePaddingSize); // include free box in ilst size
@@ -4455,7 +4455,7 @@ BigEndianWriter.WriteBoxHeader(metaWriter, FreePaddingSize, "free");
 metaWriter.Write(new byte[FreePaddingSize - 8]);
 ```
 
-Also update `CalculateNewMoovSize` — the Create scenario constant already adds 52 bytes for the udta+meta+hdlr chain; add `FreePaddingSize` to it as well:
+Also update `CalculateNewMoovSize`, the Create scenario constant already adds 52 bytes for the udta+meta+hdlr chain; add `FreePaddingSize` to it as well:
 ```csharp
 if (scenario == WriteScenario.Create && FindIlst(root) == null)
 {

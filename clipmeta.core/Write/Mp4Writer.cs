@@ -14,7 +14,7 @@ namespace ClipMetaCore.Write;
 /// <list type="number">
 ///   <item>Parse the source file into a <see cref="BoxNode"/> tree (read-only).</item>
 ///   <item>Refuse to proceed if the file is fragmented (moof boxes) or if the parser could not
-///       account for every byte of the file — see <see cref="VerifyParseAccountsForWholeFile"/>.
+///       account for every byte of the file, see <see cref="VerifyParseAccountsForWholeFile"/>.
 ///       Writing from an incomplete parse tree would silently drop the unparsed bytes,
 ///       which can include the entire mdat (the actual video/audio data).</item>
 ///   <item>Predict the new moov size and derive <c>delta</c> = how many bytes everything
@@ -24,7 +24,7 @@ namespace ClipMetaCore.Write;
 ///       prediction matches the bytes actually produced, or the write aborts.</item>
 ///   <item>Stream the file to a sibling temp file (<c>file.mp4.tmp</c>), copying every box
 ///       verbatim except the moov subtree, which is rebuilt with the mutated metadata and
-///       offset-corrected chunk tables. mdat is never loaded into memory — only stream-copied.</item>
+///       offset-corrected chunk tables. mdat is never loaded into memory, only stream-copied.</item>
 ///   <item>Verify the temp file: its length must equal original + delta, it must re-parse
 ///       cleanly end-to-end, it must contain the same number of mdat boxes as the original,
 ///       and every field we set must read back. See <see cref="VerifyWrite"/>.</item>
@@ -43,7 +43,7 @@ public sealed class Mp4Writer : IMediaWriter
 
     /// <summary>
     /// Runs <paramref name="action"/>, retrying on a transient file-lock failure
-    /// (<see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> — what a sharing
+    /// (<see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>, what a sharing
     /// violation surfaces as) up to <paramref name="maxAttempts"/> times, sleeping
     /// <paramref name="baseDelayMs"/> × attempt between tries. The final failure is rethrown.
     /// Used only for the post-verification atomic swap, where a retry is safe (see call site).
@@ -92,7 +92,7 @@ public sealed class Mp4Writer : IMediaWriter
         {
             throw new IOException(
                 $"'{Path.GetFileName(filePath)}' cannot be opened for tagging. Another " +
-                $"program has it open for writing — if it is still being recorded or " +
+                $"program has it open for writing, if it is still being recorded or " +
                 $"exported, wait for that to finish and try again.", ex);
         }
         return src!;
@@ -107,13 +107,13 @@ public sealed class Mp4Writer : IMediaWriter
     {
         if (mutation.DryRun)
         {
-            logger.Log($"DRY RUN — no files will be modified: {filePath}");
+            logger.Log($"DRY RUN, no files will be modified: {filePath}");
             return;
         }
 
         Normalizer.ApplyToMutation(mutation);
 
-        // Stamp the schema version atom — but only when this write actually stores field values.
+        // Stamp the schema version atom, but only when this write actually stores field values.
         // Delete-only mutations and --clear-all must NOT re-add atoms: "remove all clipmeta
         // metadata" has to mean exactly that. (Normalizer runs first, so a --set with an empty
         // value has already been converted into a delete and won't trigger the stamp.)
@@ -128,8 +128,8 @@ public sealed class Mp4Writer : IMediaWriter
                     ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy), ClipMetaSchema.ProvenanceValue);
         }
 
-        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with —
-        // and FileMode.Create-overwrite — a file the user actually owns, or with a second write
+        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with, 
+        // and FileMode.Create-overwrite, a file the user actually owns, or with a second write
         // running against the same clip at the same time.
         string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
 
@@ -141,7 +141,7 @@ public sealed class Mp4Writer : IMediaWriter
             // Open the source ONCE, for the entire parse-and-copy, with FileShare.Read:
             // other processes may read alongside us but nobody may WRITE while we work.
             // This closes a real race: chunk offsets are captured during the parse and the
-            // bytes are copied afterwards — if a capture tool still recording the file could
+            // bytes are copied afterwards, if a capture tool still recording the file could
             // append between those two steps, the output would index bytes that moved.
             // Holding one deny-writers handle makes parse + copy see a single frozen snapshot;
             // if a recorder already has the file open for writing, this open fails up front
@@ -157,7 +157,7 @@ public sealed class Mp4Writer : IMediaWriter
                 // damaged files), but the WRITER must be strict. It rebuilds the output from the
                 // parse tree, so any byte the parser skipped would simply vanish from the new
                 // file. A corrupt 8-byte box sandwiched between moov and mdat would otherwise
-                // cause the entire mdat — all the video — to be dropped silently. Refuse instead.
+                // cause the entire mdat, all the video, to be dropped silently. Refuse instead.
                 VerifyParseAccountsForWholeFile(root, filePath);
                 logger.LogVerbose($"PARSE {CountBoxes(root)} boxes");
 
@@ -213,7 +213,7 @@ public sealed class Mp4Writer : IMediaWriter
                 // Predict, byte-exactly, how large the rebuilt moov will be. The difference vs
                 // the original moov ("delta") is how far every byte after moov will shift in the
                 // output. Chunk-offset tables (stco/co64) inside moov hold ABSOLUTE file offsets
-                // into mdat, so each of their entries must be corrected by exactly this delta —
+                // into mdat, so each of their entries must be corrected by exactly this delta, 
                 // see WriteAdjustedStco/WriteAdjustedCo64. WriteMoov later asserts that the moov
                 // it actually produced matches this prediction; a mismatch aborts the write
                 // rather than risk patching the offsets by the wrong amount.
@@ -223,8 +223,8 @@ public sealed class Mp4Writer : IMediaWriter
                 logger.LogVerbose($"WRITE delta={delta:+#;-#;0} bytes");
 
                 // Where the original moov ends. Chunk offsets BELOW this point reference data
-                // that sits before/inside moov (the mdat-before-moov layout — common output of
-                // many screen recorders) — that data does not move, so those entries are left
+                // that sits before/inside moov (the mdat-before-moov layout, common output of
+                // many screen recorders), that data does not move, so those entries are left
                 // alone. Layout is detected here from the actual box offsets, never assumed from
                 // the file's source; moov-first and mdat-first files are both handled on merit.
                 long moovEndOffset = GetMoovEndOffset(root);
@@ -232,7 +232,7 @@ public sealed class Mp4Writer : IMediaWriter
                 WriteToTemp(src, tempPath, root, mutation, scenario, ilstChildren, newFields,
                             delta, moovEndOffset, newMoovSize, drop, logger);
 
-                // VERIFICATION STEP 1 — cheap whole-file arithmetic. moov is the only box whose
+                // VERIFICATION STEP 1, cheap whole-file arithmetic. moov is the only box whose
                 // size changed, so the temp file must be exactly (original length + delta) bytes.
                 // This single check catches every "a box was silently dropped" failure mode.
                 long expectedTempLength = (long)root.Size + delta;
@@ -243,7 +243,7 @@ public sealed class Mp4Writer : IMediaWriter
                         $"{actualTempLength} bytes but {expectedTempLength} were expected " +
                         $"(original {root.Size} + delta {delta}). The original file is untouched.");
 
-                // VERIFICATION STEP 2 — full re-parse of the temp file. It must parse cleanly
+                // VERIFICATION STEP 2, full re-parse of the temp file. It must parse cleanly
                 // from first byte to last, contain the same media boxes as the original, and
                 // every field this mutation set must read back. Only after this passes do we
                 // touch the original.
@@ -255,18 +255,18 @@ public sealed class Mp4Writer : IMediaWriter
             // The deny-writers handle must be released BEFORE File.Replace: ReplaceFile needs
             // write/delete access to the destination, which our own open would block. This
             // re-opens a microscopic window where another process could grab the file between
-            // the close and the swap — but by now the temp file is fully written and verified,
+            // the close and the swap, but by now the temp file is fully written and verified,
             // so the worst case is the swap failing with an IOException (original untouched),
             // never a torn output.
             //
             // Retry the swap briefly on a transient sharing violation. By this point the temp is
-            // fully written and verified, so retrying the atomic swap weakens no guarantee — it
+            // fully written and verified, so retrying the atomic swap weakens no guarantee, it
             // only rides out a momentary lock, which on Windows is common: antivirus or the
             // Search indexer grabs a just-written file (the temp, or the destination right after
             // a recorder finished it) for a second or two. Without this, tagging a freshly
             // created clip intermittently failed with "being used by another process" even though
             // nothing was wrong. If every attempt still fails, the last exception propagates and
-            // the original file is untouched — fail safe, exactly as before.
+            // the original file is untouched, fail safe, exactly as before.
             RetryOnTransientLock(
                 () => File.Replace(tempPath, filePath, destinationBackupFileName: mutation.BackupPath),
                 MaxReplaceAttempts, ReplaceBackoffMs,
@@ -290,15 +290,15 @@ public sealed class Mp4Writer : IMediaWriter
     // ── Orphaned schema stamp + empty-chain removal ────────────────────────────
 
     /// <summary>Which now-empty containers this write should drop (innermost first).</summary>
-    /// <param name="Ilst">The post-mutation ilst would hold zero atoms — omit it.</param>
-    /// <param name="Meta">With ilst gone, meta would hold only its hdlr — omit it too.</param>
-    /// <param name="Udta">With meta gone, udta would be empty — omit the whole chain.</param>
+    /// <param name="Ilst">The post-mutation ilst would hold zero atoms, omit it.</param>
+    /// <param name="Meta">With ilst gone, meta would hold only its hdlr, omit it too.</param>
+    /// <param name="Udta">With meta gone, udta would be empty, omit the whole chain.</param>
     private readonly record struct EmptyChainRemoval(bool Ilst, bool Meta, bool Udta);
 
     /// <summary>
     /// If this mutation removes the LAST user clipmeta field, schedules the schema-version
     /// stamp for deletion as well. The stamp exists to version real metadata; once no user
-    /// field remains it is pure residue — without this, every write→clear cycle left ~80
+    /// field remains it is pure residue, without this, every write→clear cycle left ~80
     /// bytes behind and "has clipmeta ever touched this file" stopped being answerable.
     /// Runs after appends are folded into <see cref="MetadataMutation.SetFields"/>.
     /// </summary>
@@ -308,7 +308,7 @@ public sealed class Mp4Writer : IMediaWriter
         string taggedByKey = ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy);
         string domainPrefix = ClipMetaSchema.Domain + ":";
 
-        // Neither bookkeeping stamp (schema, tagged_by) counts as a "user" field — both may sit in
+        // Neither bookkeeping stamp (schema, tagged_by) counts as a "user" field, both may sit in
         // SetFields, added by the conditional stamps above.
         bool IsBookkeeping(string key) =>
             key.Equals(schemaKey, StringComparison.Ordinal) ||
@@ -337,7 +337,7 @@ public sealed class Mp4Writer : IMediaWriter
             return;
 
         // No user fields after this write: the bookkeeping stamps are orphaned. ClearAll already
-        // sweeps them; delete-only mutations need them added explicitly. (Harmless if absent —
+        // sweeps them; delete-only mutations need them added explicitly. (Harmless if absent, 
         // deleting a nonexistent field is a no-op.)
         mutation.DeleteFields.Add(schemaKey);
         mutation.DeleteFields.Add(taggedByKey);
@@ -429,10 +429,10 @@ public sealed class Mp4Writer : IMediaWriter
     /// <param name="src">
     /// The source stream the file was PARSED from, still open. Reusing the same deny-writers
     /// handle (rather than re-opening the path) guarantees the bytes we copy are the bytes the
-    /// parse described — no other process can have modified the file in between.
+    /// parse described, no other process can have modified the file in between.
     /// </param>
     /// <param name="predictedMoovSize">
-    /// The moov size computed by <see cref="CalculateNewMoovSize"/> — the value the stco/co64
+    /// The moov size computed by <see cref="CalculateNewMoovSize"/>, the value the stco/co64
     /// delta was derived from. <see cref="WriteMoov"/> hard-fails if the moov it builds does
     /// not match this exactly.
     /// </param>
@@ -461,7 +461,7 @@ public sealed class Mp4Writer : IMediaWriter
     /// Rebuilds the moov box into an in-memory buffer, then writes it to the destination.
     /// Buffering first is what lets us (a) know the final size before emitting the 8-byte
     /// header, and (b) assert that size against the prediction BEFORE anything is committed.
-    /// moov is metadata-only and small (KBs to low MBs), so buffering it is safe — unlike mdat,
+    /// moov is metadata-only and small (KBs to low MBs), so buffering it is safe, unlike mdat,
     /// which is never buffered.
     /// </summary>
     private static void WriteMoov(
@@ -476,7 +476,7 @@ public sealed class Mp4Writer : IMediaWriter
         foreach (var child in moov.Children)
         {
             if (child.Type == "udta" && drop.Udta)
-                // The whole chain emptied out — the udta is not rebuilt at all.
+                // The whole chain emptied out, the udta is not rebuilt at all.
                 continue;
             if (child.Type == "trak")
                 // trak is rebuilt (not copied) because its stbl subtree holds the
@@ -496,8 +496,8 @@ public sealed class Mp4Writer : IMediaWriter
 
         // THE CRITICAL ASSERT. The stco/co64 entries inside moovBuf were just shifted by a
         // delta that assumed the new moov would be exactly predictedMoovSize bytes. If the
-        // bytes we actually produced disagree — any future bug in the size calculation, an
-        // exotic box layout we mis-accounted, anything — those chunk offsets are wrong and
+        // bytes we actually produced disagree, any future bug in the size calculation, an
+        // exotic box layout we mis-accounted, anything, those chunk offsets are wrong and
         // the file would play garbage. Failing here costs nothing (temp file is discarded);
         // proceeding would corrupt the clip silently.
         long actualMoovSize = 8 + moovBuf.Length;
@@ -505,7 +505,7 @@ public sealed class Mp4Writer : IMediaWriter
             throw new InvalidDataException(
                 $"Internal size mismatch: rebuilt moov is {actualMoovSize} bytes but " +
                 $"{predictedMoovSize} were predicted; chunk offsets would be corrupted. " +
-                $"Write aborted — the original file is untouched.");
+                $"Write aborted, the original file is untouched.");
 
         BigEndianWriter.WriteBoxHeader(dst, (uint)actualMoovSize, "moov");
         moovBuf.Position = 0;
@@ -612,7 +612,7 @@ public sealed class Mp4Writer : IMediaWriter
             uint original = BigEndianReader.ReadUInt32(src);
             if ((long)original < moovEndOffset)
             {
-                // Chunk is before moov end — mdat did not move, no adjustment needed.
+                // Chunk is before moov end, mdat did not move, no adjustment needed.
                 BigEndianWriter.WriteUInt32(cw, original);
                 continue;
             }
@@ -650,7 +650,7 @@ public sealed class Mp4Writer : IMediaWriter
             ulong original = BigEndianReader.ReadUInt64(src);
             if ((long)original < moovEndOffset)
             {
-                // Chunk is before moov end — mdat did not move, no adjustment needed.
+                // Chunk is before moov end, mdat did not move, no adjustment needed.
                 BigEndianWriter.WriteUInt64(cw, original);
                 continue;
             }
@@ -681,7 +681,7 @@ public sealed class Mp4Writer : IMediaWriter
         foreach (var child in udta.Children)
         {
             if (child.Type == "meta" && drop.Meta)
-                // meta held only its hdlr + the now-empty ilst — drop it entirely.
+                // meta held only its hdlr + the now-empty ilst, drop it entirely.
                 continue;
             if (child.Type == "meta")
                 WriteMeta(src, udtaWriter, child, mutation, scenario, existingIlstChildren, newFields, drop);
@@ -761,7 +761,7 @@ public sealed class Mp4Writer : IMediaWriter
         foreach (var child in meta.Children)
         {
             if (child.Type == "ilst" && drop.Ilst)
-                // The ilst would be empty — omit it, keeping the meta's hdlr (so a future
+                // The ilst would be empty, omit it, keeping the meta's hdlr (so a future
                 // tag still has a valid mdir-handler meta to write into).
                 continue;
             if (child.Type == "ilst")
@@ -949,14 +949,14 @@ public sealed class Mp4Writer : IMediaWriter
                 delta += 53; // udta(8) + meta(8) + meta FullBox prefix(4) + hdlr(8+4+21=33) = 53
             else if (!hasMeta)
                 delta += 45; // meta(8) + meta FullBox prefix(4) + hdlr(8+4+21=33) = 45
-            // else: udta+meta exist, no ilst — WriteMeta synthesizes a new ilst via WriteNewIlst; delta = newIlstSize covers it.
+            // else: udta+meta exist, no ilst, WriteMeta synthesizes a new ilst via WriteNewIlst; delta = newIlstSize covers it.
         }
 
         return oldMoovSize + delta + headerSizeDelta;
     }
 
     /// <summary>
-    /// On-disk size of the outermost container the empty-chain removal drops — the exact number
+    /// On-disk size of the outermost container the empty-chain removal drops, the exact number
     /// of bytes moov loses. udta &gt; meta &gt; ilst, matching how far up
     /// <see cref="DetermineEmptyChainRemoval"/> found it safe to remove.
     /// </summary>
@@ -997,7 +997,7 @@ public sealed class Mp4Writer : IMediaWriter
         foreach (var (key, val) in newFields)
         {
             // Skip only when an existing atom for this key will actually be preserved or updated
-            // in the first loop above. A cleared (ClearAll) or deleted atom was skipped there —
+            // in the first loop above. A cleared (ClearAll) or deleted atom was skipped there, 
             // WriteIlst will still append the new value, so it must be counted here.
             bool existingHandledInFirstLoop = existing.Any(c =>
                 c.EditableKey == key &&
@@ -1036,10 +1036,10 @@ public sealed class Mp4Writer : IMediaWriter
     /// </summary>
     /// <remarks>
     /// <para>The parser stops (rather than throws) when it meets a box it cannot make sense of
-    /// — e.g. a size field smaller than the 8-byte header, or a 64-bit size that overflows.
+    ///, e.g. a size field smaller than the 8-byte header, or a 64-bit size that overflows.
     /// That leniency is correct for *viewing* (show what you can), but fatal for *writing*:
-    /// the writer emits only the boxes in the tree, so unparsed trailing bytes — which may be
-    /// the entire mdat if the corrupt box sits between moov and mdat — would silently
+    /// the writer emits only the boxes in the tree, so unparsed trailing bytes, which may be
+    /// the entire mdat if the corrupt box sits between moov and mdat, would silently
     /// disappear from the output.</para>
     /// <para>Two conditions are enforced here:</para>
     /// <list type="bullet">
@@ -1047,7 +1047,7 @@ public sealed class Mp4Writer : IMediaWriter
     ///       the first starts at byte 0, and the last ends at the final byte.</item>
     ///   <item>No box anywhere in the tree may have been size-clamped by the parser. A clamped
     ///       box means its size field claims more bytes than its container holds (typical of a
-    ///       truncated download) — its on-disk header is lying, and copying it verbatim would
+    ///       truncated download), its on-disk header is lying, and copying it verbatim would
     ///       reproduce the lie around content we cannot vouch for.</item>
     /// </list>
     /// </remarks>
@@ -1058,7 +1058,7 @@ public sealed class Mp4Writer : IMediaWriter
     /// <summary>
     /// Public entry to the whole-file-accounting gate, so callers that adopt a file as
     /// authoritative (e.g. <see cref="ClipBackup.Restore"/> validating a backup before swapping
-    /// it over the live clip) apply the SAME strictness the writer does before a write — the
+    /// it over the live clip) apply the SAME strictness the writer does before a write, the
     /// parse must tile the whole file and contain no size-clamped (truncated) box.
     /// </summary>
     /// <param name="root">Parse tree from <see cref="Mp4Parser.ParseFile"/>.</param>
@@ -1084,8 +1084,8 @@ public sealed class Mp4Writer : IMediaWriter
             throw new UnsupportedFormatException(
                 $"'{Path.GetFileName(filePath)}' contains {(long)root.Size - covered} bytes at " +
                 $"offset {covered} that could not be parsed as MP4 boxes (likely a corrupt box " +
-                $"header). Refusing to rewrite the file because those bytes — possibly the " +
-                $"entire video data — would be lost.");
+                $"header). Refusing to rewrite the file because those bytes, possibly the " +
+                $"entire video data, would be lost.");
 
         var clamped = FindNode(root, n => n.WasClamped);
         if (clamped != null)

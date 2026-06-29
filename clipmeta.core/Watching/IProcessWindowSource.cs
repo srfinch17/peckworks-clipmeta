@@ -10,7 +10,7 @@ public interface IProcessWindowSource
     /// <summary>
     /// Returns one <see cref="ProcessWindow"/> per running process whose name matches one of
     /// <paramref name="processNames"/> (case-insensitive) and has a non-empty main-window title.
-    /// Implementations MUST NOT throw for a single inaccessible or exited process — skip and
+    /// Implementations MUST NOT throw for a single inaccessible or exited process, skip and
     /// continue.
     /// </summary>
     IReadOnlyList<ProcessWindow> GetPlayerWindows(IReadOnlyCollection<string> processNames);

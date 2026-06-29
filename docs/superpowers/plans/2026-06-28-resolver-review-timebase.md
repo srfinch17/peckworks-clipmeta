@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the review-mode resolver so a foreign media player (open *or* recently closed) can never blank a legitimate in-library candidate, and make `library_flush_queue`'s `written` authoritative — closing the two HIGH findings + §4.4 from the v1.5.0 dogfood.
+**Goal:** Fix the review-mode resolver so a foreign media player (open *or* recently closed) can never blank a legitimate in-library candidate, and make `library_flush_queue`'s `written` authoritative, closing the two HIGH findings + §4.4 from the v1.5.0 dogfood.
 
 **Architecture:** `WatchingResolver.ResolveReview` currently derives BOTH the foreign-player diagnostics and the "which clip did you watch" binding from one synthetic window built from a possibly-closed/foreign segment. Split the time-bases: diagnostics + gaming/access come from a **live** player poll; the review bind is resolved separately from the chosen segment (reusing `ResolveCore` over a context that shares the already-enumerated library). `anyLiveTarget` is recomputed from the final candidate list so `anyLiveTarget:true`+`candidates:[]` is impossible by construction. Separately, `library_queue_tag` wakes the background drain pump only for *locked* clips, so an unlocked queued tag lands via the foreground flush and reports under `written`.
 
@@ -11,14 +11,14 @@
 ## Global Constraints
 
 - **Zero external NuGet packages** in `clipmeta.core`, `clipmetascribe`, `clipmetamcp` (test projects may use MSTest only). Copy verbatim from CLAUDE.md.
-- **CLIs/MCP are thin shells** — no business logic outside Core. The fix lives in `ClipMetaCore.Watching`; `clipmetamcp` only gets test additions + a one-line wake guard.
+- **CLIs/MCP are thin shells**, no business logic outside Core. The fix lives in `ClipMetaCore.Watching`; `clipmetamcp` only gets test additions + a one-line wake guard.
 - **Big-endian everywhere** for MP4 IO (not touched here, but never use raw `BinaryReader`).
 - **Build gate:** `dotnet build --nologo -v q` → 0 warnings, 0 errors, all projects.
-- **Test gate:** `dotnet test --nologo --no-build -v q` → all pass, incl. real-clip integration + media-integrity. `clipmetascribe.Tests` takes a few minutes — use a long timeout, it is not a hang.
+- **Test gate:** `dotnet test --nologo --no-build -v q` → all pass, incl. real-clip integration + media-integrity. `clipmetascribe.Tests` takes a few minutes, use a long timeout, it is not a hang.
 - **Changed an MCP tool registration or CLI surface?** Run the FULL relevant test project, never a `--filter` (surface-wide assertions live outside the diff). This pass changes NO tool surface, but the version-bump task still runs the full `clipmetamcp.Tests`.
 - **XML doc comments** on all public types/methods; named constants, no magic numbers.
-- **Version target:** clipmetamcp **v1.6.0** (csproj + `tools/mcpb-manifest.json` must match — pack gate enforces equality).
-- New gotchas go in `docs/PITFALLS.md`. The `.mcpb` is git-ignored — repack but do not commit it.
+- **Version target:** clipmetamcp **v1.6.0** (csproj + `tools/mcpb-manifest.json` must match, pack gate enforces equality).
+- New gotchas go in `docs/PITFALLS.md`. The `.mcpb` is git-ignored, repack but do not commit it.
 
 **Spec:** `docs/superpowers/specs/2026-06-28-resolver-review-timebase-design.md` (§ references below point there).
 
@@ -26,7 +26,7 @@
 
 ### Task 1: Split the time-bases in `ResolveReview` (live diagnostics, historical binding)
 
-This is the core fix (spec §3). It folds in two small scaffolding pieces — a `WatchContext.WithPlayerWindows` helper (so the library is enumerated once, not twice) and an extracted `IsLiveTarget` predicate shared with `ResolveCore` — then rewrites `ResolveReview`.
+This is the core fix (spec §3). It folds in two small scaffolding pieces, a `WatchContext.WithPlayerWindows` helper (so the library is enumerated once, not twice) and an extracted `IsLiveTarget` predicate shared with `ResolveCore`, then rewrites `ResolveReview`.
 
 **Files:**
 - Modify: `clipmeta.core/Watching/WatchContext.cs` (add `WithPlayerWindows`)
@@ -37,8 +37,8 @@ This is the core fix (spec §3). It folds in two small scaffolding pieces — a 
 **Interfaces:**
 - Consumes: `WatchContext.Build(string, IReadOnlyList<ProcessWindow>, SelfActionLedger?)`, `WatchContext.{LibraryClips,ByFileName,ByFullPath,PlayerWindows,KnownBaselinePaths,Ledger}`, `LibraryTitleMatcher.FindBestMatch(string?, IEnumerable<string>)`, `ReviewBindingResolver.Resolve(...)`, `ReviewFlagResolver.Resolve(IReadOnlyList<ReviewFlag>, WatchContext)`, `WatchingCandidate` record, `PlayerTitleSignal.SourceName`, `RecentWriteSignal.SourceName`.
 - Produces:
-  - `WatchContext WithPlayerWindows(IReadOnlyList<ProcessWindow> playerWindows)` — a new context sharing this one's enumerated library/baseline/ledger but with a different window set.
-  - `WatchingResolver.IsLiveTarget(WatchingCandidate)` (private static) — the single liveness predicate.
+  - `WatchContext WithPlayerWindows(IReadOnlyList<ProcessWindow> playerWindows)`, a new context sharing this one's enumerated library/baseline/ledger but with a different window set.
+  - `WatchingResolver.IsLiveTarget(WatchingCandidate)` (private static), the single liveness predicate.
   - Rewritten `ResolveReview(...)` with the same public signature and return type (`WatchingResult`).
 
 - [ ] **Step 1: Write the failing `WithPlayerWindows` test**
@@ -71,7 +71,7 @@ public void WithPlayerWindows_ReusesLibrary_SwapsWindows()
 - [ ] **Step 2: Run it to confirm it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter WithPlayerWindows_ReusesLibrary_SwapsWindows`
-Expected: FAIL — `WatchContext` has no `WithPlayerWindows`.
+Expected: FAIL, `WatchContext` has no `WithPlayerWindows`.
 
 - [ ] **Step 3: Add `WithPlayerWindows` to `WatchContext`**
 
@@ -81,8 +81,8 @@ In `clipmeta.core/Watching/WatchContext.cs`, after the second `Build` overload (
 /// <summary>
 /// Returns a context that REUSES this one's already-enumerated library, baseline, and ledger but
 /// resolves against a different set of <paramref name="playerWindows"/>. Review-mode resolution uses
-/// this to ask the same library two questions with two window sets — "what is open live?" and "which
-/// recorded title did the user describe?" — without paying for a second library enumeration.
+/// this to ask the same library two questions with two window sets, "what is open live?" and "which
+/// recorded title did the user describe?", without paying for a second library enumeration.
 /// </summary>
 /// <param name="playerWindows">The window set the returned context resolves against.</param>
 public WatchContext WithPlayerWindows(IReadOnlyList<ProcessWindow> playerWindows)
@@ -110,7 +110,7 @@ Expected: PASS.
 In `clipmeta.core/Watching/WatchingResolver.cs`, replace the inline `anyLiveTarget` computation in `ResolveCore` (the block currently at ~lines 298-304):
 
 ```csharp
-// #3 — a live target is one a player named, one currently locked, OR a confidently just-saved
+// #3, a live target is one a player named, one currently locked, OR a confidently just-saved
 // clip (gaming mode, Policy A). When false, every candidate is an unverified recency guess and
 // the caller must confirm before tagging.
 bool anyLiveTarget = finalCandidates.Any(c =>
@@ -122,7 +122,7 @@ bool anyLiveTarget = finalCandidates.Any(c =>
 with a call to a new shared predicate:
 
 ```csharp
-// #3 — a live target is one a player named, one currently locked, OR a confidently just-saved
+// #3, a live target is one a player named, one currently locked, OR a confidently just-saved
 // clip (gaming mode, Policy A). When false, every candidate is an unverified recency guess and
 // the caller must confirm before tagging. Shared with ResolveReview so the two paths cannot drift.
 bool anyLiveTarget = finalCandidates.Any(IsLiveTarget);
@@ -158,7 +158,7 @@ In `clipmetascribe.Tests/ResolveReviewTests.cs`, add a live-seeded resolver help
 private static WatchingResolver ResolverWithLive(params ProcessWindow[] live) =>
     WatchingResolver.CreateDefault(new FakeProcessWindowSource(live));
 
-// A title naming a file that is NOT in the test library — an "outside the library" player.
+// A title naming a file that is NOT in the test library, an "outside the library" player.
 private const string ForeignTitle =
     @"C:\Outside\Team Fortress 2 2026.01.20 - 21.41.04.189.DVR.mp4 - VLC media player";
 ```
@@ -187,7 +187,7 @@ public void ResolveReview_ForeignPlayerOpen_FreshSave_SurfacesGamingCandidate()
 [TestMethod]
 public void ResolveReview_ForeignPlayerClosed_FreshSave_NoGhostWarning()
 {
-    // §4.2a (ghost): the foreign player is CLOSED — it survives only as a closed segment in history,
+    // §4.2a (ghost): the foreign player is CLOSED, it survives only as a closed segment in history,
     // with NO live window. It must not be replayed as an open player; the fresh save still surfaces.
     string saved = Touch("saved.mp4");
     var closedForeign = new[] { new TitleSegment(1, "vlc", ForeignTitle, T0, T0.AddSeconds(5)) };
@@ -243,7 +243,7 @@ public void ResolveReview_Invariant_AnyLiveTargetImpliesCandidatesPresent()
 - [ ] **Step 8: Run the new tests to confirm they FAIL against current code**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ResolveReview_ForeignPlayer`
-Expected: FAIL — today `ResolveReview` strips the `recent_write` candidate (so candidates are empty) and replays the foreign segment as a synthetic window (so `UnresolvedPlayers` is non-empty / a ghost). This failure is the bug.
+Expected: FAIL, today `ResolveReview` strips the `recent_write` candidate (so candidates are empty) and replays the foreign segment as a synthetic window (so `UnresolvedPlayers` is non-empty / a ghost). This failure is the bug.
 
 - [ ] **Step 9: Rewrite `ResolveReview`**
 
@@ -259,7 +259,7 @@ public WatchingResult ResolveReview(
 
     // TIME-BASE 1 (live reality): diagnostics, wrong-directory suppression, gaming (recent_write)
     // and access fallback all reflect what is open RIGHT NOW. A player closed a turn ago is simply
-    // absent here — so it can raise no "do not tag" warning (the ghost) and skew no suppression.
+    // absent here, so it can raise no "do not tag" warning (the ghost) and skew no suppression.
     WatchContext liveContext = WatchContext.Build(libraryRoot, _windowSource.GetPlayerWindows(_playerNames), _ledger);
     WatchingResult core = ResolveCore(liveContext, limit, includeAccessFallback);
 
@@ -269,7 +269,7 @@ public WatchingResult ResolveReview(
 
     // TIME-BASE 2 (history): which recorded title did the user describe? Resolve the chosen segment
     // against the SAME (already-enumerated) library. Only when it resolves to a single in-library
-    // player-title candidate is it a real "what you watched" bind — and then it IS the answer, so a
+    // player-title candidate is it a real "what you watched" bind, and then it IS the answer, so a
     // background save (recent_write) and recency guesses are noise and drop out. When the chosen
     // segment is foreign/closed/unresolved, there is no bind: the live `core` result stands, so a
     // fresh game-save (Policy A) survives and a live foreign player demotes to an advisory downstream.
@@ -298,7 +298,7 @@ public WatchingResult ResolveReview(
         }
     }
 
-    // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first. Nothing
+    // #2 cap: when two or more players are open, the bind is ambiguous, force confirm-first. Nothing
     // is an auto-tag target and no candidate may read high, even a locked one.
     bool multiPlayer = binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive);
     if (multiPlayer)
@@ -317,7 +317,7 @@ public WatchingResult ResolveReview(
 }
 ```
 
-Note: the old `core.Candidates.Where(c => c.Source != RecentWriteSignal.SourceName)` strip and the `core.AnyLiveTarget || confident` line are intentionally gone — replaced by the bind-overlay and the derived `anyLive`.
+Note: the old `core.Candidates.Where(c => c.Source != RecentWriteSignal.SourceName)` strip and the `core.AnyLiveTarget || confident` line are intentionally gone, replaced by the bind-overlay and the derived `anyLive`.
 
 - [ ] **Step 10: Run the new tests to confirm they PASS**
 
@@ -330,13 +330,13 @@ Expected: PASS.
 - [ ] **Step 11: Run the FULL `ResolveReviewTests` + binding/flag suites to confirm no regression**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "ResolveReview|ReviewBinding|ReviewFlag|WatchingResolver|WatchContext"`
-Expected: PASS — all pre-existing review/binding/flag/resolver tests stay green (their `binding.Chosen` resolves in-library, so the overlay reproduces today's bind; cold-start and multi-player paths are behaviorally unchanged).
+Expected: PASS, all pre-existing review/binding/flag/resolver tests stay green (their `binding.Chosen` resolves in-library, so the overlay reproduces today's bind; cold-start and multi-player paths are behaviorally unchanged).
 
 - [ ] **Step 12: Commit**
 
 ```bash
 git add clipmeta.core/Watching/WatchContext.cs clipmeta.core/Watching/WatchingResolver.cs clipmetascribe.Tests/ResolveReviewTests.cs clipmetascribe.Tests/WatchContextTests.cs
-git commit -m "fix(resolver): split review-mode time-bases — live diagnostics, historical binding
+git commit -m "fix(resolver): split review-mode time-bases, live diagnostics, historical binding
 
 ResolveReview derived both the foreign-player diagnostics and the watched-clip
 bind from one synthetic window built from a possibly-closed/foreign segment.
@@ -350,11 +350,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: §4.4 — wake the drain pump only for locked clips so `written` is authoritative
+### Task 2: §4.4, wake the drain pump only for locked clips so `written` is authoritative
 
 Spec §4. `library_queue_tag` wakes the purely event-driven `QueueDrainPump` unconditionally, so it drains an *unlocked* clip immediately and books it under `autoFlushed` before an explicit `library_flush_queue` runs (which then reports `written:[]`). Wake only when the clip is locked.
 
-**Why a new harness method:** the existing MCP queue tests (`QueueToolsTests.cs`) all run via `McpHarness.Run`, which wires `pump: null` — so they never exercise the production pump path, and the §4.4 bug (and its fix) is invisible to them. This task adds a `RunWithPump` harness method (mirroring the existing `RunWithJournal` / `RunWithLedger`) that wires a real `QueueDrainPump` + `DrainJournal`, closing that coverage gap. The deterministic assertion is the UNLOCKED case: post-fix the pump is never woken, so the background thread stays idle (its `WaitAny` never fires) and the explicit flush lands the tag in `written`.
+**Why a new harness method:** the existing MCP queue tests (`QueueToolsTests.cs`) all run via `McpHarness.Run`, which wires `pump: null`, so they never exercise the production pump path, and the §4.4 bug (and its fix) is invisible to them. This task adds a `RunWithPump` harness method (mirroring the existing `RunWithJournal` / `RunWithLedger`) that wires a real `QueueDrainPump` + `DrainJournal`, closing that coverage gap. The deterministic assertion is the UNLOCKED case: post-fix the pump is never woken, so the background thread stays idle (its `WaitAny` never fires) and the explicit flush lands the tag in `written`.
 
 **Files:**
 - Modify: `clipmetamcp/Tools/QueueTools.cs` (the `pump?.Wake();` line in `QueueTag`, ~line 148)
@@ -396,9 +396,9 @@ public static IReadOnlyList<JsonObject> RunWithPump(
 }
 ```
 
-Add `using ClipMetaCore.Write;` to the file if `QueueDrainPump`/`Mp4Writer` types aren't already in scope (they live in `ClipMetaCore.Watching` / `ClipMetaCore.Write` — the test references the pump type only as a parameter, so just the `ClipMetaCore.Watching` using already present suffices for `QueueDrainPump`).
+Add `using ClipMetaCore.Write;` to the file if `QueueDrainPump`/`Mp4Writer` types aren't already in scope (they live in `ClipMetaCore.Watching` / `ClipMetaCore.Write`, the test references the pump type only as a parameter, so just the `ClipMetaCore.Watching` using already present suffices for `QueueDrainPump`).
 
-- [ ] **Step 2: Write the failing test — unlocked queued tag lands in `written`, pump never woken**
+- [ ] **Step 2: Write the failing test, unlocked queued tag lands in `written`, pump never woken**
 
 In `clipmetamcp.Tests/QueueToolsTests.cs`, add (the pump uses the real `LockProbe.IsInUse`; an empty temp `.mp4` is unlocked, so post-fix the pump is never woken and stays idle):
 
@@ -440,14 +440,14 @@ Add any missing usings to `QueueToolsTests.cs`: `using ClipMetaCore.Write;` (for
 - [ ] **Step 3: Run to confirm it fails**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q --filter QueueTag_UnlockedClip_PumpNotWoken_FlushReportsUnderWritten`
-Expected: FAIL — today the pump is woken for the unlocked clip, drains it under `autoFlushed`, and the flush reports `written:[]` (`autoFlushed` count 1).
+Expected: FAIL, today the pump is woken for the unlocked clip, drains it under `autoFlushed`, and the flush reports `written:[]` (`autoFlushed` count 1).
 
 - [ ] **Step 4: Guard the wake on lock state**
 
 In `clipmetamcp/Tools/QueueTools.cs`, in `QueueTag`, replace:
 
 ```csharp
-        // Wake the background pump so it lands THIS tag the instant the player's lock clears — the
+        // Wake the background pump so it lands THIS tag the instant the player's lock clears, the
         // zero-touch flush for the last clip, where no further watched-clip call will drain it.
         pump?.Wake();
 ```
@@ -455,7 +455,7 @@ In `clipmetamcp/Tools/QueueTools.cs`, in `QueueTag`, replace:
 with:
 
 ```csharp
-        // Wake the background pump ONLY for a clip that is currently LOCKED — that is the case the
+        // Wake the background pump ONLY for a clip that is currently LOCKED, that is the case the
         // pump exists for (zero-touch landing when the player closes). An UNLOCKED queued tag is left
         // for the foreground drain (the next watched-clip call or an explicit library_flush_queue) so
         // it reports under `written`, not `autoFlushed`. The pump idles on an event, so not waking it
@@ -472,7 +472,7 @@ Expected: PASS.
 - [ ] **Step 6: Run the FULL queue + pump suites for regressions**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q --filter "Queue"` then `dotnet test clipmetascribe.Tests --nologo -v q --filter "QueueDrainPump|TagQueue"`
-Expected: PASS — the locked-clip zero-touch path (pump still woken when `IsInUse`) is unchanged; the existing `pump:null` queue tests are unaffected.
+Expected: PASS, the locked-clip zero-touch path (pump still woken when `IsInUse`) is unchanged; the existing `pump:null` queue tests are unaffected.
 
 - [ ] **Step 7: Commit**
 
@@ -512,7 +512,7 @@ Expected: both show `1.5.0`. Note the exact element/key names before editing.
 
 Edit `clipmetamcp/clipmetamcp.csproj`: change the version element value `1.5.0` → `1.6.0`.
 Edit `tools/mcpb-manifest.json`: change the `"version"` value `1.5.0` → `1.6.0`.
-(The pack script enforces these two match — keep them identical.)
+(The pack script enforces these two match, keep them identical.)
 
 - [ ] **Step 3: Append PITFALLS entries**
 
@@ -523,19 +523,19 @@ In `docs/PITFALLS.md`, append:
 
 `WatchingResolver.ResolveReview` must answer two questions from two time-bases. "Is a foreign player
 open right now?" (the `player_outside_library` diagnostic + access suppression) MUST come from a LIVE
-player poll — never from `binding.Chosen`'s segment, which may be a player that has since CLOSED.
+player poll, never from `binding.Chosen`'s segment, which may be a player that has since CLOSED.
 Replaying a closed segment as a synthetic window made closed players "ghost" (warn after exit) and,
 combined with the review-mode `recent_write` strip, blanked a valid in-library gaming candidate
 (`anyLiveTarget:true` beside `candidates:[]`). "Which clip did the user describe?" (the bind) is the
 historical question and is resolved separately from the chosen segment. Derive `anyLiveTarget` from
 the FINAL candidate list (shared `IsLiveTarget` predicate) so true-beside-empty is impossible. Pass-6's
 Policy A fix lived in `ResolveCore`; its tests never drove `ResolveReview` with a foreign SEGMENT
-present, so the regression hid — always test the resolver through `ResolveReview` with seeded segments.
+present, so the regression hid, always test the resolver through `ResolveReview` with seeded segments.
 
 ## Queue: wake the drain pump only for locked clips (pass-7)
 
 `library_queue_tag` waking `QueueDrainPump` unconditionally made the (event-driven) pump drain an
-UNLOCKED clip and book it under `autoFlushed` before an explicit `library_flush_queue` ran — so
+UNLOCKED clip and book it under `autoFlushed` before an explicit `library_flush_queue` ran, so
 `flush` reported `written:[]` though the write succeeded. Wake the pump only when `LockProbe.IsInUse`
 is true; an unlocked tag then lands via the foreground drain and reports under `written`. The pump
 idles on an event, so not waking it means no race with the foreground flush.
@@ -546,7 +546,7 @@ idles on an event, so not waking it means no race with the foreground flush.
 Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors, all projects.
 
-- [ ] **Step 5: Full test suite (long timeout — this is the real-clip integration run)**
+- [ ] **Step 5: Full test suite (long timeout, this is the real-clip integration run)**
 
 Run: `dotnet test --nologo --no-build -v q`
 Expected: ALL pass (view 101+, mcp 131+ incl. the new cases, scribe 489+ incl. the new cases), including real-clip integration + media-integrity. Use a multi-minute timeout; `clipmetascribe.Tests` is slow by design, not hung.
@@ -569,7 +569,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## Notes for the executor
 
-- **Out of scope (do NOT implement):** §4.5 recent_write window (verify in the next dogfood first — likely the index-baseline exclusion, not a window bug), §6 (already guarded by CreationTime + SelfActionLedger), incremental indexing, the index-as-primary-identity rework, the v1.0.0 release reset (owner-gated).
-- **Documented follow-up (NOT this pass) — MCP suite never exercises review mode.** During planning I found `McpHarness` wires `watcher: null` everywhere, so every `library_watching` MCP test runs the live-`Resolve` path, never `ResolveReview` — and `ReadTools.Watching` hardcodes `ProcessWindowSource.ForCurrentPlatform()` for the live poll, so an *open* foreign player cannot be injected at the MCP boundary. The §4.1/§4.2 regression is therefore fully covered at the **Core** level (Task 1 drives `ResolveReview` directly), which is where the bug lives. A future pass could (a) add a `RunWithWatcher` harness seam + (b) make the watching handler's live window source injectable, then add the foreign-open advisory (`player_outside_library_ignored`) and foreign-closed no-ghost cases end-to-end. Worth a PITFALLS/spec note next time the MCP watching surface is touched. This is the only finding originally slated as an MCP test task that was descoped — not a gap in the fix, a gap in MCP-level *integration* coverage.
-- **Do not push or open a PR or merge** as part of execution — the owner reviews first and decides the v1.6.0-vs-fold-into-1.0.0 version question after their next dogfood.
-- If any new test cannot be expressed with the existing harness, extend the harness minimally following `ReviewWatcherTests.cs` / the existing MCP harness — never relax an assertion or move logic out of Core to make a test pass.
+- **Out of scope (do NOT implement):** §4.5 recent_write window (verify in the next dogfood first, likely the index-baseline exclusion, not a window bug), §6 (already guarded by CreationTime + SelfActionLedger), incremental indexing, the index-as-primary-identity rework, the v1.0.0 release reset (owner-gated).
+- **Documented follow-up (NOT this pass), MCP suite never exercises review mode.** During planning I found `McpHarness` wires `watcher: null` everywhere, so every `library_watching` MCP test runs the live-`Resolve` path, never `ResolveReview`, and `ReadTools.Watching` hardcodes `ProcessWindowSource.ForCurrentPlatform()` for the live poll, so an *open* foreign player cannot be injected at the MCP boundary. The §4.1/§4.2 regression is therefore fully covered at the **Core** level (Task 1 drives `ResolveReview` directly), which is where the bug lives. A future pass could (a) add a `RunWithWatcher` harness seam + (b) make the watching handler's live window source injectable, then add the foreign-open advisory (`player_outside_library_ignored`) and foreign-closed no-ghost cases end-to-end. Worth a PITFALLS/spec note next time the MCP watching surface is touched. This is the only finding originally slated as an MCP test task that was descoped, not a gap in the fix, a gap in MCP-level *integration* coverage.
+- **Do not push or open a PR or merge** as part of execution, the owner reviews first and decides the v1.6.0-vs-fold-into-1.0.0 version question after their next dogfood.
+- If any new test cannot be expressed with the existing harness, extend the harness minimally following `ReviewWatcherTests.cs` / the existing MCP harness, never relax an assertion or move logic out of Core to make a test pass.

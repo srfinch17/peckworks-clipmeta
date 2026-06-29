@@ -4,7 +4,7 @@ using ClipMetaScribe.Tests.Helpers;
 namespace ClipMetaScribe.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="RecentWriteSignal"/> — the gaming-mode "clip just saved" signal. Timing
+/// Unit tests for <see cref="RecentWriteSignal"/>, the gaming-mode "clip just saved" signal. Timing
 /// is driven by an injected clock and explicit write times so the tests are deterministic.
 /// </summary>
 [TestClass]
@@ -151,7 +151,7 @@ public class RecentWriteSignalTests
 
     /// <summary>
     /// Builds a <see cref="WatchContext"/> from a synthetic clip list, empty baseline, and optional
-    /// ledger — for unit tests that need full predicate control without touching the filesystem.
+    /// ledger, for unit tests that need full predicate control without touching the filesystem.
     /// </summary>
     private static WatchContext ContextWith(
         IReadOnlyList<LibraryClip> clips, IEnumerable<string> baseline, SelfActionLedger? ledger)

@@ -5,7 +5,7 @@ namespace ClipMetaCore.Watching;
 /// titles on a timer and records a <see cref="TitleSegment"/> each time the active title changes, so
 /// <c>library_watching</c> can resolve a tag against what was PLAYING at the user's dictation moment
 /// rather than a fresh "what's open now?" snapshot taken a turn later (the binding race). The hot loop
-/// only reads titles — no library enumeration, no MP4 work — and never writes a file, so it cannot
+/// only reads titles, no library enumeration, no MP4 work, and never writes a file, so it cannot
 /// race any writer. Mirrors the <see cref="QueueDrainPump"/> thread/dispose pattern.
 /// </summary>
 public sealed class ReviewWatcher : IDisposable
@@ -71,7 +71,7 @@ public sealed class ReviewWatcher : IDisposable
 
     /// <summary>
     /// One poll: open a new segment for any player whose title changed, close the segment of any
-    /// player that vanished or changed title. Never throws — a flaky OS read just skips this tick.
+    /// player that vanished or changed title. Never throws, a flaky OS read just skips this tick.
     /// Internal so tests drive it deterministically without the timer.
     /// </summary>
     internal void PollOnce()

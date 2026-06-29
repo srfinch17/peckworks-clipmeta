@@ -13,7 +13,7 @@ internal static class BatchCommand
 {
     /// <summary>
     /// For each path in <paramref name="files"/>, obtains its mutation from
-    /// <paramref name="mutationFor"/> (a <see langword="null"/> result skips the file — e.g. a
+    /// <paramref name="mutationFor"/> (a <see langword="null"/> result skips the file, e.g. a
     /// batch-copy's source) and applies it through the unchanged single-file write-safety chain.
     /// User-error exceptions are reported and counted; the run continues. Prints a summary to
     /// <paramref name="output"/> (default <see cref="Console.Out"/>) and returns <c>0</c> when
@@ -69,7 +69,7 @@ internal static class BatchCommand
 
     /// <summary>
     /// The exception set that represents a per-file <i>user</i> problem (a clip that can't be read,
-    /// is locked, is malformed, or whose value is invalid) — isolated and counted, never aborting
+    /// is locked, is malformed, or whose value is invalid), isolated and counted, never aborting
     /// the batch. Mirrors the catch set <see cref="Program"/> maps for single-file writes. Anything
     /// outside this set is a genuine bug and is allowed to propagate rather than be hidden as a
     /// per-file "failure".

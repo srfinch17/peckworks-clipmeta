@@ -4,7 +4,7 @@ namespace ClipMetaCore.Mp4;
 
 /// <summary>
 /// Static utility for writing big-endian integers and MP4 structural types to a <see cref="BinaryWriter"/>.
-/// Mirrors <see cref="BigEndianReader"/> — every write is the exact inverse of a read.
+/// Mirrors <see cref="BigEndianReader"/>, every write is the exact inverse of a read.
 /// </summary>
 public static class BigEndianWriter
 {

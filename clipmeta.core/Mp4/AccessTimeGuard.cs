@@ -4,7 +4,7 @@ namespace ClipMetaCore.Mp4;
 /// Captures a file's <see cref="File.GetLastAccessTimeUtc(string)"/> on construction and restores
 /// it on <see cref="Dispose"/>, best-effort. ClipMeta's own reads would otherwise bump the access
 /// time and pollute the watched-clip access-time signal. Restoring is itself a metadata write that
-/// can fail (file locked by a player, read-only, removed); such failures are swallowed — preserving
+/// can fail (file locked by a player, read-only, removed); such failures are swallowed, preserving
 /// the signal must never break a read.
 /// </summary>
 public readonly struct AccessTimeGuard : IDisposable

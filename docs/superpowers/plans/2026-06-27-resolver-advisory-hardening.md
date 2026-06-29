@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the v1.4.0 dogfood's three resolution defects — a foreign player no longer hides a fresh gaming save (#1), `multiplePlayersActive` fires whenever two players are open and caps confidence (#2), and review advisories show clean, deduped library names (#6).
+**Goal:** Fix the v1.4.0 dogfood's three resolution defects, a foreign player no longer hides a fresh gaming save (#1), `multiplePlayersActive` fires whenever two players are open and caps confidence (#2), and review advisories show clean, deduped library names (#6).
 
 **Architecture:** Three small, isolated changes. #1 adds a one-clause exception to the foreign-player suppression in `WatchingResolver.ResolveCore` plus a pure warning/advisory decision helper in `ReadTools`. #2 widens a boolean in `ReviewBindingResolver.ComputeHeuristic` and adds a confidence cap in `WatchingResolver.ResolveReview`. #6 adds a pure `ReviewFlagResolver` (reusing `LibraryTitleMatcher`) wired into `ResolveReview`. No new MCP tools, no CLI changes.
 
@@ -13,12 +13,12 @@
 ## Global Constraints
 
 - **Zero external NuGet packages** in production projects (`clipmeta.core`, `clipmetamcp`). BCL/SDK only; MSTest only in test projects.
-- **CLIs/MCP are thin shells** — no business logic in `ReadTools`; clip-identity logic lives in `clipmeta.core`.
+- **CLIs/MCP are thin shells**, no business logic in `ReadTools`; clip-identity logic lives in `clipmeta.core`.
 - **Big-endian MP4 IO** rule is untouched here (no parser/writer changes).
 - **`warning`** stays semantically "do not tag"; the #1 foreign-player demotion uses a **separate non-blocking `advisory` key** (type `player_outside_library_ignored`).
 - **Policy A:** only a *lone* unambiguous `recent_write` (exactly one fresh save) is an auto-taggable live target; several at once stay low/confirm.
 - **Version:** bump `clipmetamcp` **1.4.0 → 1.5.0** in BOTH `clipmetamcp/clipmetamcp.csproj` (`AssemblyVersion` + `InformationalVersion`) and `tools/mcpb-manifest.json` (pack gate fails if they disagree).
-- **`.mcpb` repack is DEFERRED** to after the final whole-branch review (so the shipped bundle carries any fix-wave changes) — exactly as pass-5 did. Do NOT commit `dist/clipmeta.mcpb` (git-ignored).
+- **`.mcpb` repack is DEFERRED** to after the final whole-branch review (so the shipped bundle carries any fix-wave changes), exactly as pass-5 did. Do NOT commit `dist/clipmeta.mcpb` (git-ignored).
 - **Run the FULL `clipmetamcp.Tests` project** for any change touching the MCP tool surface (`Phase2ReadToolsTests.ToolsList_ContainsTheFullToolSurface` asserts the exact tool set).
 - Build must be **0 warnings, 0 errors**; all tests green including real-clip integration.
 - XML doc comments on all new public types/methods; named constants, no magic numbers.
@@ -42,7 +42,7 @@
 
 ---
 
-## Task 1: #1 — Gaming candidate survives foreign-player suppression (core)
+## Task 1: #1, Gaming candidate survives foreign-player suppression (core)
 
 **Files:**
 - Modify: `clipmeta.core/Watching/WatchingResolver.cs` (the `if (!hasPlayer && suppressAccessFallback) continue;` branch, ~line 185)
@@ -50,9 +50,9 @@
 
 **Interfaces:**
 - Consumes: `RecentWriteSignal.SourceName` (`"recent_write"`), `SignalHit.Ambiguous`, existing `hasRecentWrite` local in `ResolveCore`.
-- Produces: no signature change. Behavior change — a single unambiguous `recent_write` hit now survives the foreign-player suppression and scores high / `AnyLiveTarget == true`.
+- Produces: no signature change. Behavior change, a single unambiguous `recent_write` hit now survives the foreign-player suppression and scores high / `AnyLiveTarget == true`.
 
-**Background:** Today, when a player is open on a file outside the library, `suppressAccessFallback` is true and the loop drops *every* non-player hit — including the just-saved gaming clip. The fix: keep a *lone* unambiguous `recent_write` hit (Policy A). `RecentWriteSignal` already marks its hit `Ambiguous` when more than one fresh clip exists, so a single fresh save is exactly `!Ambiguous`.
+**Background:** Today, when a player is open on a file outside the library, `suppressAccessFallback` is true and the loop drops *every* non-player hit, including the just-saved gaming clip. The fix: keep a *lone* unambiguous `recent_write` hit (Policy A). `RecentWriteSignal` already marks its hit `Ambiguous` when more than one fresh clip exists, so a single fresh save is exactly `!Ambiguous`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -63,7 +63,7 @@ Add to `clipmetascribe.Tests/WatchingResolverTests.cs` (after the existing gamin
 public void Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression()
 {
     // #1 (P0): a player is open on a file OUTSIDE the library AND one clip was just saved into
-    // the library. The foreign lock and an in-library save are independent — the fresh save must
+    // the library. The foreign lock and an in-library save are independent, the fresh save must
     // surface as the high-confidence gaming target, not be suppressed to zero candidates.
     string saved = Touch("saved.mp4"); // fresh creation time → a recent_write candidate
 
@@ -81,7 +81,7 @@ public void Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression()
 [TestMethod]
 public void Resolve_ForeignPlayer_MultipleFreshSaves_StaySuppressed()
 {
-    // Several fresh saves at once is NOT Policy A — ambiguous, so the foreign-player suppression
+    // Several fresh saves at once is NOT Policy A, ambiguous, so the foreign-player suppression
     // still applies and nothing surfaces (the model must not auto-pick among them).
     Touch("one.mp4");
     Touch("two.mp4");
@@ -94,14 +94,14 @@ public void Resolve_ForeignPlayer_MultipleFreshSaves_StaySuppressed()
 }
 ```
 
-Also **fix two existing fixtures** whose `inlibrary.mp4` is created fresh and would now surface as a gaming candidate (their intent is pure access-fallback suppression with *no* fresh save — back-date so that intent holds). In `Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback` change:
+Also **fix two existing fixtures** whose `inlibrary.mp4` is created fresh and would now surface as a gaming candidate (their intent is pure access-fallback suppression with *no* fresh save, back-date so that intent holds). In `Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback` change:
 
 ```csharp
         Touch("inlibrary.mp4"); // exists, but nobody is playing it
 ```
 to:
 ```csharp
-        TouchStale("inlibrary.mp4"); // exists, not fresh — no gaming target, pure suppression case
+        TouchStale("inlibrary.mp4"); // exists, not fresh, no gaming target, pure suppression case
 ```
 
 And in `Resolve_BareNameForeignFile_HasNoForeignDirectory` change:
@@ -116,7 +116,7 @@ to:
 - [ ] **Step 2: Run the new tests to verify they fail**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~Resolve_ForeignPlayer"`
-Expected: FAIL — `Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression` finds 0 candidates (current suppression drops the save).
+Expected: FAIL, `Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression` finds 0 candidates (current suppression drops the save).
 
 - [ ] **Step 3: Add the suppression exception**
 
@@ -133,7 +133,7 @@ with:
 
 ```csharp
             // The wrong-directory suppression (a player on a foreign file) means the user is NOT
-            // gaming — so it suppresses access-time guesses. EXCEPTION (#1, Policy A): a single
+            // gaming, so it suppresses access-time guesses. EXCEPTION (#1, Policy A): a single
             // unambiguous just-saved clip is a legitimate in-library gaming target and the foreign
             // lock (on a file you cannot tag anyway) must not hide it. Several fresh saves at once
             // are ambiguous and stay suppressed.
@@ -149,7 +149,7 @@ with:
 - [ ] **Step 4: Run the watching suite to verify pass + no regressions**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~WatchingResolver"`
-Expected: PASS — all `WatchingResolverTests` green, including the two new tests and the two re-based fixtures.
+Expected: PASS, all `WatchingResolverTests` green, including the two new tests and the two re-based fixtures.
 
 - [ ] **Step 5: Commit**
 
@@ -160,7 +160,7 @@ git commit -m "fix(watching): a single fresh save survives foreign-player suppre
 
 ---
 
-## Task 2: #1 — `player_outside_library` demotes to non-blocking advisory (MCP)
+## Task 2: #1, `player_outside_library` demotes to non-blocking advisory (MCP)
 
 **Files:**
 - Modify: `clipmetamcp/Tools/ReadTools.cs` (add a pure decision helper; change the warning-emission block, ~line 652-669)
@@ -205,7 +205,7 @@ public void ForeignNotice_NonBlocking_WhenGamingTargetPresent()
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q --filter "FullyQualifiedName~ForeignNotice"`
-Expected: FAIL — `ReadTools.ForeignNoticeIsBlocking` does not exist (compile error).
+Expected: FAIL, `ReadTools.ForeignNoticeIsBlocking` does not exist (compile error).
 
 - [ ] **Step 3: Add the helper and rewire the emission**
 
@@ -215,7 +215,7 @@ In `clipmetamcp/Tools/ReadTools.cs`, add the helper (near the other private help
 /// <summary>
 /// Whether an open foreign player should be reported as a BLOCKING "do not tag" warning. False
 /// when the candidate list already contains a gaming target (a <c>recent_write</c> candidate): a
-/// foreign lock is on a file you cannot tag anyway, so it must not block a valid in-library save —
+/// foreign lock is on a file you cannot tag anyway, so it must not block a valid in-library save, 
 /// it demotes to a non-blocking advisory instead (#1).
 /// </summary>
 internal static bool ForeignNoticeIsBlocking(IReadOnlyList<WatchingCandidate> candidates) =>
@@ -268,13 +268,13 @@ with:
                     ["unresolvedPlayers"] = players,
                 };
             else
-                // #1: a fresh in-library save was detected — the gaming candidate is the live target,
+                // #1: a fresh in-library save was detected, the gaming candidate is the live target,
                 // so the foreign player is informational only (never "do not tag").
                 response["advisory"] = new JsonObject
                 {
                     ["type"] = "player_outside_library_ignored",
                     ["message"] = "A media player is showing a file outside the library, but a fresh " +
-                                  "in-library save was detected — the gaming candidate below is the live " +
+                                  "in-library save was detected, the gaming candidate below is the live " +
                                   "target. The foreign player was ignored.",
                     ["unresolvedPlayers"] = players,
                 };
@@ -284,7 +284,7 @@ with:
 - [ ] **Step 4: Run the FULL MCP test project**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q`
-Expected: PASS — the two new helper tests plus the full existing suite (incl. `ToolsList_ContainsTheFullToolSurface` and `Watching_NormalCall_HasNoWarning`, which stays green: no foreign player → neither key emitted).
+Expected: PASS, the two new helper tests plus the full existing suite (incl. `ToolsList_ContainsTheFullToolSurface` and `Watching_NormalCall_HasNoWarning`, which stays green: no foreign player → neither key emitted).
 
 - [ ] **Step 5: Commit**
 
@@ -295,7 +295,7 @@ git commit -m "feat(mcp): demote player_outside_library to non-blocking advisory
 
 ---
 
-## Task 3: #2 — `multiplePlayersActive` fires for any two open players + caps confidence
+## Task 3: #2, `multiplePlayersActive` fires for any two open players + caps confidence
 
 **Files:**
 - Modify: `clipmeta.core/Watching/ReviewBindingResolver.cs` (`ComputeHeuristic`, the `multiPlayer` detection, ~line 82-95)
@@ -335,7 +335,7 @@ public void ResolveReview_TwoPlayersOpenFarApart_FlagsMultiPlayer()
 [TestMethod]
 public void ResolveReview_MultiPlayer_CapsConfidenceAndNotLive()
 {
-    // #2 cap: when multiplePlayersActive fires, the caller must confirm — anyLiveTarget is false
+    // #2 cap: when multiplePlayersActive fires, the caller must confirm, anyLiveTarget is false
     // and no candidate is high, even if a clip is locked.
     string a = Touch("a.mp4");
     string b = Touch("b.mp4");
@@ -357,7 +357,7 @@ public void ResolveReview_MultiPlayer_CapsConfidenceAndNotLive()
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~ResolveReview_TwoPlayersOpenFarApart|FullyQualifiedName~ResolveReview_MultiPlayer_CapsConfidence"`
-Expected: FAIL — `TwoPlayersOpenFarApart` sees no flag (old timing rule); `CapsConfidence` sees `AnyLiveTarget == true` (locked clip).
+Expected: FAIL, `TwoPlayersOpenFarApart` sees no flag (old timing rule); `CapsConfidence` sees `AnyLiveTarget == true` (locked clip).
 
 - [ ] **Step 3: Widen the multi-player trigger**
 
@@ -384,7 +384,7 @@ with:
 
 ```csharp
         // Ambiguity (#2): two or more distinct players currently have an OPEN segment. Any such
-        // overlap is too ambiguous to bind — independent of when each started (the old near-
+        // overlap is too ambiguous to bind, independent of when each started (the old near-
         // simultaneous-start rule missed players opened seconds apart, the common case).
         List<TitleSegment> openSegments = ordered.Where(s => s.EndedAt is null).ToList();
         int openPlayers = openSegments
@@ -415,7 +415,7 @@ with:
         // A corrected/confident bind is a live target even when unlocked.
         bool anyLive = core.AnyLiveTarget || confident;
 
-        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first.
+        // #2 cap: when two or more players are open, the bind is ambiguous, force confirm-first.
         // Nothing is an auto-tag target and no candidate may read high, even a locked one.
         if (binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive))
         {
@@ -432,7 +432,7 @@ with:
 - [ ] **Step 5: Run the review suite to verify pass + no regressions**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~ResolveReview|FullyQualifiedName~ReviewBindingResolver"`
-Expected: PASS — the two new tests plus existing `ResolveReviewTests` / `ReviewBindingResolverTests` (the existing near-simultaneous `ResolveReview_MultiPlayer_NoCorrection_FlagAndWarn` still fires the flag under the widened rule).
+Expected: PASS, the two new tests plus existing `ResolveReviewTests` / `ReviewBindingResolverTests` (the existing near-simultaneous `ResolveReview_MultiPlayer_NoCorrection_FlagAndWarn` still fires the flag under the widened rule).
 
 - [ ] **Step 6: Commit**
 
@@ -443,18 +443,18 @@ git commit -m "fix(watching): multiplePlayersActive fires for any two open playe
 
 ---
 
-## Task 4: #6 — `ReviewFlagResolver` cleans advisory clip names + wire into `ResolveReview`
+## Task 4: #6, `ReviewFlagResolver` cleans advisory clip names + wire into `ResolveReview`
 
 **Files:**
 - Create: `clipmeta.core/Watching/ReviewFlagResolver.cs`
 - Create: `clipmetascribe.Tests/ReviewFlagResolverTests.cs`
-- Modify: `clipmeta.core/Watching/WatchingResolver.cs` (`ResolveReview` — pass `binding.Flags` through the resolver before returning)
+- Modify: `clipmeta.core/Watching/WatchingResolver.cs` (`ResolveReview`, pass `binding.Flags` through the resolver before returning)
 
 **Interfaces:**
 - Consumes: `ReviewFlag` (`Type, Clips, StableSeconds`), `WatchContext.ByFileName` (`IReadOnlyDictionary<string, IReadOnlyList<LibraryClip>>`), `LibraryTitleMatcher.FindBestMatch(string?, IEnumerable<string>) → string?`.
-- Produces: `public static IReadOnlyList<ReviewFlag> ReviewFlagResolver.Resolve(IReadOnlyList<ReviewFlag> flags, WatchContext context)` — same flags with each `Clips` entry resolved to a library basename, unresolvable entries dropped, remainder deduped (OrdinalIgnoreCase, first-seen order); `Type` and `StableSeconds` unchanged.
+- Produces: `public static IReadOnlyList<ReviewFlag> ReviewFlagResolver.Resolve(IReadOnlyList<ReviewFlag> flags, WatchContext context)`, same flags with each `Clips` entry resolved to a library basename, unresolvable entries dropped, remainder deduped (OrdinalIgnoreCase, first-seen order); `Type` and `StableSeconds` unchanged.
 
-**Background:** `ReviewFlag.Clips` currently carries raw window titles (`TitleSegment.RawTitle`) — clean for MPC (full path), garbled for VLC (bare name or `"vlc"`), and duplicated when a clip replays. Resolve each to its library basename using the same matcher the resolver trusts; drop foreign/unrecognized; dedup.
+**Background:** `ReviewFlag.Clips` currently carries raw window titles (`TitleSegment.RawTitle`), clean for MPC (full path), garbled for VLC (bare name or `"vlc"`), and duplicated when a clip replays. Resolve each to its library basename using the same matcher the resolver trusts; drop foreign/unrecognized; dedup.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -555,7 +555,7 @@ public class ReviewFlagResolverTests
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~ReviewFlagResolver"`
-Expected: FAIL — `ReviewFlagResolver` does not exist (compile error).
+Expected: FAIL, `ReviewFlagResolver` does not exist (compile error).
 
 - [ ] **Step 3: Create the resolver**
 
@@ -567,7 +567,7 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Rewrites review-flag clip strings (raw player-window titles) into clean, deduped library
 /// basenames using the same library-aware matcher the resolver uses, so advisories never expose
-/// raw titles, OSD/timecode text, or duplicate entries. Pure: no IO — library identity comes from
+/// raw titles, OSD/timecode text, or duplicate entries. Pure: no IO, library identity comes from
 /// the supplied <see cref="WatchContext"/>. Flag <see cref="ReviewFlag.Type"/> and
 /// <see cref="ReviewFlag.StableSeconds"/> are untouched; only the clip payload changes.
 /// </summary>
@@ -605,7 +605,7 @@ public static class ReviewFlagResolver
 - [ ] **Step 4: Run the resolver tests to verify pass**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~ReviewFlagResolver"`
-Expected: PASS — all four `ReviewFlagResolverTests` green.
+Expected: PASS, all four `ReviewFlagResolverTests` green.
 
 - [ ] **Step 5: Wire into `ResolveReview` + add an integration test**
 
@@ -644,7 +644,7 @@ public void ResolveReview_MultiPlayerFlag_ClipsAreResolvedLibraryNames()
 - [ ] **Step 6: Run the full watching + review suites**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter "FullyQualifiedName~Watching|FullyQualifiedName~Review|FullyQualifiedName~ResolveReview"`
-Expected: PASS — all watching/review tests green, including the new integration test.
+Expected: PASS, all watching/review tests green, including the new integration test.
 
 - [ ] **Step 7: Commit**
 
@@ -664,7 +664,7 @@ git commit -m "feat(watching): resolve + dedup review advisory clip names (#6)"
 
 **Interfaces:** none (metadata + docs only).
 
-**Background:** Behavior change to existing tools, no new tools → minor bump. The pack gate requires csproj and manifest to match. `.mcpb` repack is deferred to after the final whole-branch review (pass-5 discipline) — this task does NOT repack.
+**Background:** Behavior change to existing tools, no new tools → minor bump. The pack gate requires csproj and manifest to match. `.mcpb` repack is deferred to after the final whole-branch review (pass-5 discipline), this task does NOT repack.
 
 - [ ] **Step 1: Bump the csproj version**
 
@@ -695,13 +695,13 @@ to:
 In `docs/PITFALLS.md`, insert at the top of the "Field-discovered" section (immediately after line 9 `## Field-discovered (append here as we go)`):
 
 ```markdown
-## 2026-06-27 — A foreign-player lock must not suppress a fresh in-library save
+## 2026-06-27, A foreign-player lock must not suppress a fresh in-library save
 **Symptom:** With a media player paused on a file OUTSIDE the library, a brand-new game clip saved
-INTO the library returned `candidateCount: 0` and a blocking `player_outside_library` warning — the
+INTO the library returned `candidateCount: 0` and a blocking `player_outside_library` warning, the
 fresh save was invisible.
 **Cause:** `WatchingResolver.ResolveCore`'s `suppressAccessFallback` branch (a player on a foreign
 file ⇒ "user isn't gaming") dropped EVERY non-player hit, including the just-saved `recent_write`
-gaming candidate. A foreign lock and an in-library save are independent signals — you cannot tag a
+gaming candidate. A foreign lock and an in-library save are independent signals, you cannot tag a
 foreign file anyway.
 **Fix:** A single unambiguous `recent_write` hit (Policy A) survives the suppression; several fresh
 saves at once stay suppressed. At the MCP layer, `player_outside_library` demotes to a non-blocking
@@ -709,18 +709,18 @@ saves at once stay suppressed. At the MCP layer, `player_outside_library` demote
 stays semantically "do not tag."
 **Lesson:** Two independent suppression conditions that happen to co-occur in one branch (foreign
 player + no gaming) will silently couple. When a new signal (gaming `recent_write`) is added, audit
-every existing branch that drops "non-player" hits — the new signal is non-player too.
+every existing branch that drops "non-player" hits, the new signal is non-player too.
 
-## 2026-06-27 — Review advisories must resolve segment titles to library names
+## 2026-06-27, Review advisories must resolve segment titles to library names
 **Symptom:** `review[]` advisories listed duplicate entries and, for VLC, raw window-title strings
 and the bare process name `"vlc"` instead of clip names; `sequenceSkip` repeated `DVR_5` five times.
 **Cause:** `ReviewFlag.Clips` carried `TitleSegment.RawTitle` verbatim via `Display(s)`. MPC titles
 are full paths (look clean); VLC titles are the bare filename or `"vlc"` (look garbled); a replayed
 clip creates multiple segments with the same title (no dedup). The advisory builder and the
-candidate resolver are DIFFERENT sources — `include_access_fallback:false` cleans the candidate list
+candidate resolver are DIFFERENT sources, `include_access_fallback:false` cleans the candidate list
 but NOT the segment-derived advisories (a misdiagnosis to avoid).
 **Fix:** `ReviewFlagResolver.Resolve` maps each clip string through `LibraryTitleMatcher`, drops
-unresolvable entries, and dedups — wired into `ResolveReview` after the context is built.
+unresolvable entries, and dedups, wired into `ResolveReview` after the context is built.
 **Lesson:** A "residue in the advisory" symptom can have two distinct sources (segment history vs
 access-time fallback). Confirm WHICH list the strings come from before designing the fix.
 ```
@@ -728,7 +728,7 @@ access-time fallback). Confirm WHICH list the strings come from before designing
 - [ ] **Step 4: Verify the build (version consistency)**
 
 Run: `dotnet build --nologo -v q`
-Expected: 0 warnings, 0 errors. (The pack gate is exercised at repack time, deferred — but csproj and manifest now both read 1.5.0.)
+Expected: 0 warnings, 0 errors. (The pack gate is exercised at repack time, deferred, but csproj and manifest now both read 1.5.0.)
 
 - [ ] **Step 5: Commit**
 
@@ -741,10 +741,10 @@ git commit -m "chore: bump clipmetamcp to v1.5.0 + record pass-6 pitfalls"
 
 ## Post-task (controller, after final whole-branch review)
 
-These are NOT plan tasks — they happen after the final review + any fix wave, per pass-5 discipline:
+These are NOT plan tasks, they happen after the final review + any fix wave, per pass-5 discipline:
 
-1. **Full suite green:** `dotnet build --nologo -v q` then `dotnet test --nologo --no-build -v q` (view + mcp + scribe; scribe takes a few minutes — long timeout).
-2. **Repack the `.mcpb`:** `tools/pack-mcpb.ps1` (version gate must pass: csproj == manifest == 1.5.0). `dist/clipmeta.mcpb` is git-ignored — do NOT commit it.
+1. **Full suite green:** `dotnet build --nologo -v q` then `dotnet test --nologo --no-build -v q` (view + mcp + scribe; scribe takes a few minutes, long timeout).
+2. **Repack the `.mcpb`:** `tools/pack-mcpb.ps1` (version gate must pass: csproj == manifest == 1.5.0). `dist/clipmeta.mcpb` is git-ignored, do NOT commit it.
 3. **Finish the branch** via superpowers:finishing-a-development-branch (push + PR; the owner merges).
 
 ---
@@ -764,6 +764,6 @@ These are NOT plan tasks — they happen after the final review + any fix wave, 
 
 **2. Placeholder scan:** No TBD/TODO; every code step shows full code; every command has expected output. ✅
 
-**3. Type consistency:** `ForeignNoticeIsBlocking(IReadOnlyList<WatchingCandidate>)`, `ReviewFlagResolver.Resolve(IReadOnlyList<ReviewFlag>, WatchContext)`, `WatchingCandidate` 9-arg positional ctor, `ReviewFlag(Type, Clips, StableSeconds)`, `LibraryTitleMatcher.FindBestMatch(string?, IEnumerable<string>)`, `WatchContext.Build(root, IReadOnlyList<ProcessWindow>)` — all match the real signatures. ✅
+**3. Type consistency:** `ForeignNoticeIsBlocking(IReadOnlyList<WatchingCandidate>)`, `ReviewFlagResolver.Resolve(IReadOnlyList<ReviewFlag>, WatchContext)`, `WatchingCandidate` 9-arg positional ctor, `ReviewFlag(Type, Clips, StableSeconds)`, `LibraryTitleMatcher.FindBestMatch(string?, IEnumerable<string>)`, `WatchContext.Build(root, IReadOnlyList<ProcessWindow>)`, all match the real signatures. ✅
 
-**Note for executor (pre-flight):** Task 1 intentionally edits two existing test fixtures (`Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback`, `Resolve_BareNameForeignFile_HasNoForeignDirectory`) from `Touch` to `TouchStale`. This is a deliberate, spec-aligned behavior change (a fresh in-library clip is now a gaming candidate even under a foreign player), NOT a masked regression — call it out to the task reviewer so it is adjudicated as correct-new-behavior.
+**Note for executor (pre-flight):** Task 1 intentionally edits two existing test fixtures (`Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback`, `Resolve_BareNameForeignFile_HasNoForeignDirectory`) from `Touch` to `TouchStale`. This is a deliberate, spec-aligned behavior change (a fresh in-library clip is now a gaming candidate even under a foreign player), NOT a masked regression, call it out to the task reviewer so it is adjudicated as correct-new-behavior.

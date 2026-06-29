@@ -1,9 +1,9 @@
-# Queue Write Semantics, Provenance & Zero-Touch Flush — Design Spec
+# Queue Write Semantics, Provenance & Zero-Touch Flush, Design Spec
 **Date:** 2026-06-25
 **Round:** Watched-clip resolution, pass 3 (write side)
 **Author:** Peckworks Lab
 **Predecessors:** pass-2 deferred-tag queue (#30); companion spec
-`2026-06-25-watched-clip-detection-robustness.md` (the *read* side — sequenced **first**).
+`2026-06-25-watched-clip-detection-robustness.md` (the *read* side, sequenced **first**).
 
 ---
 
@@ -21,12 +21,12 @@ surfaced three things on the **write** side of the watch-and-tag loop:
    `notes`/`tags`/`players`, set the rest.**
 
 2. **No provenance.** Nothing records that ClipMeta authored a tag. The owner wants every write to
-   carry `tagged_by: Peckworks ClipMeta`. Confirmed absent — the seven clips tagged in the session
+   carry `tagged_by: Peckworks ClipMeta`. Confirmed absent, the seven clips tagged in the session
    have only `game`/`players`/`notes`. Decision: **auto-stamp on every write, with an opt-out.**
 
 3. **The last clip of a session needs a manual flush.** The queue drains opportunistically on the
-   next watched-clip tool call, so every clip *except the last* is zero-touch. The final clip — when
-   the user closes the player and sends no further message — needs an explicit
+   next watched-clip tool call, so every clip *except the last* is zero-touch. The final clip, when
+   the user closes the player and sends no further message, needs an explicit
    `library_flush_queue`. The owner wants the fast workflow ("speak it, click next, keep moving") to
    be zero-touch end to end. Decision: **build a background drain pump** that flushes the last clip
    when its lock clears, no user action required.
@@ -44,7 +44,7 @@ item 3 is a *latency* optimization on top of that guarantee, never a replacement
 **In scope:**
 
 - **#1 Per-field append semantics** for `library_queue_tag`: `notes`/`tags`/`players` accumulate;
-  `game`/`rating`/`timecode`/custom set. Plus the Core support it needs — **field-type-aware
+  `game`/`rating`/`timecode`/custom set. Plus the Core support it needs, **field-type-aware
   append** so `notes` joins as prose (case preserved, no dedup) while `tags`/`players` keep
   pipe-merge+dedup. This also fixes a latent `clip_append_field` bug (it currently lowercases and
   pipe-mangles appended notes).
@@ -58,15 +58,15 @@ item 3 is a *latency* optimization on top of that guarantee, never a replacement
 
 - The read/detection items (companion spec): library-aware title matching, `AnyLiveTarget`, player
   attribution, access-time quieting.
-- Changing `clip_set_fields` semantics — it stays pure replace (its documented contract). Only
+- Changing `clip_set_fields` semantics, it stays pure replace (its documented contract). Only
   `library_queue_tag` gains per-field append routing.
-- Per-clip *timestamped* note history / structured multi-note model — appending into one `notes`
+- Per-clip *timestamped* note history / structured multi-note model, appending into one `notes`
   string is the chosen model this round (see §1.4 for the rationale and the deferred alternative).
 - Restart Manager, perf instrumentation (separate items).
 
 ---
 
-## 1. Per-Field Append Semantics (#1 — the P0 data-loss fix)
+## 1. Per-Field Append Semantics (#1, the P0 data-loss fix)
 
 ### 1.1 The decision
 
@@ -75,11 +75,11 @@ item 3 is a *latency* optimization on top of that guarantee, never a replacement
 | `notes` | **append** | prose: `existing` + separator + `incoming`, trimmed, **case preserved, no dedup** |
 | `tags` | **append** | pipe-merge + dedup + lowercase (existing list rule) |
 | `players` | **append** | pipe-merge + dedup (existing list rule) |
-| `game` | set (replace) | — |
-| `rating` | set (replace) | — |
-| `timecode` | set (replace) this round* | — |
-| custom / unknown | set (replace) | — |
-| any field set to `""` | **delete** (unchanged idiom) | — |
+| `game` | set (replace) |, |
+| `rating` | set (replace) |, |
+| `timecode` | set (replace) this round* |, |
+| custom / unknown | set (replace) |, |
+| any field set to `""` | **delete** (unchanged idiom) |, |
 
 \* `timecode` is technically a pipe-list and a future round may move it to append; the owner's
 explicit choice this round is "append notes/tags/players, set the rest," so `timecode` sets. Flagged,
@@ -103,7 +103,7 @@ for any append of those fields (queue merge **and** disk write), independent of 
 ### 1.3 Where the changes land
 
 **`clipmetamcp` `QueueTools.QueueTag` (the routing):** replace the unconditional
-`mutation.SetFields[...] = text` with per-field routing —
+`mutation.SetFields[...] = text` with per-field routing, 
 
 ```
 for each (name, value):
@@ -113,12 +113,12 @@ for each (name, value):
 ```
 
 This is the whole P0 fix at the tool layer: appended fields now flow through `AppendFields`, which
-the queue merge accumulates and the write engine folds onto the *current on-disk* value — closing
+the queue merge accumulates and the write engine folds onto the *current on-disk* value, closing
 both the in-queue clobber and the drained-then-retag clobber.
 
 **Core `Normalizer` / `Mp4Writer` (field-type-aware append fold):** today the fold
 (`Mp4Writer.cs:141-170`) runs every append through `AppendToPipeList`, which lowercases, dedups, and
-pipe-joins — correct for lists, **wrong for prose** (it would turn `"Chuck wins"` + `"raccoon"` into
+pipe-joins, correct for lists, **wrong for prose** (it would turn `"Chuck wins"` + `"raccoon"` into
 `"chuck wins|raccoon"`). Make the fold consult `ProseFields`:
 
 - Prose field → `combined = string.IsNullOrEmpty(current) ? incoming.Trim() : current.TrimEnd() + SEP + incoming.Trim()`; **no** lowercasing, **no** dedup.
@@ -132,13 +132,13 @@ Mirror the same prose-vs-list distinction in **`TagQueue.Merge` / `PipeMerge`** 
 for the same locked clip accumulate `notes` as prose and `tags`/`players` as deduped lists.
 
 **`clip_append_field` (bonus fix):** it already routes to `AppendFields`, so it inherits the
-prose-aware fold automatically — appended `notes` will stop being lowercased and pipe-mangled. Add a
+prose-aware fold automatically, appended `notes` will stop being lowercased and pipe-mangled. Add a
 test pinning this; no handler change needed.
 
 ### 1.4 Why one appended `notes` string (and not a note history)
 
 The session raised whether multi-narration should accumulate timestamped note entries. This round
-chooses the simpler model — append into the single `notes` string — because it requires no schema
+chooses the simpler model, append into the single `notes` string, because it requires no schema
 change, keeps `notes` a plain readable field, and matches the voice workflow ("add a phrase to what
 this clip is about"). A structured/timestamped note model is recorded as a deferred option if real
 use shows the flat string is insufficient.
@@ -154,7 +154,7 @@ public const string TaggedBy = "tagged_by";               // atom: com.peckworks
 public const string ProvenanceValue = "Peckworks ClipMeta";
 ```
 
-`tagged_by` is a **visible** field (it appears in `--list` and `clip_get_metadata` — that is the
+`tagged_by` is a **visible** field (it appears in `--list` and `clip_get_metadata`, that is the
 point), but it is excluded from `--vocab` aggregation and "untagged" detection treats it the way it
 treats `schema`: a clip carrying *only* `tagged_by` is not "tagged." In practice this never arises,
 because (see §2.2) provenance is stamped only when the write also stores a real user field.
@@ -162,7 +162,7 @@ because (see §2.2) provenance is stamped only when the write also stores a real
 ### 2.2 Stamping (Core, `Mp4Writer`)
 
 Alongside the existing schema stamp, under the **same gate** (the mutation stores at least one user
-set/append field — we do not brand a file we are not otherwise writing user data to):
+set/append field, we do not brand a file we are not otherwise writing user data to):
 
 ```csharp
 if (mutation.StampProvenance && (mutation.SetFields.Count > 0 || mutation.AppendFields.Count > 0))
@@ -189,7 +189,7 @@ public bool StampProvenance { get; init; } = true;
 - **Queue drains always stamp.** `QueuedMutation` does not carry the flag; a queued tag is, by
   definition, ClipMeta-authored, so the drain reconstructs the mutation with `StampProvenance =
   true` (the default). The opt-out therefore governs direct `clip_set_fields`/`clip_append_field`
-  only — which is the correct scope (a user opting out of branding is doing direct edits, not
+  only, which is the correct scope (a user opting out of branding is doing direct edits, not
   driving the watch loop).
 
 ### 2.4 Backfill the seven session clips
@@ -207,7 +207,7 @@ built).
 
 ### 3.1 Goal
 
-Eliminate the one remaining manual step — the explicit `library_flush_queue` for the last clip —
+Eliminate the one remaining manual step, the explicit `library_flush_queue` for the last clip, 
 so the workflow is zero-touch end to end. When the user closes the player on the final clip, its
 write should land on its own, with no further message.
 
@@ -218,12 +218,12 @@ The owner suggested both; neither is the right primitive:
 - **FileSystemWatcher** raises events on file create/change/delete/rename. A media player
   *releasing its handle* (the unlock we are waiting for) is **not** a filesystem mutation, so FSW
   never fires on it. It would watch the wrong thing.
-- **Process-exit hooks** (`Process.Exited`) are racy against real player behavior — playlists keep
-  one process alive across clips, users run two players, processes are re-used — and require holding
+- **Process-exit hooks** (`Process.Exited`) are racy against real player behavior, playlists keep
+  one process alive across clips, users run two players, processes are re-used, and require holding
   a handle per player process and continuously re-scanning as they churn.
 
 The robust primitive is a **debounced poll of the lock state of the (tiny) queued set**, active only
-while the queue is non-empty. The queued set is exactly the clips just tagged — a handful — and the
+while the queue is non-empty. The queued set is exactly the clips just tagged, a handful, and the
 lock probe is a cheap shared-open attempt (`LockProbe.IsInUse`). When a lock clears, the next tick
 drains it. When the queue empties, the pump idles until the next enqueue wakes it. This watches the
 *right* signal (the lock) at negligible cost.
@@ -251,7 +251,7 @@ public sealed class QueueDrainPump : IDisposable
 
 **Loop:**
 
-1. Wait on a wake signal (`AutoResetEvent`/`ManualResetEventSlim`) — zero CPU while idle.
+1. Wait on a wake signal (`AutoResetEvent`/`ManualResetEventSlim`), zero CPU while idle.
 2. On wake: run one drain under `runExclusive`. If `TagQueue.Status` shows entries still locked
    (`stillQueued` non-empty), wait `pollInterval` and drain again. Repeat until the queue is empty.
 3. Empty → return to step 1.
@@ -270,7 +270,7 @@ public sealed class QueueDrainPump : IDisposable
   lock clears, the tag remains in `.clipmeta-queue` and drains on the next session's first
   watched-clip call. The pump optimizes the common case; it is not the integrity mechanism.
 
-### 3.4 Wiring (MCP shell only — thin-shell rule)
+### 3.4 Wiring (MCP shell only, thin-shell rule)
 
 - `QueueDrainPump` lives in Core (testable, no MCP dependency); `WriteGate` stays in `clipmetamcp`.
   Core stays decoupled via the injected `runExclusive` seam (the same trailing-injectable
@@ -278,7 +278,7 @@ public sealed class QueueDrainPump : IDisposable
 - `Program.Serve()` constructs the pump after the sandbox (only when a library root is configured),
   `Start()`s it before `session.Run()`, and `Dispose()`s it after `Run()` returns on stdin EOF.
 - `QueueTools.RegisterAll` takes the pump so `QueueTag` can call `pump.Wake()` right after
-  `TagQueue.Enqueue` — the enqueue is the signal that a lock-clear is coming. `library_flush_queue`
+  `TagQueue.Enqueue`, the enqueue is the signal that a lock-clear is coming. `library_flush_queue`
   remains for explicit/manual use and as the no-library-root fallback.
 
 ### 3.5 Minor interaction
@@ -293,7 +293,7 @@ documented minor risk, not a correctness hole.
 
 ## 4. Structured-Extraction Nudge (#7)
 
-The session wrote almost everything into `notes`; `players` was used once and `tags` never — so
+The session wrote almost everything into `notes`; `players` was used once and `tags` never, so
 "find every clip with hetare" or "every raccoon clip" can't work, because the searchable nouns are
 buried in prose. This is caller/model behavior, but the **tool descriptions are our lever**.
 
@@ -329,11 +329,11 @@ hot path.
 ## 6. Test Strategy
 
 Run the **full** `clipmetascribe.Tests` and `clipmetamcp.Tests` projects (not filtered) per the
-CLAUDE.md surface-test rule — `QueueTools` routing and the tool surface change.
+CLAUDE.md surface-test rule, `QueueTools` routing and the tool surface change.
 
 **Append semantics (`clipmetascribe.Tests`, with scratch clips)**
 - Queue `notes:"A"`, drain to disk; queue `notes:"B"`, drain → on-disk `notes == "A B"` (the P0
-  regression — must go red before the fix).
+  regression, must go red before the fix).
 - Two `notes` queue entries while locked merge to `"A B"` in one entry (in-queue prose accumulation).
 - Queue `tags:"x"` then `tags:"x|y"` → on-disk `tags == "x|y"` (dedup, lowercase preserved as list).
 - Queue `players:"chuck"` then `players:"chicken"` → `"chuck|chicken"`.
@@ -348,7 +348,7 @@ CLAUDE.md surface-test rule — `QueueTools` routing and the tool surface change
 - A caller-supplied `tagged_by` is not overwritten (`TryAdd`).
 - A queue drain stamps provenance (always-on for queue writes).
 
-**`QueueDrainPump` (`clipmetascribe.Tests`, fakes — no real player/timer)**
+**`QueueDrainPump` (`clipmetascribe.Tests`, fakes, no real player/timer)**
 - Inject a fake `isInUse` that returns true then false, a fake `runExclusive`, a fake `IMediaWriter`,
   a short interval: after the lock "clears," the pump drains the entry exactly once.
 - Empty queue → pump idles (no drain calls) until `Wake()`.
@@ -381,15 +381,15 @@ CLAUDE.md surface-test rule — `QueueTools` routing and the tool surface change
 
 ## 8. Definition of Done
 
-1. `dotnet build` — 0 warnings, 0 errors, all projects.
-2. `dotnet test` — full `clipmetascribe.Tests` and `clipmetamcp.Tests` pass, including the notes
+1. `dotnet build`, 0 warnings, 0 errors, all projects.
+2. `dotnet test`, full `clipmetascribe.Tests` and `clipmetamcp.Tests` pass, including the notes
    round-trip P0 regression, provenance, and `QueueDrainPump` tests.
 3. Re-tagging a clip's `notes` through the queue accumulates instead of overwriting, on disk.
 4. Every user-data write carries `tagged_by: Peckworks ClipMeta` unless opted out; the seven session
    clips are backfilled.
 5. Closing the player on the last clip drains its queued tag with no further tool call (pump),
    while the durable queue still covers a host kill.
-6. All clip mutations — direct, opportunistic drain, and pump drain — are serialized through the
+6. All clip mutations, direct, opportunistic drain, and pump drain, are serialized through the
    write single-flight.
 7. Zero NuGet packages added to production projects.
 8. New public types/methods documented; PITFALLS updated with the notes-clobber gap and the

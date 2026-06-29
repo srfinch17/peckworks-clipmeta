@@ -107,7 +107,7 @@ public class ListCommandTests
     public void Run_MultipleFields_PadsToLongestFieldName()
     {
         // Arrange
-        // "game" (4 chars) vs "timecode" (8 chars) — verify padding is consistent
+        // "game" (4 chars) vs "timecode" (8 chars), verify padding is consistent
         string scratch = PrepareScratch(TestClipsLocator.AllPristine().First());
         var mutation = new MetadataMutation();
         mutation.SetFields[ClipMetaSchema.AtomName("game")] = "TF2";
@@ -136,7 +136,7 @@ public class ListCommandTests
         string gameValue = ExtractValue(gameLine!);
         string timecodeValue = ExtractValue(timecodeLine!);
 
-        // Both lines exist and contain values — this verifies the formatter ran successfully
+        // Both lines exist and contain values, this verifies the formatter ran successfully
         Assert.IsFalse(string.IsNullOrWhiteSpace(gameValue), "game line should have a value");
         Assert.IsFalse(string.IsNullOrWhiteSpace(timecodeValue), "timecode line should have a value");
     }

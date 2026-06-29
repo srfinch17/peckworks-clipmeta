@@ -7,7 +7,7 @@ namespace ClipMetaView.Tests;
 [TestClass]
 public class TreeRendererTests
 {
-    // Pass a StringWriter directly — no Console.SetOut needed, safe for parallel execution.
+    // Pass a StringWriter directly, no Console.SetOut needed, safe for parallel execution.
     private static string CaptureRender(BoxNode root, string filePath = "test.mp4")
     {
         var sw = new StringWriter();
@@ -90,7 +90,7 @@ public class TreeRendererTests
         moov.Children.Add(mvhd);
         root.Children.Add(new BoxNode { Type = "ftyp", Size = 32, FileOffset = 0, HeaderSize = 8 });
         root.Children.Add(moov);
-        // Add mdat after moov so moov is NOT the last child — this forces the │ continuation bar.
+        // Add mdat after moov so moov is NOT the last child, this forces the │ continuation bar.
         root.Children.Add(new BoxNode { Type = "mdat", Size = 100, FileOffset = 432, HeaderSize = 8 });
 
         string output = CaptureRender(root);

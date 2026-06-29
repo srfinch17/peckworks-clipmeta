@@ -8,7 +8,7 @@ namespace ClipMetaMcp.Protocol;
 
 /// <summary>
 /// One MCP session over a pair of text streams: reads newline-delimited JSON-RPC requests,
-/// dispatches them, and writes newline-delimited responses. Deliberately transport-agnostic —
+/// dispatches them, and writes newline-delimited responses. Deliberately transport-agnostic, 
 /// production binds it to stdin/stdout, tests drive it with StringReader/StringWriter.
 /// </summary>
 public sealed class McpSession
@@ -35,7 +35,7 @@ public sealed class McpSession
     /// <summary>
     /// Server version advertised in the initialize result. Single-sourced from the assembly's
     /// InformationalVersion, which Directory.Build.props stamps from the repo-root VERSION file, so
-    /// the exe metadata, the initialize result, and the bundle manifest can never disagree —
+    /// the exe metadata, the initialize result, and the bundle manifest can never disagree, 
     /// pack-mcpb.ps1 stamps the manifest from VERSION and fails the build if it doesn't match the
     /// published exe.
     /// </summary>
@@ -88,7 +88,7 @@ public sealed class McpSession
             }
             catch (JsonException ex)
             {
-                // Malformed input must never kill the session — answer and keep reading.
+                // Malformed input must never kill the session, answer and keep reading.
                 _logger.Log($"parse error: {ex.Message}");
                 JsonRpcWriter.WriteError(_output, null, JsonRpcErrorCodes.ParseError, "Parse error: invalid JSON.");
                 continue;
@@ -121,7 +121,7 @@ public sealed class McpSession
         }
 
         // Notification-vs-request is decided exactly once, here. Notifications never get a
-        // response: the only one in our surface (notifications/initialized — the client
+        // response: the only one in our surface (notifications/initialized, the client
         // acknowledging our initialize result) needs no action, and unknown notifications are
         // ignored silently per spec. Everything below this point is a request with a real id.
         if (message.IsNotification)
@@ -248,13 +248,13 @@ public sealed class McpSession
             // Expected refusal (sandbox, bad argument, unreadable file). The message is written
             // for the model so it can self-correct. Tool errors, never protocol errors (spec §2).
             callResult = ToolErrorResult(ex.Message);
-            _logger.Log($"tool {name}: refused — {ex.Message}");
+            _logger.Log($"tool {name}: refused, {ex.Message}");
         }
         catch (Exception ex)
         {
             // Unexpected failure: human-readable summary to the model, full stack to the log only.
             callResult = ToolErrorResult($"The {name} tool failed: {ex.Message}");
-            _logger.Log($"tool {name}: failed — {ex}");
+            _logger.Log($"tool {name}: failed, {ex}");
         }
 
         JsonRpcWriter.WriteResult(_output, id, callResult);

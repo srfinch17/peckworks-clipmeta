@@ -4,7 +4,7 @@
 
 **Goal:** Add a `--list` flag to clipmetascribe that reads and displays all `com.peckworkslab.clipmeta` metadata fields from an MP4 file.
 
-**Architecture:** Field-extraction logic lives in `clipmeta.core` as `ClipMetaReader.GetFields(BoxNode)`, making it reusable and directly testable from `clipmetascribe.Tests` without a reference to the CLI project. `ListCommand` in clipmetascribe wraps it with I/O — parse, extract, format, print. `Program.cs` checks `--list` before the write-operation path and dispatches to `ListCommand.Run`.
+**Architecture:** Field-extraction logic lives in `clipmeta.core` as `ClipMetaReader.GetFields(BoxNode)`, making it reusable and directly testable from `clipmetascribe.Tests` without a reference to the CLI project. `ListCommand` in clipmetascribe wraps it with I/O, parse, extract, format, print. `Program.cs` checks `--list` before the write-operation path and dispatches to `ListCommand.Run`.
 
 **Tech Stack:** C# / .NET 10, MSTest 4, ClipMeta.Core (Mp4Parser, BoxNode, ClipMetaSchema, Mp4Writer)
 
@@ -14,14 +14,14 @@
 
 | File | Action | Purpose |
 |---|---|---|
-| `clipmeta.core/Read/ClipMetaReader.cs` | Create | `GetFields(BoxNode root)` — walks the box tree and collects all clipmeta freeform atoms |
-| `clipmetascribe/Commands/ListCommand.cs` | Create | `Run(string filePath, TextWriter? output)` — parse + format + print |
+| `clipmeta.core/Read/ClipMetaReader.cs` | Create | `GetFields(BoxNode root)`, walks the box tree and collects all clipmeta freeform atoms |
+| `clipmetascribe/Commands/ListCommand.cs` | Create | `Run(string filePath, TextWriter? output)`, parse + format + print |
 | `clipmetascribe/Program.cs` | Modify | Handle `--list` flag before write-operation check; update usage text |
 | `clipmetascribe.Tests/ClipMetaReaderTests.cs` | Create | Unit tests (constructed BoxNode trees) + integration tests (real clips after real writes) |
 
 ---
 
-## Task 1: ClipMetaReader — field extraction (TDD)
+## Task 1: ClipMetaReader, field extraction (TDD)
 
 **Files:**
 - Create: `clipmeta.core/Read/ClipMetaReader.cs`
@@ -241,7 +241,7 @@ public class ClipMetaReaderTests
 dotnet test clipmetascribe.Tests --filter "ClassName=ClipMetaScribe.Tests.ClipMetaReaderTests" --no-build 2>&1 | head -20
 ```
 
-Expected: compile error — `error CS0234: The type or namespace name 'Read' does not exist in the namespace 'ClipMetaCore'`
+Expected: compile error, `error CS0234: The type or namespace name 'Read' does not exist in the namespace 'ClipMetaCore'`
 
 - [ ] **Step 3: Create `clipmeta.core/Read/ClipMetaReader.cs`**
 
@@ -428,7 +428,7 @@ Replace the PrintUsage method body with:
 private static void PrintUsage()
 {
     Console.WriteLine("""
-        clipmetascribe — MP4 metadata writer (Peckworks Lab)
+        clipmetascribe, MP4 metadata writer (Peckworks Lab)
 
         Usage:
           clipmetascribe "clip.mp4" --list

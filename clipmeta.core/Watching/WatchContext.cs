@@ -41,7 +41,7 @@ public sealed class WatchContext
     }
 
     /// <summary>
-    /// Builds a context over supplied player windows instead of polling a source — used by review-mode
+    /// Builds a context over supplied player windows instead of polling a source, used by review-mode
     /// resolution, which has already chosen WHICH title to resolve from the watcher's segment history.
     /// </summary>
     public static WatchContext Build(
@@ -63,8 +63,8 @@ public sealed class WatchContext
     /// <summary>
     /// Returns a context that REUSES this one's already-enumerated library, baseline, and ledger but
     /// resolves against a different set of <paramref name="playerWindows"/>. Review-mode resolution uses
-    /// this to ask the same library two questions with two window sets — "what is open live?" and "which
-    /// recorded title did the user describe?" — without paying for a second library enumeration.
+    /// this to ask the same library two questions with two window sets, "what is open live?" and "which
+    /// recorded title did the user describe?", without paying for a second library enumeration.
     /// </summary>
     /// <param name="playerWindows">The window set the returned context resolves against.</param>
     public WatchContext WithPlayerWindows(IReadOnlyList<ProcessWindow> playerWindows)
@@ -143,7 +143,7 @@ public sealed class WatchContext
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            // Treat a corrupt/locked index as "no baseline" — never let it abort a resolution pass.
+            // Treat a corrupt/locked index as "no baseline", never let it abort a resolution pass.
         }
         return known;
     }

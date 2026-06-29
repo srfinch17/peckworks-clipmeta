@@ -5,7 +5,7 @@ namespace ClipMetaCore.Write;
 /// <summary>
 /// Computes the curated (user-facing) fields a write would leave on a clip, WITHOUT touching the file.
 /// Reuses the writer's <see cref="Normalizer"/> so the prediction matches an actual write's read-back
-/// exactly — the property the dry-run preview depends on. Internal bookkeeping stamps
+/// exactly, the property the dry-run preview depends on. Internal bookkeeping stamps
 /// (<c>schema</c>, <c>tagged_by</c>) are never shown, matching what a real post-write
 /// <c>clip_get_metadata</c> returns (it hides internal fields).
 /// </summary>

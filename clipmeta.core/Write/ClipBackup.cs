@@ -22,7 +22,7 @@ public record BackupInfo(
 /// here means the writer (which creates backups) and the management tools (which list/restore/
 /// prune them) can never drift apart on the naming scheme.
 ///
-/// Convention: a backup of <c>clip.mp4</c> is <c>clip.mp4.bak-yyyyMMdd-HHmmss</c> — the full clip
+/// Convention: a backup of <c>clip.mp4</c> is <c>clip.mp4.bak-yyyyMMdd-HHmmss</c>, the full clip
 /// name (extension included) plus a <c>.bak-</c> marker and a 15-char local timestamp. The clip
 /// name is recovered by stripping exactly that suffix, so it round-trips for any clip name.
 /// </summary>
@@ -46,7 +46,7 @@ public static class ClipBackup
     /// <summary>
     /// Recognizes a backup file made by <see cref="MakeBackupPath"/> and recovers the clip it
     /// backs up. Rejects anything whose suffix is not <c>.bak-</c> followed by a valid
-    /// <see cref="StampFormat"/> stamp — so a user's unrelated <c>.bak</c> file, or a
+    /// <see cref="StampFormat"/> stamp, so a user's unrelated <c>.bak</c> file, or a
     /// <c>.bak-notes</c>, is never mistaken for one of ours (important: prune deletes these).
     /// </summary>
     public static bool TryGetClipForBackup(string backupPath, [NotNullWhen(true)] out string? clipPath)
@@ -62,7 +62,7 @@ public static class ClipBackup
         if (!DateTime.TryParseExact(stamp, StampFormat, CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out _))
         {
-            return false; // suffix after .bak- is not our timestamp — not our backup
+            return false; // suffix after .bak- is not our timestamp, not our backup
         }
 
         string? dir = Path.GetDirectoryName(backupPath);
@@ -116,7 +116,7 @@ public static class ClipBackup
     /// Restores <paramref name="clipPath"/> from <paramref name="backupPath"/>: the backup is
     /// first validated as a complete, parseable MP4 (the same whole-file-accounting gate the
     /// writer applies before any write), then atomically swapped into place via a temp file and
-    /// <see cref="File.Replace(string,string,string?)"/> — the writer's golden rule. A backup
+    /// <see cref="File.Replace(string,string,string?)"/>, the writer's golden rule. A backup
     /// that fails validation is refused with the live clip untouched. The backup file itself is
     /// left on disk (restoring does not consume it).
     /// </summary>
@@ -147,7 +147,7 @@ public static class ClipBackup
                 $"valid MP4 ({ex.Message}). The current file was left untouched.", ex);
         }
 
-        // Copy the backup to a unique temp sibling of the clip, then atomically replace — the
+        // Copy the backup to a unique temp sibling of the clip, then atomically replace, the
         // clip is never partially written. (Copy first so a failure mid-copy leaves the clip
         // intact; File.Replace is the single committing step.)
         string tempPath = $"{clipPath}.{Guid.NewGuid():N}.restore.tmp";

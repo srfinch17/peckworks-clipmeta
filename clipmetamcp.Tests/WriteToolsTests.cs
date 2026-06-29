@@ -11,11 +11,11 @@ namespace ClipMetaMcp.Tests;
 /// <summary>
 /// End-to-end tests for the phase-3 write tools, driven through the full session → registry →
 /// sandbox → Mp4Writer pipeline against real clips. Unlike the read-tool tests these MUST copy
-/// a pristine clip per test — every test mutates its own file.
+/// a pristine clip per test, every test mutates its own file.
 ///
 /// The safety contract under test (spec §3):
 /// backup defaults ON, dry_run never touches bytes, clear_all demands confirm:true,
-/// writes refuse without a configured library, and — the one that matters most to the user —
+/// writes refuse without a configured library, and, the one that matters most to the user, 
 /// the media bytes survive every MCP-driven write (proved by the independent integrity
 /// scanner, source-linked from clipmetascribe.Tests).
 /// </summary>
@@ -112,7 +112,7 @@ public class WriteToolsTests
     public void DryRun_PreviewMatchesRealWrite_OnAFieldThatAlreadyHasData()
     {
         string clip = PrepareClip();
-        // Seed existing data so preview-vs-actual matters — the bug only showed when the field
+        // Seed existing data so preview-vs-actual matters, the bug only showed when the field
         // already had a value (dry_run read the UNCHANGED file back, so it showed current state).
         AssertOk(Call("clip_set_fields", new JsonObject
         {
@@ -322,7 +322,7 @@ public class WriteToolsTests
             ["backup"] = false,
         }));
 
-        // No confirm at all, and the string "true" — both must refuse (literal boolean only).
+        // No confirm at all, and the string "true", both must refuse (literal boolean only).
         AssertRefused(Call("clip_clear_all", new JsonObject { ["path"] = clip }), "confirm:true");
         AssertRefused(Call("clip_clear_all", new JsonObject { ["path"] = clip, ["confirm"] = "true" }),
             "confirm:true");
@@ -414,7 +414,7 @@ public class WriteToolsTests
 
     /// <summary>
     /// (a) An unknown player name (not in library vocab, not in roster) generates an
-    /// "unknownPlayer" advisory — but the write STILL lands (soft, not a gate).
+    /// "unknownPlayer" advisory, but the write STILL lands (soft, not a gate).
     /// </summary>
     [TestMethod]
     public void SetFields_UnknownPlayer_AdvisoryFires_WriteStillLands()
@@ -541,7 +541,7 @@ public class WriteToolsTests
     public void McpWriteLifecycle_MediaBytesIdentical_ByIndependentScanner()
     {
         // set → append → clear one → clear all, then prove the video/audio payload and every
-        // chunk offset survived — using the scanner that shares no code with the writer.
+        // chunk offset survived, using the scanner that shares no code with the writer.
         string pristine = TestClipsLocator.SmallestPristine();
         string clip = PrepareClip();
 

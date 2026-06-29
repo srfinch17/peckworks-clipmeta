@@ -5,7 +5,7 @@ namespace ClipMetaMcp.Tools;
 
 /// <summary>
 /// Thrown by tool handlers for expected refusals: sandbox violations, missing arguments,
-/// unreadable files. The message is written for the model — it states what was wrong and what a
+/// unreadable files. The message is written for the model, it states what was wrong and what a
 /// valid call looks like, so the model self-corrects instead of retrying blindly. The session
 /// converts it to an <c>isError: true</c> tool result; it never carries a stack trace.
 /// </summary>
@@ -16,13 +16,13 @@ public sealed class ToolException : Exception
 }
 
 /// <summary>One registered MCP tool: the metadata served by tools/list plus the handler invoked by tools/call.</summary>
-/// <param name="Name">Tool name — a snake_case verb phrase the model can reason about.</param>
+/// <param name="Name">Tool name, a snake_case verb phrase the model can reason about.</param>
 /// <param name="Description">Description written for the model; states preconditions explicitly.</param>
 /// <param name="InputSchema">JSON Schema for the arguments object.</param>
 /// <param name="Handler">Maps the arguments object (null when the client sent none) to a structured result.</param>
 /// <param name="ExampleArguments">
 /// Builds a plausible, runnable argument object for a given clip path inside the library.
-/// The stdout-purity test calls this for every registered tool to drive its full happy path —
+/// The stdout-purity test calls this for every registered tool to drive its full happy path, 
 /// a tool that cannot produce working example arguments cannot be registered, so the purity
 /// suite scales to new tools automatically. It also doubles as executable documentation of the
 /// tool's argument shape. Tools whose arguments don't involve a clip path may ignore the input.
@@ -45,7 +45,7 @@ public sealed class ToolRegistry
     /// <summary>All registered tools in registration order.</summary>
     public IReadOnlyList<ToolDefinition> All => _ordered;
 
-    /// <summary>Registers a tool. Throws on a duplicate name — that is a programming error, not user input.</summary>
+    /// <summary>Registers a tool. Throws on a duplicate name, that is a programming error, not user input.</summary>
     public void Register(ToolDefinition tool)
     {
         ArgumentNullException.ThrowIfNull(tool);

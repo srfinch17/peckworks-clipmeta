@@ -8,10 +8,10 @@ using ClipMetaScribe.Tests.Helpers;
 namespace ClipMetaScribe.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="Mp4Writer.RetryOnTransientLock"/> — the bounded retry wrapped around
+/// Unit tests for <see cref="Mp4Writer.RetryOnTransientLock"/>, the bounded retry wrapped around
 /// the final atomic swap so a momentary antivirus/indexer lock on a freshly-written file doesn't
 /// fail an otherwise-good write (field-discovered 2026-06-12). Driven with a controllable
-/// delegate and zero delay, so these are deterministic and fast — no real file locks, no timing.
+/// delegate and zero delay, so these are deterministic and fast, no real file locks, no timing.
 /// </summary>
 [TestClass]
 public class Mp4WriterRetryTests
@@ -30,7 +30,7 @@ public class Mp4WriterRetryTests
     [TestMethod]
     public void Retries_ThenSucceeds_WhenTransientLockClears()
     {
-        // Fail twice with a sharing-violation-style IOException, then succeed — exactly the
+        // Fail twice with a sharing-violation-style IOException, then succeed, exactly the
         // antivirus-releases-the-file case the retry exists for.
         int calls = 0, retries = 0;
         Mp4Writer.RetryOnTransientLock(
@@ -49,7 +49,7 @@ public class Mp4WriterRetryTests
     public void Throws_LastException_AfterMaxAttempts()
     {
         // A lock that never clears: every attempt fails, the final exception propagates
-        // (the caller then leaves the original file untouched — fail safe).
+        // (the caller then leaves the original file untouched, fail safe).
         int calls = 0;
         var ex = Assert.ThrowsExactly<IOException>(() =>
             Mp4Writer.RetryOnTransientLock(

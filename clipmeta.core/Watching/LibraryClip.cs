@@ -9,7 +9,7 @@ namespace ClipMetaCore.Watching;
 /// </param>
 /// <param name="CreationTimeUtc">
 /// NTFS creation time at enumeration. Set fresh when a file appears in a directory even when a copy
-/// preserves the source's write time, so it — not write time — identifies a genuinely new clip
+/// preserves the source's write time, so it, not write time, identifies a genuinely new clip
 /// (gaming mode; see <see cref="RecentWriteSignal"/>).
 /// </param>
 public sealed record LibraryClip(

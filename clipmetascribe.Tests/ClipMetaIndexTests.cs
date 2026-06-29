@@ -195,7 +195,7 @@ public class ClipMetaIndexTests
     public void WriteToFile_FailureMidSerialization_LeavesExistingIndexIntactAndNoTemp()
     {
         // The bug this feature fixes: the old WriteToFile opened the target with
-        // StreamWriter(append:false), truncating it on open — so a write that fails partway
+        // StreamWriter(append:false), truncating it on open, so a write that fails partway
         // (here, an entry list that throws mid-enumeration, standing in for a crash / disk-full)
         // would leave the user's previously-built index truncated. Atomic temp-then-swap must
         // leave the existing index byte-for-byte intact.
@@ -277,7 +277,7 @@ public class ClipMetaIndexTests
         Assert.AreEqual(StaleReason.Missing, ClipMetaIndex.CheckEntry(entry));
     }
 
-    /// <summary>An entry list that yields nothing and throws as soon as it is enumerated —
+    /// <summary>An entry list that yields nothing and throws as soon as it is enumerated, 
     /// stands in for an interrupted serialization (crash / disk-full) mid-write.</summary>
     private sealed class ThrowingEntryList : IReadOnlyList<IndexEntry>
     {

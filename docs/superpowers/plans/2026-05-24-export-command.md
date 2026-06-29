@@ -4,7 +4,7 @@
 
 **Goal:** Add `--export` to clipmetascribe so a user can dump clipmeta metadata from one MP4 file or an entire directory to JSON or CSV.
 
-**Architecture:** `ClipMetaExporter.GetRecords(IEnumerable<string> filePaths)` (in `clipmeta.core/Read/`) reads fields from each file and returns `IReadOnlyList<ExportRecord>`, excluding the internal `schema` field. `ExportCommand.Run(IReadOnlyList<ExportRecord>, string format, TextWriter?)` formats the records as JSON or CSV with hand-written serialization (no NuGet). Program.cs constructs the file list (single file or directory scan), opens an optional `StreamWriter` for `--output`, and calls `ClipMetaExporter.GetRecords` → `ExportCommand.Run`. Tests for `ExportCommand` use constructed `ExportRecord` values — no MP4 file I/O needed — making them fast unit tests.
+**Architecture:** `ClipMetaExporter.GetRecords(IEnumerable<string> filePaths)` (in `clipmeta.core/Read/`) reads fields from each file and returns `IReadOnlyList<ExportRecord>`, excluding the internal `schema` field. `ExportCommand.Run(IReadOnlyList<ExportRecord>, string format, TextWriter?)` formats the records as JSON or CSV with hand-written serialization (no NuGet). Program.cs constructs the file list (single file or directory scan), opens an optional `StreamWriter` for `--output`, and calls `ClipMetaExporter.GetRecords` → `ExportCommand.Run`. Tests for `ExportCommand` use constructed `ExportRecord` values, no MP4 file I/O needed, making them fast unit tests.
 
 **Tech Stack:** C# / .NET 10, MSTest 4, no external packages. Solution root: `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`.
 
@@ -14,11 +14,11 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
-| `clipmeta.core/Read/ClipMetaExporter.cs` | Create | `ExportRecord` record + `ClipMetaExporter.GetRecords` — gathers fields from MP4 files |
+| `clipmeta.core/Read/ClipMetaExporter.cs` | Create | `ExportRecord` record + `ClipMetaExporter.GetRecords`, gathers fields from MP4 files |
 | `clipmetascribe/Commands/ExportCommand.cs` | Create | Formats `ExportRecord` list as JSON or CSV; writes to `TextWriter` |
 | `clipmetascribe/Program.cs` | Modify | Wire `--export`, `--format`, `--output`; open StreamWriter if needed |
 | `clipmetascribe.Tests/ClipMetaExporterTests.cs` | Create | Integration tests using real MP4 files |
-| `clipmetascribe.Tests/ExportCommandTests.cs` | Create | Unit tests using constructed `ExportRecord` — no file I/O |
+| `clipmetascribe.Tests/ExportCommandTests.cs` | Create | Unit tests using constructed `ExportRecord`, no file I/O |
 
 ---
 
@@ -26,19 +26,19 @@
 
 **`ClipMetaReader.GetFields(BoxNode root)`** → `IReadOnlyList<(string Field, string Value)>`. Bare field names, unquoted values. In `clipmeta.core/Read/ClipMetaReader.cs`.
 
-**`ClipMetaSchema.Schema`** = `"schema"` — the internal field written on every write. Must be excluded from export output.
+**`ClipMetaSchema.Schema`** = `"schema"`, the internal field written on every write. Must be excluded from export output.
 
 **`ClipMetaSchema.AtomName(field)`** → `"com.peckworkslab.clipmeta:field"`. Used in tests when calling `Mp4Writer`.
 
-**`ClipMetaSchema.Game/Players/Tags/Timecode/Rating/Notes`** — the six known field names. Used as fixed CSV column headers.
+**`ClipMetaSchema.Game/Players/Tags/Timecode/Rating/Notes`**, the six known field names. Used as fixed CSV column headers.
 
-**`Mp4Parser.ParseFile(path)`** — can throw `IOException`, `UnauthorizedAccessException`, `InvalidDataException`. All three must be caught per-file with `continue`.
+**`Mp4Parser.ParseFile(path)`**, can throw `IOException`, `UnauthorizedAccessException`, `InvalidDataException`. All three must be caught per-file with `continue`.
 
-**`TestClipsLocator.AllPristine()`** — in `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`. Returns paths to pristine `.mp4` files.
+**`TestClipsLocator.AllPristine()`**, in `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`. Returns paths to pristine `.mp4` files.
 
-**`GetFlag(args, "--format")`** — already in Program.cs. Returns `args[idx+1]` if flag present with a following arg, else null.
+**`GetFlag(args, "--format")`**, already in Program.cs. Returns `args[idx+1]` if flag present with a following arg, else null.
 
-**`GetFlag(args, "--output")`** — same helper for the output path.
+**`GetFlag(args, "--output")`**, same helper for the output path.
 
 ---
 
@@ -172,7 +172,7 @@ cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "ClipMetaExporterTests" --verbosity minimal
 ```
 
-Expected: build error — `ClipMetaExporter` does not exist.
+Expected: build error, `ClipMetaExporter` does not exist.
 
 - [ ] **Step 3: Implement ClipMetaExporter**
 
@@ -461,7 +461,7 @@ public class ExportCommandTests
 dotnet test clipmetascribe.Tests --filter "ExportCommandTests" --verbosity minimal
 ```
 
-Expected: build error — `ExportCommand` does not exist.
+Expected: build error, `ExportCommand` does not exist.
 
 - [ ] **Step 3: Implement ExportCommand**
 
@@ -583,7 +583,7 @@ internal static class ExportCommand
 
 Read `clipmetascribe/Program.cs` to confirm current content, then make two changes.
 
-**Change A — add `--export` block.**
+**Change A, add `--export` block.**
 
 Find this text in Program.cs (it is the `--vocab` closing brace followed by the `File.Exists` check):
 ```csharp
@@ -657,11 +657,11 @@ Replace with:
             if (filePath != null && Path.HasExtension(filePath))
 ```
 
-**Change B — update PrintUsage.** Replace the entire `Console.WriteLine("""...""");` block with:
+**Change B, update PrintUsage.** Replace the entire `Console.WriteLine("""...""");` block with:
 
 ```csharp
         Console.WriteLine("""
-            clipmetascribe — MP4 metadata writer (Peckworks Lab)
+            clipmetascribe, MP4 metadata writer (Peckworks Lab)
 
             Usage:
               clipmetascribe "clip.mp4" --list
@@ -709,7 +709,7 @@ Replace with:
             """);
 ```
 
-**Change C — add `using ClipMetaCore.Read;` if not already present.**
+**Change C, add `using ClipMetaCore.Read;` if not already present.**
 
 Check the top of Program.cs. It currently imports: `ClipMetaCore`, `ClipMetaCore.Abstractions`, `ClipMetaCore.Logging`, `ClipMetaCore.Schema`, `ClipMetaCore.Write`, `ClipMetaScribe.Commands`. Add `using ClipMetaCore.Read;` after the existing using directives.
 
@@ -741,26 +741,26 @@ git commit -m "feat: add --export command for JSON and CSV metadata dump"
 ## Self-Review
 
 **Spec coverage:**
-- ✅ `--export` on single file — Program.cs `File.Exists` branch → `new[] { filePath }`
-- ✅ `--export` on directory — Program.cs `Directory.Exists` branch → `Directory.EnumerateFiles`
-- ✅ JSON output — `WriteJson` with hand-written serialization
-- ✅ CSV output — `WriteCsv` with known-field columns + custom fields appended
-- ✅ `--format json|csv` — `GetFlag(args, "--format") ?? "json"`; `--flag` guard
-- ✅ `--output <path>` — `StreamWriter` opened in Program.cs; disposed in `finally`
-- ✅ Internal `schema` field excluded — `ClipMetaExporter.GetRecords` filters it
-- ✅ Malformed files skipped — three-exception catch in `GetRecords`
-- ✅ Pristine file with no fields — includes record with empty Fields list
-- ✅ JSON escaping — `JsonEscape` handles `"`, `\`, `\n`, `\r`, `\t`, control chars
-- ✅ CSV escaping — `CsvEscape` wraps in quotes when `,`, `"`, newline present
-- ✅ CSV header always contains all six known fields — `KnownFields` array in `ExportCommand`
-- ✅ Unknown format returns exit code 1 — `WriteFormatError`
-- ✅ IOException handling at Program.cs level — wraps `ExportCommand.Run` call
+- ✅ `--export` on single file, Program.cs `File.Exists` branch → `new[] { filePath }`
+- ✅ `--export` on directory, Program.cs `Directory.Exists` branch → `Directory.EnumerateFiles`
+- ✅ JSON output, `WriteJson` with hand-written serialization
+- ✅ CSV output, `WriteCsv` with known-field columns + custom fields appended
+- ✅ `--format json|csv`, `GetFlag(args, "--format") ?? "json"`; `--flag` guard
+- ✅ `--output <path>`, `StreamWriter` opened in Program.cs; disposed in `finally`
+- ✅ Internal `schema` field excluded, `ClipMetaExporter.GetRecords` filters it
+- ✅ Malformed files skipped, three-exception catch in `GetRecords`
+- ✅ Pristine file with no fields, includes record with empty Fields list
+- ✅ JSON escaping, `JsonEscape` handles `"`, `\`, `\n`, `\r`, `\t`, control chars
+- ✅ CSV escaping, `CsvEscape` wraps in quotes when `,`, `"`, newline present
+- ✅ CSV header always contains all six known fields, `KnownFields` array in `ExportCommand`
+- ✅ Unknown format returns exit code 1, `WriteFormatError`
+- ✅ IOException handling at Program.cs level, wraps `ExportCommand.Run` call
 - ✅ PrintUsage updated with `--export`, `--format`, `--output`
 
 **Placeholder scan:** No TBD, TODO, "similar to Task N", or vague steps. All code is complete.
 
 **Type consistency:**
-- `ExportRecord(string FilePath, IReadOnlyList<(string Field, string Value)> Fields)` — defined in Task 1, used in Task 2 `ExportCommand.Run` signature and test `MakeRecord` helper. Consistent.
-- `ClipMetaExporter.GetRecords(IEnumerable<string>)` → `IReadOnlyList<ExportRecord>` — defined in Task 1, called in Program.cs in Task 2. Consistent.
-- `ExportCommand.Run(IReadOnlyList<ExportRecord>, string, TextWriter?)` → `int` — defined and tested in Task 2. Consistent.
-- `KnownFields` in `ExportCommand` matches `ClipMetaSchema.Game/Players/Tags/Timecode/Rating/Notes` — same 6 fields used in `StatsCommand`. Consistent.
+- `ExportRecord(string FilePath, IReadOnlyList<(string Field, string Value)> Fields)`, defined in Task 1, used in Task 2 `ExportCommand.Run` signature and test `MakeRecord` helper. Consistent.
+- `ClipMetaExporter.GetRecords(IEnumerable<string>)` → `IReadOnlyList<ExportRecord>`, defined in Task 1, called in Program.cs in Task 2. Consistent.
+- `ExportCommand.Run(IReadOnlyList<ExportRecord>, string, TextWriter?)` → `int`, defined and tested in Task 2. Consistent.
+- `KnownFields` in `ExportCommand` matches `ClipMetaSchema.Game/Players/Tags/Timecode/Rating/Notes`, same 6 fields used in `StatsCommand`. Consistent.

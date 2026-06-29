@@ -13,15 +13,15 @@ namespace ClipMetaMcp.Tests;
 ///
 /// One shared library is built ONCE for the whole class (a single ~70 MB pristine copy plus a
 /// tiny garbage .mp4) because per-test copies would multiply real-clip I/O by every test here.
-/// All tests treat the library as read-only — except the index tests, whose only side effect
+/// All tests treat the library as read-only, except the index tests, whose only side effect
 /// is the .clipmeta-index cache file, which no other tool reads (everything else enumerates
 /// *.mp4 only).
 ///
 /// Library layout:
-///   tagged.mp4        — real clip; game + tags + one custom field; lastWrite = now − 1 h
-///   sub\noise.mp4     — 8 garbage bytes; parses to an empty tree (lenient parser);
+///   tagged.mp4, real clip; game + tags + one custom field; lastWrite = now − 1 h
+///   sub\noise.mp4, 8 garbage bytes; parses to an empty tree (lenient parser);
 ///                       lastWrite = now (the NEWEST file, for ordering assertions)
-///   readme.txt        — must never appear in any listing or export
+///   readme.txt, must never appear in any listing or export
 /// </summary>
 [TestClass]
 public class Phase2ReadToolsTests
@@ -74,7 +74,7 @@ public class Phase2ReadToolsTests
     public void RequireClips()
     {
         if (!TestClipsLocator.PristineClipsPresent())
-            Assert.Inconclusive("No test clips in testclips/pristine — skipped (e.g. CI).");
+            Assert.Inconclusive("No test clips in testclips/pristine, skipped (e.g. CI).");
     }
 
     /// <summary>Runs one tool call against the shared library and returns the call result.</summary>
@@ -392,7 +392,7 @@ public class Phase2ReadToolsTests
     [TestMethod]
     public void SearchIndex_CorruptIndexFile_SelfHealsByRebuilding()
     {
-        // A truncated/garbled cache must trigger a rescan, not a dead tool — the index is a
+        // A truncated/garbled cache must trigger a rescan, not a dead tool, the index is a
         // cache, never the source of truth. "built NOTADATE" makes DateTimeOffset.Parse throw.
         File.WriteAllText(Path.Combine(_lib, ClipMetaIndex.IndexFileName),
             "version 1\nbuilt NOTADATE\n");

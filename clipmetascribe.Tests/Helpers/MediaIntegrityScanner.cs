@@ -4,24 +4,24 @@ namespace ClipMetaScribe.Tests.Helpers;
 
 /// <summary>
 /// A deliberately independent MP4 scanner used to prove, byte-for-byte, that a metadata write
-/// did not damage the media data. It shares NO code with clipmeta.core — it re-implements the
-/// minimal box walking it needs — so that a bug in the production parser cannot mask an
+/// did not damage the media data. It shares NO code with clipmeta.core, it re-implements the
+/// minimal box walking it needs, so that a bug in the production parser cannot mask an
 /// identical bug in the writer (if both used the same code, a shared mistake would round-trip
 /// "cleanly" and the tests would pass while real players choke).
 /// </summary>
 /// <remarks>
 /// What "media integrity" means here, and why each piece matters:
 /// <list type="bullet">
-///   <item><b>mdat payloads</b> — the actual compressed video/audio bytes. After a metadata
+///   <item><b>mdat payloads</b>, the actual compressed video/audio bytes. After a metadata
 ///       write these must be IDENTICAL (verified by SHA-256). The writer only ever
 ///       stream-copies mdat, so any difference means catastrophic corruption.</item>
-///   <item><b>Chunk-offset tables (stco/co64)</b> — every entry is an ABSOLUTE file offset
+///   <item><b>Chunk-offset tables (stco/co64)</b>, every entry is an ABSOLUTE file offset
 ///       telling the player where a chunk of samples starts. When the moov box grows or
 ///       shrinks, everything after it slides, so the writer must patch each entry by exactly
 ///       that delta. The proof that it did: the bytes found at the OLD offset in the ORIGINAL
 ///       file must equal the bytes at the NEW offset in the REWRITTEN file. Checking the
 ///       bytes (not the arithmetic) means we don't have to trust anyone's delta math.</item>
-///   <item><b>Top-level box inventory</b> — the sequence of top-level box types must be
+///   <item><b>Top-level box inventory</b>, the sequence of top-level box types must be
 ///       unchanged; a missing mdat or a dropped trailing box is instantly visible.</item>
 /// </list>
 /// </remarks>
@@ -84,7 +84,7 @@ internal static class MediaIntegrityScanner
                 size = (ulong)(end - pos);
             }
 
-            if (size < (ulong)headerSize) break;     // corrupt size field — stop scanning
+            if (size < (ulong)headerSize) break;     // corrupt size field, stop scanning
             long boxEnd = pos + (long)size;
             if (boxEnd > end) boxEnd = end;          // clamp boxes that overrun their container
 
@@ -96,7 +96,7 @@ internal static class MediaIntegrityScanner
             }
             else if (type is "moov" or "trak" or "mdia" or "minf" or "stbl")
             {
-                // Pure container boxes on the path to the chunk tables — recurse.
+                // Pure container boxes on the path to the chunk tables, recurse.
                 Walk(f, pos + headerSize, boxEnd, snap, topLevel: false);
             }
             else if (type is "stco" or "co64")
@@ -144,7 +144,7 @@ internal static class MediaIntegrityScanner
         var before = Scan(originalPath);
         var after = Scan(rewrittenPath);
 
-        // 1. Same top-level boxes in the same order — instantly catches a dropped mdat.
+        // 1. Same top-level boxes in the same order, instantly catches a dropped mdat.
         CollectionAssert.AreEqual(before.TopLevelTypes, after.TopLevelTypes,
             $"Top-level box inventory changed: [{string.Join(",", before.TopLevelTypes)}] → " +
             $"[{string.Join(",", after.TopLevelTypes)}]");
@@ -158,7 +158,7 @@ internal static class MediaIntegrityScanner
             Assert.AreEqual(
                 HashRange(originalPath, before.MdatPayloads[i]),
                 HashRange(rewrittenPath, after.MdatPayloads[i]),
-                $"mdat[{i}] payload bytes changed (SHA-256 mismatch) — media data corrupted");
+                $"mdat[{i}] payload bytes changed (SHA-256 mismatch), media data corrupted");
         }
 
         // 3. Chunk tables: identical shape, and every entry must point at the same data.
@@ -183,8 +183,8 @@ internal static class MediaIntegrityScanner
                 //
                 // The comparison window is clamped to the END of the mdat that contains the
                 // offset: a chunk near the mdat boundary (ZC112's last chunk sits 38 bytes from
-                // it) would otherwise have a fixed 64-byte read spill into the NEXT box — moov,
-                // which legitimately changed when metadata was written — and report a false
+                // it) would otherwise have a fixed 64-byte read spill into the NEXT box, moov,
+                // which legitimately changed when metadata was written, and report a false
                 // "plays garbage". The chunk's actual sample bytes live inside mdat; comparing
                 // past mdat-end compares non-media. (mdat itself is already proven identical
                 // byte-for-byte by the SHA-256 check above, so this remains a strict offset
@@ -200,7 +200,7 @@ internal static class MediaIntegrityScanner
                     bytesAtOldOffset.Take(gotOld).ToArray(),
                     bytesAtNewOffset.Take(gotNew).ToArray(),
                     $"chunk table[{t}] entry {i} points at different data after rewrite " +
-                    $"(old offset {offsetsBefore[i]}, new offset {offsetsAfter[i]}) — " +
+                    $"(old offset {offsetsBefore[i]}, new offset {offsetsAfter[i]}), " +
                     $"the track would play garbage");
             }
         }
@@ -218,7 +218,7 @@ internal static class MediaIntegrityScanner
 
     /// <summary>
     /// How many bytes from <paramref name="offset"/> may be compared without reading past the
-    /// end of the mdat that contains it — capped at <paramref name="cap"/>. A chunk offset
+    /// end of the mdat that contains it, capped at <paramref name="cap"/>. A chunk offset
     /// addresses sample data inside some mdat; comparing beyond that mdat's last byte compares
     /// non-media (the next box), which can change for legitimate reasons. If no mdat contains
     /// the offset (unexpected), the full cap is allowed so the check still runs.

@@ -142,7 +142,7 @@ public class TagQueueTests
     public void Drain_NotesAppend_AccumulatesOntoDiskAsProse()
     {
         // The P0 fix (disk half): appending to a clip whose notes already exist on disk joins as
-        // prose, case preserved — never clobbers (the original dogfooding data-loss bug).
+        // prose, case preserved, never clobbers (the original dogfooding data-loss bug).
         string clip = MakeClip("a.mp4", seedField: "notes", seedValue: "Chuck wins");
         var m = new MetadataMutation();
         m.AppendFields[ClipMetaSchema.AtomName("notes")] = "raccoon appears";

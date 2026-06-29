@@ -13,12 +13,12 @@ public sealed record InstallResult(bool Success, string Message, string? BackupP
 /// <summary>
 /// The manual-config fallback (spec §4): writes a <c>mcpServers.clipmeta</c> entry into Claude
 /// Desktop's <c>claude_desktop_config.json</c> for hosts/situations where bundle install isn't
-/// available — or, as discovered in the field, where it is silently broken (the Microsoft
+/// available, or, as discovered in the field, where it is silently broken (the Microsoft
 /// Store build; see PITFALLS 2026-06-12).
 ///
 /// Contract mirrors the write engine's golden rule, scaled down: the existing config is backed
-/// up (timestamped sibling) before any change, an unparseable config is REFUSED — never
-/// "repaired" — and everything that is not the clipmeta entry round-trips untouched.
+/// up (timestamped sibling) before any change, an unparseable config is REFUSED, never
+/// "repaired", and everything that is not the clipmeta entry round-trips untouched.
 /// </summary>
 public static class ClaudeConfigInstaller
 {
@@ -30,7 +30,7 @@ public static class ClaudeConfigInstaller
     /// <summary>
     /// Finds the config file Claude Desktop will actually read, newest install style first:
     /// the Microsoft Store (MSIX) build virtualizes <c>%APPDATA%\Claude</c> into its package
-    /// container — when that container exists, a file at the classic path is INVISIBLE to the
+    /// container, when that container exists, a file at the classic path is INVISIBLE to the
     /// app, so the container must win. Returns the first existing file; if none exists yet,
     /// the preferred location to create (container when present, else classic).
     /// </summary>
@@ -59,7 +59,7 @@ public static class ClaudeConfigInstaller
         return candidates.FirstOrDefault(File.Exists) ?? candidates[0];
     }
 
-    // ── Install / uninstall (pure file operations — what the tests drive) ────────────────
+    // ── Install / uninstall (pure file operations, what the tests drive) ────────────────
 
     /// <summary>
     /// Inserts or updates the clipmeta entry in <paramref name="configPath"/>. Creates the file
@@ -83,7 +83,7 @@ public static class ClaudeConfigInstaller
             }
             catch (JsonException ex)
             {
-                // Never "fix" a config we can't parse — it may hold servers the user cares
+                // Never "fix" a config we can't parse, it may hold servers the user cares
                 // about in a form we'd destroy. Refuse; the file is untouched.
                 return new InstallResult(false,
                     $"Refused: '{configPath}' is not valid JSON ({ex.Message}). " +
@@ -122,14 +122,14 @@ public static class ClaudeConfigInstaller
                 [LibrarySandbox.EnvVarName] = Path.GetFullPath(libraryRoot),
             };
         }
-        servers[ServerKey] = entry; // insert or replace — re-running --install is idempotent
+        servers[ServerKey] = entry; // insert or replace, re-running --install is idempotent
 
         File.WriteAllText(configPath,
             root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         string libraryNote = libraryRoot is not null
             ? $"library root: {Path.GetFullPath(libraryRoot)}"
-            : "no library root set — read tools work anywhere, WRITE tools stay disabled " +
+            : "no library root set, read tools work anywhere, WRITE tools stay disabled " +
               "(re-run with --library-root <folder> to enable them)";
         return new InstallResult(true,
             $"Installed '{ServerKey}' into {configPath} ({libraryNote}). " +
@@ -211,7 +211,7 @@ public static class ClaudeConfigInstaller
     /// <summary>
     /// How an MCP host should launch this server. The published single-file exe is its own
     /// command; under `dotnet run` (dev) the host is dotnet.exe and the entry dll becomes the
-    /// argument — same resolution rule the selftest uses for spawning itself.
+    /// argument, same resolution rule the selftest uses for spawning itself.
     /// </summary>
     private static (string? Command, string[] Args) ResolveOwnCommand()
     {

@@ -5,7 +5,7 @@ namespace ClipMetaView.Tests;
 /// <summary>
 /// Helpers for locating the solution-level testclips directory.
 ///
-/// Graceful-skip for clip-less machines (e.g. CI — clips are git-ignored): when no pristine
+/// Graceful-skip for clip-less machines (e.g. CI, clips are git-ignored): when no pristine
 /// clips are present, the clip accessors call <see cref="Assert.Inconclusive"/> so the calling
 /// test reports as <b>skipped</b>, not failed. DynamicData sources can't catch Inconclusive
 /// (they run during data expansion), so they use <see cref="ClipRows"/> + <see cref="SkipIfMissing"/>.
@@ -79,7 +79,7 @@ internal static class TestClips
     private static string SkipNoClips()
     {
         Assert.Inconclusive(
-            "No test clips found in testclips/pristine — test skipped. These run locally where " +
+            "No test clips found in testclips/pristine, test skipped. These run locally where " +
             "real .mp4 clips exist; CI runs clip-less by design (graceful skip).");
         return null!; // unreachable: Assert.Inconclusive always throws
     }

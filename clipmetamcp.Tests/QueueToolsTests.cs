@@ -41,7 +41,7 @@ public class QueueToolsTests
     private string PrepareClip(string fileName = "clip.mp4")
     {
         if (!TestClipsLocator.PristineClipsPresent())
-            Assert.Inconclusive("No test clips in testclips/pristine — skipped (e.g. CI).");
+            Assert.Inconclusive("No test clips in testclips/pristine, skipped (e.g. CI).");
 
         string dest = Path.Combine(_lib, fileName);
         File.Copy(TestClipsLocator.SmallestPristine(), dest);
@@ -73,7 +73,7 @@ public class QueueToolsTests
     /// <summary>
     /// After a queue_tag call the queue file must exist and contain exactly one entry for the
     /// clip, and the tool response must report the clip as queued with pending >= 1.
-    /// We don't hold a real OS lock here — the brief says to assert queue persistence via
+    /// We don't hold a real OS lock here, the brief says to assert queue persistence via
     /// TagQueue.Load when an in-process lock is awkward; drain/lock is proven in Core tests.
     /// </summary>
     [TestMethod]
@@ -99,7 +99,7 @@ public class QueueToolsTests
         Assert.AreEqual(1, data.Entries.Count, "queue must have exactly one entry");
         Assert.AreEqual(clip, data.Entries[0].ClipPath, StringComparer.OrdinalIgnoreCase,
             "the queued clip path must match the resolved path");
-        // 'tags' is an accumulate field, so it routes to AppendFields (not SetFields) — re-tagging
+        // 'tags' is an accumulate field, so it routes to AppendFields (not SetFields), re-tagging
         // the same clip merges instead of overwriting.
         Assert.IsTrue(data.Entries[0].Mutation.AppendFields.Values.Contains("headshot"),
             "the queued mutation must append the 'tags' value");
@@ -109,7 +109,7 @@ public class QueueToolsTests
     public void QueueTag_RoutesNotesTagsPlayersToAppend_RestToSet()
     {
         // The P0 fix at the tool layer: free-text/list fields accumulate (AppendFields), scalar
-        // fields replace (SetFields). An empty .mp4 is enough — queue_tag stores the path, never parses.
+        // fields replace (SetFields). An empty .mp4 is enough, queue_tag stores the path, never parses.
         string clip = Path.Combine(_lib, "clip.mp4");
         File.WriteAllBytes(clip, Array.Empty<byte>());
 
@@ -199,7 +199,7 @@ public class QueueToolsTests
     [TestMethod]
     public void QueueTag_NoLibrary_RefusesCleanly()
     {
-        // Path doesn't matter — ResolveWritePath fires first when Root is null.
+        // Path doesn't matter, ResolveWritePath fires first when Root is null.
         JsonObject result = Call("library_queue_tag", new JsonObject
         {
             ["path"] = "clip.mp4",
@@ -232,7 +232,7 @@ public class QueueToolsTests
         var journal = new DrainJournal();
         journal.Record(new DrainedTag(path, new[] { "tags" }, DateTimeOffset.UtcNow));
 
-        // First call — must surface the one journal entry.
+        // First call, must surface the one journal entry.
         var responses = McpHarness.RunWithJournal(_lib, journal,
             McpHarness.InitializeRequest,
             McpHarness.ToolCall(2, "library_flush_queue", new JsonObject()));
@@ -269,7 +269,7 @@ public class QueueToolsTests
     [TestMethod]
     public void QueueTag_UnknownPlayer_AdvisoryFires_TagStillEnqueued()
     {
-        // Empty-bytes file is enough — queue_tag stores the path and never parses.
+        // Empty-bytes file is enough, queue_tag stores the path and never parses.
         string clip = Path.Combine(_lib, "clip.mp4");
         File.WriteAllBytes(clip, Array.Empty<byte>());
 
@@ -317,7 +317,7 @@ public class QueueToolsTests
         var journal = new DrainJournal();
         // pollInterval is deliberately long: the pump is purely event-driven (idles on
         // WaitHandle.WaitAny) and is never woken for an unlocked clip, so it never reaches a poll
-        // wait — the long interval just documents that and guards against any future pump change.
+        // wait, the long interval just documents that and guards against any future pump change.
         using var pump = new QueueDrainPump(
             _lib, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse,
             runExclusive: action => { WriteGate.Enter(); try { action(); } finally { WriteGate.Exit(); } },

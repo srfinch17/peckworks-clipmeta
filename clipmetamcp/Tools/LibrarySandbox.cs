@@ -1,7 +1,7 @@
 namespace ClipMetaMcp.Tools;
 
 /// <summary>
-/// Confines tool file access to the user's configured clips folder (spec §3, risk R6 — the
+/// Confines tool file access to the user's configured clips folder (spec §3, risk R6, the
 /// caller is an LLM that can hallucinate paths). The root arrives via the
 /// <c>CLIPMETA_LIBRARY_ROOT</c> environment variable, which the .mcpb user_config plumbing sets
 /// from the folder the user picked at install time.
@@ -10,7 +10,7 @@ namespace ClipMetaMcp.Tools;
 /// component resolved), not the lexical one: <c>Path.GetFullPath</c> does NOT resolve reparse
 /// points while <c>FileStream</c> DOES follow them, so a junction inside the library pointing
 /// outside it would otherwise tunnel straight through a purely lexical check (2026-06-11
-/// adversarial review, finding F1 — demonstrated escape).
+/// adversarial review, finding F1, demonstrated escape).
 /// </summary>
 public sealed class LibrarySandbox
 {
@@ -25,7 +25,7 @@ public sealed class LibrarySandbox
     public string? Root { get; }
 
     /// <summary>
-    /// The root with every junction/symlink component resolved — what containment is actually
+    /// The root with every junction/symlink component resolved, what containment is actually
     /// checked against. Differs from <see cref="Root"/> when the user's library path itself
     /// goes through a link (e.g. a relocated-folder junction).
     /// </summary>
@@ -46,7 +46,7 @@ public sealed class LibrarySandbox
 
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         // Canonicalize once: if the configured root path itself contains link components,
-        // clips inside it resolve to the link TARGET — containment must compare like with like
+        // clips inside it resolve to the link TARGET, containment must compare like with like
         // or every legitimate clip would be refused.
         _canonicalRoot = Directory.Exists(Root)
             ? Path.TrimEndingDirectorySeparator(ResolveRealPath(Root))
@@ -60,7 +60,7 @@ public sealed class LibrarySandbox
     /// <summary>
     /// Validates a clip path for reading and returns its resolved absolute form. Relative paths
     /// resolve against the library root (the working directory of a host-spawned server is
-    /// undefined — never resolve against it). Requires containment in the root when one is
+    /// undefined, never resolve against it). Requires containment in the root when one is
     /// configured (checked on the canonical, link-resolved path), an .mp4 extension, an
     /// existing file, and no NTFS alternate-data-stream syntax. Throws
     /// <see cref="ToolException"/> with a model-readable message otherwise.
@@ -81,7 +81,7 @@ public sealed class LibrarySandbox
         }
 
         // NTFS alternate data streams ("clip.mp4:hidden.mp4") would satisfy the .mp4 suffix
-        // check with the STREAM name while opening arbitrary hidden content — and File.Replace
+        // check with the STREAM name while opening arbitrary hidden content, and File.Replace
         // against a stream path has destructive semantics for the future write tools. Any colon
         // in the final path segment is stream syntax (the drive colon lives in the root segment).
         if (Path.GetFileName(full).Contains(':'))
@@ -109,7 +109,7 @@ public sealed class LibrarySandbox
 
     /// <summary>
     /// Validates a clip path for WRITING. Same checks as <see cref="ResolveClipPath"/>, with one
-    /// stricter precondition: writes with no configured library are refused outright (spec §3) —
+    /// stricter precondition: writes with no configured library are refused outright (spec §3), 
     /// a read outside a sandbox shows someone data; a write outside a sandbox mutates their
     /// files. The message names the fix because the model relays it to the user.
     /// </summary>
@@ -127,7 +127,7 @@ public sealed class LibrarySandbox
     /// Resolves an arbitrary file path for a library-management operation (a backup file, or a
     /// clip whose backups are being managed) and enforces canonical containment in the library.
     /// Unlike <see cref="ResolveClipPath"/> it does NOT require a <c>.mp4</c> extension (backups
-    /// are <c>clip.mp4.bak-&lt;stamp&gt;</c>) and existence is the caller's choice — you can list
+    /// are <c>clip.mp4.bak-&lt;stamp&gt;</c>) and existence is the caller's choice, you can list
     /// or prune the backups of a clip that has since been deleted. Requires a configured library
     /// and rejects ADS syntax, exactly like the clip resolver.
     /// </summary>
@@ -156,7 +156,7 @@ public sealed class LibrarySandbox
         if (mustExist && !File.Exists(full))
             throw new ToolException($"No file exists at '{full}'. Check the path and try again.");
 
-        // Canonical containment — junctions/symlinks resolved, same rule as ResolveClipPath.
+        // Canonical containment, junctions/symlinks resolved, same rule as ResolveClipPath.
         // A nonexistent path can't be link-resolved, so judge it lexically (GetFullPath already
         // collapsed ".."); an existing path is resolved through its reparse points.
         string toCheck = File.Exists(full) || Directory.Exists(full) ? ResolveRealPath(full) : full;
@@ -170,8 +170,8 @@ public sealed class LibrarySandbox
 
     /// <summary>
     /// Returns the configured library root, or refuses when none is set. Directory-scoped tools
-    /// (list/find/vocab/export/index) have no meaningful "anywhere" mode — scanning an undefined
-    /// directory tree on an LLM's behalf is exactly the surprise this sandbox exists to prevent —
+    /// (list/find/vocab/export/index) have no meaningful "anywhere" mode, scanning an undefined
+    /// directory tree on an LLM's behalf is exactly the surprise this sandbox exists to prevent, 
     /// so unlike single-clip reads they hard-require configuration (plan, phase 2).
     /// </summary>
     public string RequireRoot()
@@ -188,7 +188,7 @@ public sealed class LibrarySandbox
     /// Validates an optional subfolder argument for a directory-scoped tool and returns the
     /// absolute directory to operate on: the library root when <paramref name="subfolder"/> is
     /// null/blank, otherwise the subfolder resolved against the root. The same canonical
-    /// (junction/symlink-resolved) containment check as clip paths applies — a subfolder is
+    /// (junction/symlink-resolved) containment check as clip paths applies, a subfolder is
     /// attacker-reachable input exactly like a file path. The directory must exist.
     /// </summary>
     public string ResolveLibraryDirectory(string? subfolder)
@@ -231,7 +231,7 @@ public sealed class LibrarySandbox
     /// </summary>
     internal static bool IsContained(string fullPath, string root)
     {
-        // A drive root ("C:\") keeps its separator through TrimEndingDirectorySeparator —
+        // A drive root ("C:\") keeps its separator through TrimEndingDirectorySeparator, 
         // appending another would build "C:\\", which nothing starts with and which silently
         // refused every clip on a whole-drive library (2026-06-11 review, finding F3).
         string rootWithSeparator = Path.EndsInDirectorySeparator(root)
@@ -243,14 +243,14 @@ public sealed class LibrarySandbox
     /// <summary>
     /// Resolves every link component (directory junction, symlink) in an existing path to its
     /// final target, walking from the volume root down. Cloud-placeholder files (Dropbox,
-    /// OneDrive) are reparse points but NOT links — <c>ResolveLinkTarget</c> returns null for
+    /// OneDrive) are reparse points but NOT links, <c>ResolveLinkTarget</c> returns null for
     /// them, so they pass through untouched and online-only clips keep working.
     /// </summary>
     internal static string ResolveRealPath(string fullPath)
     {
         string? volumeRoot = Path.GetPathRoot(fullPath);
         if (string.IsNullOrEmpty(volumeRoot))
-            return fullPath; // no recognizable root — leave as-is; containment then fails closed
+            return fullPath; // no recognizable root, leave as-is; containment then fails closed
 
         string current = volumeRoot;
         string remainder = fullPath[volumeRoot.Length..];

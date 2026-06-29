@@ -4,7 +4,7 @@
 
 **Goal:** Add a `--stats` flag to clipmetascribe that prints the file size and a summary of which clipmeta fields are set/unset for a single MP4 file.
 
-**Architecture:** `StatsCommand` is an internal static class in `clipmetascribe/Commands/` following the exact same pattern as `ListCommand` — it calls `Mp4Parser.ParseFile`, then `ClipMetaReader.GetFields`, formats output to a `TextWriter`, and returns 0. Program.cs wires it in one line after the `--list` check.
+**Architecture:** `StatsCommand` is an internal static class in `clipmetascribe/Commands/` following the exact same pattern as `ListCommand`, it calls `Mp4Parser.ParseFile`, then `ClipMetaReader.GetFields`, formats output to a `TextWriter`, and returns 0. Program.cs wires it in one line after the `--list` check.
 
 **Tech Stack:** C# / .NET 10, MSTest 4, no new NuGet packages
 
@@ -30,7 +30,7 @@
 #### Context you need
 
 **ClipMetaSchema known user fields (game, players, tags, timecode, rating, notes):**
-The schema also has an internal `ClipMetaSchema.Schema` field (value `"schema"`) that clipmetascribe writes as a version marker on every write. Stats must exclude it — users never set it directly. The 6 user-facing fields are the public constants: `Game`, `Players`, `Tags`, `Timecode`, `Rating`, `Notes`.
+The schema also has an internal `ClipMetaSchema.Schema` field (value `"schema"`) that clipmetascribe writes as a version marker on every write. Stats must exclude it, users never set it directly. The 6 user-facing fields are the public constants: `Game`, `Players`, `Tags`, `Timecode`, `Rating`, `Notes`.
 
 **ClipMetaReader.GetFields**: Returns `IReadOnlyList<(string Field, string Value)>` where Field is the bare name (e.g. `"game"`) and Value is already unquoted. Located at `clipmeta.core/Read/ClipMetaReader.cs`.
 
@@ -62,9 +62,9 @@ Console.Error.WriteLine("Error: No write operation specified. Use --set, --appen
 **Existing InternalsVisibleTo**: `clipmetascribe/AssemblyInfo.cs` already has `[assembly: InternalsVisibleTo("clipmetascribe.Tests")]`. `clipmetascribe.Tests.csproj` already references `clipmetascribe.csproj`. No changes needed there.
 
 **Test helpers you can use**:
-- `TestClipsLocator.AllPristine()` — returns paths to pristine clips with no clipmeta metadata
-- `ScratchClips.Prepare(pristinePath)` — copies a pristine clip to `testclips/scratch/` with a unique name, returns the scratch path
-- `Mp4Writer().WriteMetadata(scratchPath, mutation, NullLogger.Instance)` — writes metadata to the scratch clip
+- `TestClipsLocator.AllPristine()`, returns paths to pristine clips with no clipmeta metadata
+- `ScratchClips.Prepare(pristinePath)`, copies a pristine clip to `testclips/scratch/` with a unique name, returns the scratch path
+- `Mp4Writer().WriteMetadata(scratchPath, mutation, NullLogger.Instance)`, writes metadata to the scratch clip
 - `ClipMetaSchema.AtomName("game")` returns `"com.peckworkslab.clipmeta:game"`
 - ConcurrentBag + ClassCleanup pattern for scratch file cleanup (follow ListCommandTests.cs pattern exactly)
 
@@ -265,7 +265,7 @@ public class StatsCommandTests
     public void Run_PartialFieldsSet_ShowsUnsetKnownFields()
     {
         string pristine = TestClipsLocator.AllPristine().First();
-        // Write only game — the other 5 should appear as unset
+        // Write only game, the other 5 should appear as unset
         string scratch = WriteFields(pristine, new()
         {
             [ClipMetaSchema.AtomName(ClipMetaSchema.Game)] = "Team Fortress 2",
@@ -329,7 +329,7 @@ cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "StatsCommandTests" --no-build 2>&1 | head -20
 ```
 
-Expected: compile error — `StatsCommand` does not exist.
+Expected: compile error, `StatsCommand` does not exist.
 
 - [ ] **Step 3: Implement StatsCommand**
 
@@ -427,7 +427,7 @@ Change to:
 Console.Error.WriteLine("Error: No write operation specified. Use --set, --append, --clear, --clear-all, --list, or --stats.");
 ```
 
-**Update PrintUsage** — in the Usage section, add `clipmetascribe "clip.mp4" --stats` after the `--list` line. In the Examples section, add `clipmetascribe "clip.mp4" --stats` after the list example.
+**Update PrintUsage**, in the Usage section, add `clipmetascribe "clip.mp4" --stats` after the `--list` line. In the Examples section, add `clipmetascribe "clip.mp4" --stats` after the list example.
 
 The updated usage string should have these lines (find and update the raw string literal):
 ```

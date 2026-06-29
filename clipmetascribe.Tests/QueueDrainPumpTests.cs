@@ -9,7 +9,7 @@ namespace ClipMetaScribe.Tests;
 /// <summary>
 /// The zero-touch background flush pump (spec B §3): while the queue is non-empty it polls the
 /// queued clips' lock state and drains them as locks clear, idle otherwise. Driven here with fakes
-/// (recording writer, scripted lock predicate, short interval) — no real player or MP4 needed.
+/// (recording writer, scripted lock predicate, short interval), no real player or MP4 needed.
 /// </summary>
 [TestClass]
 public class QueueDrainPumpTests
@@ -62,7 +62,7 @@ public class QueueDrainPumpTests
     {
         EnqueueClip();
         var writer = new RecordingWriter();
-        // Locked on the first probe, free thereafter — exercises the poll loop, not just one drain.
+        // Locked on the first probe, free thereafter, exercises the poll loop, not just one drain.
         int probes = 0;
         Func<string, bool> isInUse = _ => Interlocked.Increment(ref probes) == 1;
 
@@ -71,7 +71,7 @@ public class QueueDrainPumpTests
         pump.Wake();
 
         Assert.IsTrue(writer.Wrote.Wait(TimeSpan.FromSeconds(15)), "pump must drain the entry once its lock clears");
-        // Wrote fires inside WriteMetadata, just before Drain persists the queue removal — poll for it.
+        // Wrote fires inside WriteMetadata, just before Drain persists the queue removal, poll for it.
         bool emptied = SpinWait.SpinUntil(() => TagQueue.Load(_dir).Entries.Count == 0, TimeSpan.FromSeconds(2));
         Assert.IsTrue(emptied, "drained entry removed from the queue");
     }
@@ -158,8 +158,8 @@ public class QueueDrainPumpTests
         pump.Start();
         pump.Wake();
 
-        // Act: wait generously (15s — pass-3 background-timing lesson). Spin via TakePending;
-        // each call that finds nothing returns [] and clears nothing — safe to repeat.
+        // Act: wait generously (15s, pass-3 background-timing lesson). Spin via TakePending;
+        // each call that finds nothing returns [] and clears nothing, safe to repeat.
         IReadOnlyList<DrainedTag> taken = Array.Empty<DrainedTag>();
         bool recorded = SpinWait.SpinUntil(() =>
         {
@@ -174,7 +174,7 @@ public class QueueDrainPumpTests
         CollectionAssert.Contains(taken[0].Fields.ToList(), "tags", "fields must include 'tags'");
 
         // Report-once: TakePending already cleared the buffer; a second call must return empty.
-        Assert.AreEqual(0, journal.TakePending().Count, "TakePending must clear — report once");
+        Assert.AreEqual(0, journal.TakePending().Count, "TakePending must clear, report once");
     }
 
     private sealed class ExclusiveAssertingWriter(Func<bool> isExclusive, RecordingWriter inner) : IMediaWriter

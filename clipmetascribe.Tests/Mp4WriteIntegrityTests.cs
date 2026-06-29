@@ -9,7 +9,7 @@ namespace ClipMetaScribe.Tests;
 
 /// <summary>
 /// Media-integrity tests for the write engine. These exist because "the metadata reads back"
-/// and "the file still parses" — what the original tests checked — are NOT proof that the
+/// and "the file still parses", what the original tests checked, are NOT proof that the
 /// video survived: a file with every chunk offset corrupted still parses and still returns
 /// its metadata. Every test here instead proves one of two things:
 /// <list type="number">
@@ -19,9 +19,9 @@ namespace ClipMetaScribe.Tests;
 ///       original untouched, and cleans up its temp file.</item>
 /// </list>
 /// The moov-first fixtures matter most: the real test clips that happen to be on hand are all
-/// mdat-first (ftyp, mdat, moov — a layout many screen recorders produce), where chunk offsets
-/// never need adjusting. But layout is a per-file fact, NOT a property of the source — clips
-/// from any tool may be either layout — so the moov-first path (which forces the writer to
+/// mdat-first (ftyp, mdat, moov, a layout many screen recorders produce), where chunk offsets
+/// never need adjusting. But layout is a per-file fact, NOT a property of the source, clips
+/// from any tool may be either layout, so the moov-first path (which forces the writer to
 /// patch every stco entry, the single most corruption-prone operation in the codebase) is
 /// exercised here by synthetic moov-first fixtures rather than left to chance on real clips.
 /// </summary>
@@ -86,7 +86,7 @@ public class Mp4WriteIntegrityTests
         new Mp4Writer().WriteMetadata(working, grow, NullLogger.Instance);
         MediaIntegrityScanner.AssertMediaUnchanged(original, working);
 
-        // Shrink: delete the field (negative delta — offsets must shift backwards correctly).
+        // Shrink: delete the field (negative delta, offsets must shift backwards correctly).
         string afterGrow = working + ".grown.mp4";
         File.Copy(working, afterGrow);
         _tempFiles.Add(afterGrow);
@@ -106,13 +106,13 @@ public class Mp4WriteIntegrityTests
     public void MoovFirstCo64_CreateScenario_Grow_AllChunkOffsetsPointAtSameData()
     {
         // No real pristine clip is both moov-first AND co64 (the co64 clips are all mdat-first,
-        // where offsets never move), and CI runs clip-less — so this synthetic fixture is the
+        // where offsets never move), and CI runs clip-less, so this synthetic fixture is the
         // ONLY coverage of the writer rewriting a 64-bit chunk-offset table when moov grows and
         // shifts mdat. Create scenario: no seed metadata, so the write synthesizes the whole
-        // udta/meta/ilst chain — the largest moov growth, shifting mdat the furthest.
+        // udta/meta/ilst chain, the largest moov growth, shifting mdat the furthest.
         var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstCo64WithPatternedMdat());
 
-        // Teeth: prove the fixture actually exercises co64, not stco — otherwise this test would
+        // Teeth: prove the fixture actually exercises co64, not stco, otherwise this test would
         // silently duplicate the 32-bit path and prove nothing about the 64-bit one.
         var tables = MediaIntegrityScanner.Scan(original).ChunkTables;
         Assert.AreEqual(2, tables.Count, "fixture should have two tracks (catches single-table bugs)");
@@ -132,7 +132,7 @@ public class Mp4WriteIntegrityTests
     public void MoovFirstCo64_UpdateScenario_GrowAndShrink_AllChunkOffsetsPointAtSameData()
     {
         // Seeded with one atom so the write takes the Update path (rewrite existing ilst), over
-        // co64 tables. Exercises both a positive delta (grow) and a negative one (shrink) — the
+        // co64 tables. Exercises both a positive delta (grow) and a negative one (shrink), the
         // 64-bit offsets must shift forward then back and still address the same media.
         var (original, working) = SaveWithBackup(
             MinimalMp4Builder.BuildMoovFirstCo64WithPatternedMdat(Domain, "tags", "short"));
@@ -165,7 +165,7 @@ public class Mp4WriteIntegrityTests
         // HEADER. A moov-first mdat with a 16-byte largesize header is shifted when moov grows, so
         // the writer must parse and relocate a box whose own size is a 64-bit largesize. No real
         // clip is moov-first with a largesize mdat (the real largesize clips are all mdat-first,
-        // where the box never moves), and CI runs clip-less — so this fixture is the only coverage.
+        // where the box never moves), and CI runs clip-less, so this fixture is the only coverage.
         var (original, working) =
             SaveWithBackup(MinimalMp4Builder.BuildMoovFirstLargesizeMdatWithPatternedMdat());
 
@@ -182,7 +182,7 @@ public class Mp4WriteIntegrityTests
         MediaIntegrityScanner.AssertMediaUnchanged(original, working);
     }
 
-    /// <summary>Asserts the file's mdat box uses a 64-bit largesize header — the 32-bit size field
+    /// <summary>Asserts the file's mdat box uses a 64-bit largesize header, the 32-bit size field
     /// immediately before the "mdat" type bytes must be exactly 1 (the largesize sentinel).</summary>
     private static void AssertMdatUsesLargesizeHeader(string path)
     {
@@ -206,12 +206,12 @@ public class Mp4WriteIntegrityTests
     {
         // Reproduces the bug found in the 2026-06 audit: an unparseable box between moov and
         // mdat made the parser stop early, and the writer then emitted a file WITHOUT the mdat
-        // — the entire video silently deleted, exit code 0. The writer must now refuse.
+        //, the entire video silently deleted, exit code 0. The writer must now refuse.
         using var ms = MinimalMp4Builder.BuildMoovFirstWithPatternedMdat(Domain, "tags", "v");
         byte[] clean = ms.ToArray();
 
         // Splice 8 junk bytes between moov and mdat. The junk claims to be a box of size 5,
-        // which is impossible (smaller than the 8-byte header) — exactly the kind of damage
+        // which is impossible (smaller than the 8-byte header), exactly the kind of damage
         // that made the parser give up mid-file.
         int moovLength = (clean[0] << 24) | (clean[1] << 16) | (clean[2] << 8) | clean[3];
         byte[] junk = { 0, 0, 0, 5, (byte)'j', (byte)'u', (byte)'n', (byte)'k' };
@@ -238,7 +238,7 @@ public class Mp4WriteIntegrityTests
     public void TrailingUnparseableBytes_WriteRefused()
     {
         // Garbage after the last real box. Harmless to a player, but the rewritten file would
-        // silently lose it — and we promised to never write a file we can't fully account for.
+        // silently lose it, and we promised to never write a file we can't fully account for.
         using var ms = MinimalMp4Builder.BuildMoovFirstWithPatternedMdat();
         byte[] withTail = ms.ToArray().Concat(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0x99 }).ToArray();
 
@@ -256,7 +256,7 @@ public class Mp4WriteIntegrityTests
     [TestMethod]
     public void TruncatedFile_ClampedBox_WriteRefused()
     {
-        // Chop bytes off the end so mdat's size field claims more than the file holds —
+        // Chop bytes off the end so mdat's size field claims more than the file holds, 
         // what a torn download or interrupted copy looks like. The box header on disk is
         // lying about its length; rewriting would reproduce the lie. Refuse.
         using var ms = MinimalMp4Builder.BuildMoovFirstWithPatternedMdat();
@@ -281,7 +281,7 @@ public class Mp4WriteIntegrityTests
     {
         // Audit bug #2: --clear-all used to re-stamp the schema atom it had just removed,
         // because the stamp ran unconditionally on every write. "Remove ALL clipmeta
-        // metadata" must leave zero clipmeta atoms — schema included.
+        // metadata" must leave zero clipmeta atoms, schema included.
         var (_, working) = SaveWithBackup(
             MinimalMp4Builder.BuildMoovFirstWithPatternedMdat(Domain, "tags", "x"));
 
@@ -338,7 +338,7 @@ public class Mp4WriteIntegrityTests
     public void WriteThenClearAll_ReturnsFileToBytePristine()
     {
         // The whole point of the empty-chain removal (field-discovered 2026-06-12): a clip that
-        // was bare, got tagged, then fully cleared must be byte-for-byte what it started as —
+        // was bare, got tagged, then fully cleared must be byte-for-byte what it started as, 
         // no ~80-byte schema/container husk left behind. moov-first fixture, so the mdat offsets
         // also have to round-trip exactly (grow on write, shrink back on clear).
         var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
@@ -360,7 +360,7 @@ public class Mp4WriteIntegrityTests
     public void ClearAll_RemovesEmptyContainerChain_NoUdtaLeftBehind()
     {
         // After clearing the only metadata, the udta→meta→hdlr→ilst chain that held it is
-        // useless — it must be gone, not left as an empty husk.
+        // useless, it must be gone, not left as an empty husk.
         var (_, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
 
         var set = new MetadataMutation();
@@ -380,7 +380,7 @@ public class Mp4WriteIntegrityTests
     {
         // Reproduces the exact field report: clip_clear_fields (a delete-only mutation, NOT
         // clear-all) that removes the last user field must also take the orphaned schema stamp
-        // and the now-empty chain — otherwise the schema atom lingers invisibly.
+        // and the now-empty chain, otherwise the schema atom lingers invisibly.
         var (original, working) = SaveWithBackup(MinimalMp4Builder.BuildMoovFirstWithPatternedMdat());
 
         var set = new MetadataMutation();
@@ -423,7 +423,7 @@ public class Mp4WriteIntegrityTests
     public void ClearAll_WithForeignAtomPresent_KeepsChainAndForeignAtom()
     {
         // Spec hazard #5, via the removal path: a non-clipmeta freeform atom (an iTunes-style
-        // foreign atom) keeps the container alive — clear-all strips OUR atoms only and must
+        // foreign atom) keeps the container alive, clear-all strips OUR atoms only and must
         // never drop a chain that still holds someone else's data.
         const string foreignDomain = "com.apple.iTunes";
         var (_, working) = SaveWithBackup(

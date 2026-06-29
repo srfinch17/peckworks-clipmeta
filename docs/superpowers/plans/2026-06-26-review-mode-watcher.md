@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the watch-and-tag binding race — a continuous, read-only watcher records player-title segments over time so a spoken tag binds to the clip the user was *actually* watching, not whatever the player advanced to by the time the tool runs.
+**Goal:** Fix the watch-and-tag binding race, a continuous, read-only watcher records player-title segments over time so a spoken tag binds to the clip the user was *actually* watching, not whatever the player advanced to by the time the tool runs.
 
 **Architecture:** A Core `ReviewWatcher` background thread polls window titles (~250 ms) into a bounded ring buffer of `TitleSegment`s. A pure `ReviewBindingResolver` applies the "ignore-just-started → previous-stable" rule. `WatchingResolver.ResolveReview` reuses the existing resolution pipeline over the chosen title and promotes the corrected bind. The MCP shell wires lifecycle like `QueueDrainPump` and surfaces inline `review[]` flags. No new MCP tool.
 
@@ -23,20 +23,20 @@
 ## File Structure
 
 **Create (Core):**
-- `clipmeta.core/Watching/TitleSegment.cs` — the segment record.
-- `clipmeta.core/Watching/ReviewFlag.cs` — review flag record.
-- `clipmeta.core/Watching/ReviewBinding.cs` — heuristic output record.
-- `clipmeta.core/Watching/ReviewBindingResolver.cs` — pure previous-stable rule + flag derivation.
-- `clipmeta.core/Watching/ReviewWatcher.cs` — background title poller.
+- `clipmeta.core/Watching/TitleSegment.cs`, the segment record.
+- `clipmeta.core/Watching/ReviewFlag.cs`, review flag record.
+- `clipmeta.core/Watching/ReviewBinding.cs`, heuristic output record.
+- `clipmeta.core/Watching/ReviewBindingResolver.cs`, pure previous-stable rule + flag derivation.
+- `clipmeta.core/Watching/ReviewWatcher.cs`, background title poller.
 
 **Modify (Core):**
-- `clipmeta.core/Watching/WatchContext.cs` — add `Build` overload taking supplied windows.
-- `clipmeta.core/Watching/WatchingResolver.cs` — extract `ResolveCore`; add `ResolveReview`; not-locked exception; `anyLiveTarget` extension.
-- `clipmeta.core/Watching/WatchingResult.cs` — add `Review`, `BoundSegmentId`, `RecommendationConfident` (additive).
+- `clipmeta.core/Watching/WatchContext.cs`, add `Build` overload taking supplied windows.
+- `clipmeta.core/Watching/WatchingResolver.cs`, extract `ResolveCore`; add `ResolveReview`; not-locked exception; `anyLiveTarget` extension.
+- `clipmeta.core/Watching/WatchingResult.cs`, add `Review`, `BoundSegmentId`, `RecommendationConfident` (additive).
 
 **Modify (MCP shell):**
-- `clipmetamcp/Tools/ReadTools.cs` — `library_watching` takes the watcher (trailing injectable); calls `ResolveReview`; emits `review[]`; `MarkBound`; description update.
-- `clipmetamcp/Program.cs` — construct/Start/Dispose the `ReviewWatcher`.
+- `clipmetamcp/Tools/ReadTools.cs`, `library_watching` takes the watcher (trailing injectable); calls `ResolveReview`; emits `review[]`; `MarkBound`; description update.
+- `clipmetamcp/Program.cs`, construct/Start/Dispose the `ReviewWatcher`.
 
 **Create (tests):**
 - `clipmetascribe.Tests/ReviewBindingResolverTests.cs`
@@ -44,10 +44,10 @@
 - `clipmetascribe.Tests/ResolveReviewTests.cs`
 
 **Modify (tests):**
-- `clipmetamcp.Tests/LibraryWatchingToolTests.cs` — add `review[]` / watcher-fallback assertions.
+- `clipmetamcp.Tests/LibraryWatchingToolTests.cs`, add `review[]` / watcher-fallback assertions.
 
 **Docs:**
-- `docs/PITFALLS.md` — record the poll-at-call-time race and the not-locked-guard exception.
+- `docs/PITFALLS.md`, record the poll-at-call-time race and the not-locked-guard exception.
 
 ---
 
@@ -114,7 +114,7 @@ public sealed record ReviewFlag(string Type, IReadOnlyList<string> Clips, double
     /// <summary>Stable clips played between the last bind and this one were never tagged.</summary>
     public const string TypeSequenceSkip = "sequenceSkip";
 
-    /// <summary>More than one player is active — too ambiguous to bind a clip safely.</summary>
+    /// <summary>More than one player is active, too ambiguous to bind a clip safely.</summary>
     public const string TypeMultiplePlayersActive = "multiplePlayersActive";
 }
 ```
@@ -126,13 +126,13 @@ namespace ClipMetaCore.Watching;
 
 /// <summary>
 /// The pure heuristic's decision about which recorded title the user is describing. <see cref="Chosen"/>
-/// null means "no correction to offer" (cold start, or ambiguous multi-player) — the caller falls back
+/// null means "no correction to offer" (cold start, or ambiguous multi-player), the caller falls back
 /// to a live poll.
 /// </summary>
 /// <param name="Chosen">Segment whose title to resolve to a clip, or null.</param>
 /// <param name="CorrectedFrom">Set when the previous-stable segment was chosen over a just-started one.</param>
 /// <param name="StableSeconds">How long <see cref="Chosen"/> played (0 when null).</param>
-/// <param name="AmbiguousMultiPlayer">True when 2+ players were active — refuse correction, warn.</param>
+/// <param name="AmbiguousMultiPlayer">True when 2+ players were active, refuse correction, warn.</param>
 /// <param name="Flags">Review advisories derived from the segment sequence.</param>
 public sealed record ReviewBinding(
     TitleSegment? Chosen,
@@ -244,10 +244,10 @@ public class ReviewBindingResolverTests
 }
 ```
 
-- [ ] **Step 3: Run the tests — verify they FAIL to compile/run**
+- [ ] **Step 3: Run the tests, verify they FAIL to compile/run**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ReviewBindingResolverTests`
-Expected: FAIL — `ReviewBindingResolver` does not exist.
+Expected: FAIL, `ReviewBindingResolver` does not exist.
 
 - [ ] **Step 4: Implement `ReviewBindingResolver`**
 
@@ -259,13 +259,13 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Pure heuristic that decides which recorded title the user is describing. The core rule: if the
 /// currently-open clip only JUST started (under <see cref="DefaultStableThreshold"/>), the user has
-/// already advanced and is describing the PREVIOUS clip they actually watched — so bind that instead.
+/// already advanced and is describing the PREVIOUS clip they actually watched, so bind that instead.
 /// This is the entire fix for the poll-at-call-time binding race; it depends only on segment timing,
 /// never on when the tool happened to be called.
 /// </summary>
 public static class ReviewBindingResolver
 {
-    /// <summary>A clip open for less than this is treated as "just advanced to" — not the subject.</summary>
+    /// <summary>A clip open for less than this is treated as "just advanced to", not the subject.</summary>
     public static readonly TimeSpan DefaultStableThreshold = TimeSpan.FromSeconds(2);
 
     /// <summary>Applies the previous-stable rule and derives review flags from the segment sequence.</summary>
@@ -334,12 +334,12 @@ public static class ReviewBindingResolver
     private static IReadOnlyList<string> NamesOf(IEnumerable<TitleSegment> segs) =>
         segs.Select(Display).ToList();
 
-    /// <summary>Best display string for a segment — its raw title (which contains the file name).</summary>
+    /// <summary>Best display string for a segment, its raw title (which contains the file name).</summary>
     private static string Display(TitleSegment s) => s.RawTitle;
 }
 ```
 
-- [ ] **Step 5: Run the tests — verify they PASS**
+- [ ] **Step 5: Run the tests, verify they PASS**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ReviewBindingResolverTests`
 Expected: PASS (6/6).
@@ -482,10 +482,10 @@ public class ReviewWatcherTests
 }
 ```
 
-- [ ] **Step 2: Run the tests — verify they FAIL**
+- [ ] **Step 2: Run the tests, verify they FAIL**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ReviewWatcherTests`
-Expected: FAIL — `ReviewWatcher` does not exist.
+Expected: FAIL, `ReviewWatcher` does not exist.
 
 - [ ] **Step 3: Implement `ReviewWatcher`**
 
@@ -499,7 +499,7 @@ namespace ClipMetaCore.Watching;
 /// titles on a timer and records a <see cref="TitleSegment"/> each time the active title changes, so
 /// <c>library_watching</c> can resolve a tag against what was PLAYING at the user's dictation moment
 /// rather than a fresh "what's open now?" snapshot taken a turn later (the binding race). The hot loop
-/// only reads titles — no library enumeration, no MP4 work — and never writes a file, so it cannot
+/// only reads titles, no library enumeration, no MP4 work, and never writes a file, so it cannot
 /// race any writer. Mirrors the <see cref="QueueDrainPump"/> thread/dispose pattern.
 /// </summary>
 public sealed class ReviewWatcher : IDisposable
@@ -565,7 +565,7 @@ public sealed class ReviewWatcher : IDisposable
 
     /// <summary>
     /// One poll: open a new segment for any player whose title changed, close the segment of any
-    /// player that vanished or changed title. Never throws — a flaky OS read just skips this tick.
+    /// player that vanished or changed title. Never throws, a flaky OS read just skips this tick.
     /// Internal so tests drive it deterministically without the timer.
     /// </summary>
     internal void PollOnce()
@@ -637,7 +637,7 @@ public sealed class ReviewWatcher : IDisposable
 }
 ```
 
-- [ ] **Step 4: Run the tests — verify they PASS**
+- [ ] **Step 4: Run the tests, verify they PASS**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ReviewWatcherTests`
 Expected: PASS (7/7).
@@ -653,7 +653,7 @@ git commit -m "feat(watching): ReviewWatcher background title-segment poller"
 
 ## Task 3: `WatchContext` overload + extract `ResolveCore` (pure refactor)
 
-This is a behavior-preserving refactor so `ResolveReview` (Task 4) can run the pipeline over a supplied title. Existing `WatchingResolverTests` must stay green — that *is* the test.
+This is a behavior-preserving refactor so `ResolveReview` (Task 4) can run the pipeline over a supplied title. Existing `WatchingResolverTests` must stay green, that *is* the test.
 
 **Files:**
 - Modify: `clipmeta.core/Watching/WatchContext.cs`
@@ -670,7 +670,7 @@ In `clipmeta.core/Watching/WatchContext.cs`, add alongside the existing `Build` 
 
 ```csharp
 /// <summary>
-/// Builds a context over supplied player windows instead of polling a source — used by review-mode
+/// Builds a context over supplied player windows instead of polling a source, used by review-mode
 /// resolution, which has already chosen WHICH title to resolve from the watcher's segment history.
 /// </summary>
 public static WatchContext Build(string libraryRoot, IReadOnlyList<ProcessWindow> playerWindows)
@@ -688,7 +688,7 @@ public static WatchContext Build(string libraryRoot, IReadOnlyList<ProcessWindow
 ```
 
 Refactor the existing `Build(libraryRoot, source, playerNames)` to call a shared private
-`EnumerateLibrary(libraryRoot)` that returns `(List<LibraryClip>, IReadOnlyDictionary<string, IReadOnlyList<LibraryClip>>, IReadOnlyDictionary<string, LibraryClip>)` — move the enumeration + dictionary-building loop (current lines 29–60) into it verbatim, and have the original `Build` set `PlayerWindows = source.GetPlayerWindows(playerNames)`.
+`EnumerateLibrary(libraryRoot)` that returns `(List<LibraryClip>, IReadOnlyDictionary<string, IReadOnlyList<LibraryClip>>, IReadOnlyDictionary<string, LibraryClip>)`, move the enumeration + dictionary-building loop (current lines 29–60) into it verbatim, and have the original `Build` set `PlayerWindows = source.GetPlayerWindows(playerNames)`.
 
 - [ ] **Step 2: Extract `ResolveCore` in `WatchingResolver`**
 
@@ -710,12 +710,12 @@ private WatchingResult ResolveCore(WatchContext context, int limit, bool include
 
 Move the existing body (everything after the old `WatchContext.Build` line through `return new WatchingResult(...)`) into `ResolveCore` unchanged.
 
-- [ ] **Step 3: Build + run the existing watching suite — verify NO behavior change**
+- [ ] **Step 3: Build + run the existing watching suite, verify NO behavior change**
 
 Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors.
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter WatchingResolverTests`
-Expected: PASS (all existing tests green — the refactor changed no behavior).
+Expected: PASS (all existing tests green, the refactor changed no behavior).
 
 - [ ] **Step 4: Commit**
 
@@ -850,10 +850,10 @@ public class ResolveReviewTests
 }
 ```
 
-- [ ] **Step 3: Run the tests — verify they FAIL**
+- [ ] **Step 3: Run the tests, verify they FAIL**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ResolveReviewTests`
-Expected: FAIL — `ResolveReview` does not exist.
+Expected: FAIL, `ResolveReview` does not exist.
 
 - [ ] **Step 4: Implement `ResolveReview`**
 
@@ -892,7 +892,7 @@ public WatchingResult ResolveReview(
     {
         // The chosen title resolves to exactly the candidates the pipeline produced for that window.
         // Promote a single player-title match past the not-locked demotion (it is expected to be
-        // unlocked — the user advanced away from it), keeping its true lock state for reporting.
+        // unlocked, the user advanced away from it), keeping its true lock state for reporting.
         int idx = candidates.FindIndex(c => c.Source == PlayerTitleSignal.SourceName);
         bool singleMatch = candidates.Count(c => c.Source == PlayerTitleSignal.SourceName) == 1;
         if (idx >= 0 && singleMatch)
@@ -915,12 +915,12 @@ public WatchingResult ResolveReview(
 }
 ```
 
-- [ ] **Step 5: Run the tests — verify they PASS**
+- [ ] **Step 5: Run the tests, verify they PASS**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter ResolveReviewTests`
 Expected: PASS (3/3).
 
-- [ ] **Step 6: Run the full Core/scribe watching suite — verify no regressions**
+- [ ] **Step 6: Run the full Core/scribe watching suite, verify no regressions**
 
 Run: `dotnet test clipmetascribe.Tests --nologo -v q --filter Watching`
 Expected: PASS (`WatchingResolverTests`, `ReviewBindingResolverTests`, `ReviewWatcherTests`, `ResolveReviewTests`).
@@ -934,7 +934,7 @@ git commit -m "feat(watching): ResolveReview promotes the previous-stable bind +
 
 ---
 
-## Task 5: MCP wiring — `library_watching` uses the watcher; `Program` lifecycle
+## Task 5: MCP wiring, `library_watching` uses the watcher; `Program` lifecycle
 
 **Files:**
 - Modify: `clipmetamcp/Tools/ReadTools.cs`
@@ -967,10 +967,10 @@ public void Watching_ReviewArray_AbsentWhenNoFlags()
 }
 ```
 
-- [ ] **Step 2: Run — verify the second test FAILS only if `review` is wrongly emitted; both compile**
+- [ ] **Step 2: Run, verify the second test FAILS only if `review` is wrongly emitted; both compile**
 
 Run: `dotnet test clipmetamcp.Tests --nologo -v q --filter LibraryWatchingToolTests`
-Expected: the two new tests PASS once Step 3–4 land (before changes they pass too, since `review` isn't emitted yet — they pin the contract so Step 4 doesn't break it). Proceed.
+Expected: the two new tests PASS once Step 3–4 land (before changes they pass too, since `review` isn't emitted yet, they pin the contract so Step 4 doesn't break it). Proceed.
 
 - [ ] **Step 3: Thread the watcher through `ReadTools`**
 
@@ -1033,7 +1033,7 @@ private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox, Rev
             response["warning"] = new JsonObject
             {
                 ["type"] = "multiple_players_active",
-                ["message"] = "More than one media player is active — too ambiguous to bind a clip " +
+                ["message"] = "More than one media player is active, too ambiguous to bind a clip " +
                               "safely. Confirm the exact path with the user before tagging.",
             };
     }
@@ -1046,8 +1046,8 @@ private static JsonObject Watching(JsonObject? args, LibrarySandbox sandbox, Rev
 
 > Note: keep the existing wrong-directory `warning` block, but guard it with `if (!response.ContainsKey("warning"))` so a multi-player warning isn't overwritten. Keep the `drainedFromQueue` and `queuePending` blocks exactly as they are.
 
-4. Update the `library_watching` **description** string: append a sentence —
-   *"In review mode the recommended top candidate reflects the clip you were watching when you spoke, even if the player has since advanced (it may be unlocked and directly writable). A 'review' array may list non-blocking advisories — autoCorrected, sameClipTwice, sequenceSkip, multiplePlayersActive — to mention to the user and reconcile later; never block the run to ask."*
+4. Update the `library_watching` **description** string: append a sentence, 
+   *"In review mode the recommended top candidate reflects the clip you were watching when you spoke, even if the player has since advanced (it may be unlocked and directly writable). A 'review' array may list non-blocking advisories, autoCorrected, sameClipTwice, sequenceSkip, multiplePlayersActive, to mention to the user and reconcile later; never block the run to ask."*
 
 - [ ] **Step 4: Wire the watcher in `Program.Serve`**
 
@@ -1084,7 +1084,7 @@ finally
 Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors.
 Run: `dotnet test clipmetamcp.Tests --nologo -v q`
-Expected: PASS — including `ToolsList_ContainsTheFullToolSurface` (no tool added/removed) and stdout-purity tests with the watcher type referenced.
+Expected: PASS, including `ToolsList_ContainsTheFullToolSurface` (no tool added/removed) and stdout-purity tests with the watcher type referenced.
 
 - [ ] **Step 6: Commit**
 
@@ -1103,15 +1103,15 @@ git commit -m "feat(mcp): library_watching resolves via ReviewWatcher; review[] 
 - [ ] **Step 1: Record the gotchas**
 
 Append to `docs/PITFALLS.md` a dated entry covering:
-1. **Poll-at-call-time binding race** — `library_watching` historically resolved "what's open now" at tool-execution time, a turn after dictation; if the user advanced first, the tag bound to the next clip. Fixed by the continuous `ReviewWatcher` segment log + previous-stable heuristic (resolve against *when each title played*, not call time).
-2. **Not-locked-guard exception** — the resolver demotes an unlocked bare-name hit ("may be a same-named file elsewhere"), but a review-mode *corrected* bind is legitimately unlocked (the player advanced away from it); `ResolveReview` keeps a single history-confirmed match high-confidence rather than demoting it. Don't "fix" the guard to also demote corrected binds.
+1. **Poll-at-call-time binding race**, `library_watching` historically resolved "what's open now" at tool-execution time, a turn after dictation; if the user advanced first, the tag bound to the next clip. Fixed by the continuous `ReviewWatcher` segment log + previous-stable heuristic (resolve against *when each title played*, not call time).
+2. **Not-locked-guard exception**, the resolver demotes an unlocked bare-name hit ("may be a same-named file elsewhere"), but a review-mode *corrected* bind is legitimately unlocked (the player advanced away from it); `ResolveReview` keeps a single history-confirmed match high-confidence rather than demoting it. Don't "fix" the guard to also demote corrected binds.
 
 - [ ] **Step 2: Full build + full relevant test projects (the Definition-of-Done gate)**
 
 Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors, all projects.
 Run: `dotnet test clipmetascribe.Tests --nologo -v q`
-Expected: PASS (real-clip integration is slow — allow a long timeout).
+Expected: PASS (real-clip integration is slow, allow a long timeout).
 Run: `dotnet test clipmetamcp.Tests --nologo -v q`
 Expected: PASS.
 
@@ -1127,6 +1127,6 @@ git commit -m "docs(pitfalls): binding race + not-locked-guard exception"
 ## Self-Review (completed by plan author)
 
 - **Spec coverage:** §2 ReviewWatcher → Task 2. §3 ReviewBindingResolver → Task 1. §4 ResolveReview + interactions (not-locked exception, anyLiveTarget, multi-player) → Tasks 3–4. §5 inline surface + lifecycle → Task 5. §7 affected types → all tasks. §8 tests → each task's tests + Task 6 gate. §10 DoD → Task 6. AC1/AC3/AC4/AC5 → Task 1 + Task 4 tests. AC6 (locked deferral) → unchanged queue path, untouched.
-- **Placeholder scan:** none — every step has concrete code or an exact edit with code.
+- **Placeholder scan:** none, every step has concrete code or an exact edit with code.
 - **Type consistency:** `TitleSegment`, `ReviewFlag` (+ `Type*` consts), `ReviewBinding`, `ReviewBindingResolver.Resolve`, `ReviewWatcher` (`Snapshot`/`LastBoundId`/`MarkBound`/`PollOnce`), `WatchContext.Build(root, windows)`, `ResolveCore`, `ResolveReview`, `WatchingResult(... Review, BoundSegmentId, RecommendationConfident)` are used identically across tasks.
-- **Deferred (not in this plan, by design):** timestamp ingestion / fire-N-ahead, gaming mode, the §7 secondary-fix batch — each its own future spec.
+- **Deferred (not in this plan, by design):** timestamp ingestion / fire-N-ahead, gaming mode, the §7 secondary-fix batch, each its own future spec.

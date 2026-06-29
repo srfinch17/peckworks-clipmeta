@@ -6,7 +6,7 @@ namespace ClipMetaMcp;
 /// Crash-proof decorator over any <see cref="IClipMetaLogger"/>: logging failures are swallowed.
 ///
 /// Why this must exist: <c>FileLogger</c> appends with no sharing for writers, and this server
-/// hard-codes one shared log path — so a second clipmetamcp process (Claude Desktop's instance
+/// hard-codes one shared log path, so a second clipmetamcp process (Claude Desktop's instance
 /// plus a <c>--selftest</c> child, or two hosts) can collide and throw <c>IOException</c> from
 /// <c>Log()</c>. Logger calls sit inside the session's catch blocks; an unguarded throw there
 /// would escape <c>Run()</c> and kill the live MCP session mid-conversation (2026-06-11 review).

@@ -9,7 +9,7 @@ using ClipMetaScribe.Tests.Helpers;
 namespace ClipMetaScribe.Tests;
 
 /// <summary>
-/// Tests for <see cref="BatchCommand"/> — the iterate + isolate + report engine behind directory
+/// Tests for <see cref="BatchCommand"/>, the iterate + isolate + report engine behind directory
 /// write commands. The skip/isolation/summary behavior is proven clip-less; correctness over real
 /// clips (fields land, media survives) is proven with the pristine corpus and graceful-skips.
 /// </summary>
@@ -75,7 +75,7 @@ public class BatchCommandTests
     public void Run_DryRun_ReportsWouldUpdate_NotCompletion()
     {
         // Dry-run mutations short-circuit in Mp4Writer before opening the file, so each "succeeds"
-        // without writing. The summary must say nothing was modified — not claim N were updated.
+        // without writing. The summary must say nothing was modified, not claim N were updated.
         var files = new[] { Path.Combine(_dir, "a.mp4"), Path.Combine(_dir, "b.mp4") };
         var sw = new StringWriter();
 
@@ -96,7 +96,7 @@ public class BatchCommandTests
     public void Run_OverRealClips_AllUpdated_MediaByteIdentical()
     {
         if (!TestClipsLocator.PristineClipsPresent())
-            Assert.Inconclusive("no pristine clips — batch integration skipped (CI runs clip-less).");
+            Assert.Inconclusive("no pristine clips, batch integration skipped (CI runs clip-less).");
 
         var map = new Dictionary<string, string>();   // dest → pristine source (for integrity)
         foreach (var p in TestClipsLocator.AllPristine().OrderBy(p => new FileInfo(p).Length).Take(2))
@@ -121,7 +121,7 @@ public class BatchCommandTests
     public void Run_CorruptClipMixedIn_IsolatedReturnsTwo()
     {
         if (!TestClipsLocator.PristineClipsPresent())
-            Assert.Inconclusive("no pristine clips — batch integration skipped (CI runs clip-less).");
+            Assert.Inconclusive("no pristine clips, batch integration skipped (CI runs clip-less).");
 
         string good = TestClipsLocator.AllPristine().OrderBy(p => new FileInfo(p).Length).First();
         string goodDest = Path.Combine(_dir, "good.mp4");

@@ -27,7 +27,7 @@ public static class ClipMetaReader
     /// <summary>
     /// Like <see cref="GetFields"/>, but excludes internal bookkeeping fields
     /// (see <see cref="ClipMetaSchema.IsInternal"/>). This is the read entry point for every
-    /// user-facing surface — stats, export, index, MCP tools; only the raw tree/list views
+    /// user-facing surface, stats, export, index, MCP tools; only the raw tree/list views
     /// show internal fields.
     /// </summary>
     /// <param name="root">The root node returned by <see cref="Mp4Parser.ParseFile"/>.</param>

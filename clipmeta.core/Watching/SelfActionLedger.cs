@@ -12,7 +12,7 @@ public enum SelfTouchKind
 /// <summary>
 /// Process-wide record of the clips ClipMeta itself touched this session, so signals keyed on raw
 /// filesystem timestamps can subtract self-actions: a clip we just wrote is not a fresh user "save",
-/// and a clip we just read is not a clip the user just "watched". In-memory and session-scoped — a
+/// and a clip we just read is not a clip the user just "watched". In-memory and session-scoped, a
 /// restart is a new session. Thread-safe: the queue-drain pump thread and request threads share it.
 /// </summary>
 public sealed class SelfActionLedger

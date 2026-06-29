@@ -1,8 +1,8 @@
-# Resolver & Queue Trust Hardening — Implementation Plan
+# Resolver & Queue Trust Hardening, Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make gaming-mode resolution and the deferred-tag queue trustworthy — a just-saved clip is found, ClipMeta's own file touches stop polluting the signals, every auto-flushed tag is reported, and an unrecognized player name is flagged.
+**Goal:** Make gaming-mode resolution and the deferred-tag queue trustworthy, a just-saved clip is found, ClipMeta's own file touches stop polluting the signals, every auto-flushed tag is reported, and an unrecognized player name is flagged.
 
 **Architecture:** One shared substrate (`SelfActionLedger` + NTFS creation-time + index baseline) feeds the two no-player signals; a `DrainJournal` surfaces the silent background pump's writes; a write-path roster check rides an advisory back. All Core logic is pure and injectable; the MCP layer wires singletons in `Program.cs`.
 
@@ -12,40 +12,40 @@
 
 - Zero external NuGet packages in `clipmeta.core`, `clipmetamcp` (BCL/SDK only). MSTest is the sole test-project exception.
 - Big-endian MP4 IO only through `BigEndianReader`/`BigEndianWriter` (not touched here, but never regress it).
-- CLIs/MCP are thin shells — no business logic in handlers; logic lives in Core.
+- CLIs/MCP are thin shells, no business logic in handlers; logic lives in Core.
 - New formats/signals extend via interfaces, never edit-in-place; signals MUST NOT throw for ordinary failure (emit nothing).
 - XML doc comments on all public types/methods; named constants, no magic numbers.
-- No new MCP tools — tool count stays **17**. Changes are additive response fields + one optional `roster` arg. Still **run the full `clipmetamcp.Tests`** for any MCP-surface task (surface assertions live outside the diff — CLAUDE.md rule).
+- No new MCP tools, tool count stays **17**. Changes are additive response fields + one optional `roster` arg. Still **run the full `clipmetamcp.Tests`** for any MCP-surface task (surface assertions live outside the diff, CLAUDE.md rule).
 - Version → **1.4.0** in BOTH `clipmetamcp/clipmetamcp.csproj` and `tools/mcpb-manifest.json` (pack gate fails if they disagree).
-- Build gate: `dotnet build --nologo -v q` = 0 warnings / 0 errors. Test gate: `dotnet test --nologo --no-build -v q` all pass (scribe suite takes minutes — long timeout, not a hang).
+- Build gate: `dotnet build --nologo -v q` = 0 warnings / 0 errors. Test gate: `dotnet test --nologo --no-build -v q` all pass (scribe suite takes minutes, long timeout, not a hang).
 
 ---
 
 ## File Structure
 
 **Create (Core):**
-- `clipmeta.core/Watching/SelfActionLedger.cs` — process-wide record of paths ClipMeta wrote/read this session.
-- `clipmeta.core/Watching/DrainedTag.cs` — one auto-flushed tag (path, changed fields, when).
-- `clipmeta.core/Watching/DrainJournal.cs` — report-once buffer of pump auto-flushes.
-- `clipmeta.core/Schema/PlayerRosterGuard.cs` — pure "which committed player tokens are unknown" check.
+- `clipmeta.core/Watching/SelfActionLedger.cs`, process-wide record of paths ClipMeta wrote/read this session.
+- `clipmeta.core/Watching/DrainedTag.cs`, one auto-flushed tag (path, changed fields, when).
+- `clipmeta.core/Watching/DrainJournal.cs`, report-once buffer of pump auto-flushes.
+- `clipmeta.core/Schema/PlayerRosterGuard.cs`, pure "which committed player tokens are unknown" check.
 
 **Create (tests):**
 - `clipmetascribe.Tests/SelfActionLedgerTests.cs`, `DrainJournalTests.cs`, `PlayerRosterGuardTests.cs`.
 
 **Modify (Core):**
-- `clipmeta.core/Watching/LibraryClip.cs` — add `CreationTimeUtc`.
-- `clipmeta.core/Watching/WatchContext.cs` — read creation time; add `KnownBaselinePaths` + `Ledger`; load baseline from the index.
-- `clipmeta.core/Watching/RecentWriteSignal.cs` — creation-time + baseline + ledger predicate (P0-2).
-- `clipmeta.core/Watching/AccessTimeSignal.cs` — self-read exclusion (P1-1).
-- `clipmeta.core/Watching/WatchingResolver.cs` — hold + thread the ledger into `WatchContext.Build`.
-- `clipmeta.core/Watching/TagQueue.cs` — `Drain` gains an `onWritten` callback; extract `ChangedFields`.
-- `clipmeta.core/Watching/QueueDrainPump.cs` — record auto-flushes into the journal.
+- `clipmeta.core/Watching/LibraryClip.cs`, add `CreationTimeUtc`.
+- `clipmeta.core/Watching/WatchContext.cs`, read creation time; add `KnownBaselinePaths` + `Ledger`; load baseline from the index.
+- `clipmeta.core/Watching/RecentWriteSignal.cs`, creation-time + baseline + ledger predicate (P0-2).
+- `clipmeta.core/Watching/AccessTimeSignal.cs`, self-read exclusion (P1-1).
+- `clipmeta.core/Watching/WatchingResolver.cs`, hold + thread the ledger into `WatchContext.Build`.
+- `clipmeta.core/Watching/TagQueue.cs`, `Drain` gains an `onWritten` callback; extract `ChangedFields`.
+- `clipmeta.core/Watching/QueueDrainPump.cs`, record auto-flushes into the journal.
 
 **Modify (MCP):**
-- `clipmetamcp/Program.cs` — build one `SelfActionLedger` + one `DrainJournal`; inject both.
-- `clipmetamcp/Tools/ReadTools.cs` — mark reads; thread ledger to resolver; surface `autoFlushed`; roster review on no tools here (reads only) — see Task 8 for write/queue.
-- `clipmetamcp/Tools/WriteTools.cs` — mark writes; roster advisory + `roster` arg.
-- `clipmetamcp/Tools/QueueTools.cs` — roster advisory + `roster` arg on `library_queue_tag`; surface `autoFlushed` on flush/status.
+- `clipmetamcp/Program.cs`, build one `SelfActionLedger` + one `DrainJournal`; inject both.
+- `clipmetamcp/Tools/ReadTools.cs`, mark reads; thread ledger to resolver; surface `autoFlushed`; roster review on no tools here (reads only), see Task 8 for write/queue.
+- `clipmetamcp/Tools/WriteTools.cs`, mark writes; roster advisory + `roster` arg.
+- `clipmetamcp/Tools/QueueTools.cs`, roster advisory + `roster` arg on `library_queue_tag`; surface `autoFlushed` on flush/status.
 
 **Modify (existing tests to reconcile):** `clipmetascribe.Tests/WatchingResolverTests.cs` (gaming cases + `TouchStale`/new `TouchCreated`), `RecentWriteSignalTests.cs`, any `AccessTimeSignal`/`WatchContext` test. Reconcile as correct new behavior, not blind edits.
 
@@ -114,7 +114,7 @@ public class SelfActionLedgerTests
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter SelfActionLedgerTests`
-Expected: FAIL — `SelfActionLedger` does not exist.
+Expected: FAIL, `SelfActionLedger` does not exist.
 
 - [ ] **Step 3: Implement**
 
@@ -134,7 +134,7 @@ public enum SelfTouchKind
 /// <summary>
 /// Process-wide record of the clips ClipMeta itself touched this session, so signals keyed on raw
 /// filesystem timestamps can subtract self-actions: a clip we just wrote is not a fresh user "save",
-/// and a clip we just read is not a clip the user just "watched". In-memory and session-scoped — a
+/// and a clip we just read is not a clip the user just "watched". In-memory and session-scoped, a
 /// restart is a new session. Thread-safe: the queue-drain pump thread and request threads share it.
 /// </summary>
 public sealed class SelfActionLedger
@@ -207,7 +207,7 @@ Expected: PASS (4 tests).
 
 ```bash
 git add clipmeta.core/Watching/SelfActionLedger.cs clipmetascribe.Tests/SelfActionLedgerTests.cs
-git commit -m "feat(watching): SelfActionLedger — session record of self-written/read clips"
+git commit -m "feat(watching): SelfActionLedger, session record of self-written/read clips"
 ```
 
 ---
@@ -265,7 +265,7 @@ public class DrainJournalTests
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter DrainJournalTests`
-Expected: FAIL — types do not exist.
+Expected: FAIL, types do not exist.
 
 - [ ] **Step 3: Implement**
 
@@ -333,7 +333,7 @@ Expected: PASS (2 tests).
 
 ```bash
 git add clipmeta.core/Watching/DrainedTag.cs clipmeta.core/Watching/DrainJournal.cs clipmetascribe.Tests/DrainJournalTests.cs
-git commit -m "feat(watching): DrainJournal — report-once buffer for silent pump auto-flushes"
+git commit -m "feat(watching): DrainJournal, report-once buffer for silent pump auto-flushes"
 ```
 
 ---
@@ -407,14 +407,14 @@ public class WatchContextBaselineTests
 }
 ```
 
-> Note: confirm `ClipMetaIndex.WriteToFile(IndexData, string)` exists (it does — used by `RebuildIndex`). If its signature differs, adjust the index-build line only.
+> Note: confirm `ClipMetaIndex.WriteToFile(IndexData, string)` exists (it does, used by `RebuildIndex`). If its signature differs, adjust the index-build line only.
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter WatchContextBaselineTests`
-Expected: FAIL — `CreationTimeUtc` / `KnownBaselinePaths` / `Ledger` not defined.
+Expected: FAIL, `CreationTimeUtc` / `KnownBaselinePaths` / `Ledger` not defined.
 
-- [ ] **Step 3: Implement — `LibraryClip`**
+- [ ] **Step 3: Implement, `LibraryClip`**
 
 ```csharp
 // clipmeta.core/Watching/LibraryClip.cs
@@ -429,7 +429,7 @@ namespace ClipMetaCore.Watching;
 /// </param>
 /// <param name="CreationTimeUtc">
 /// NTFS creation time at enumeration. Set fresh when a file appears in a directory even when a copy
-/// preserves the source's write time, so it — not write time — identifies a genuinely new clip
+/// preserves the source's write time, so it, not write time, identifies a genuinely new clip
 /// (gaming mode; see <see cref="RecentWriteSignal"/>).
 /// </param>
 public sealed record LibraryClip(
@@ -437,7 +437,7 @@ public sealed record LibraryClip(
     DateTime LastAccessTimeUtc, DateTime LastWriteTimeUtc, DateTime CreationTimeUtc);
 ```
 
-- [ ] **Step 4: Implement — `WatchContext`** (add props, read creation time, load baseline, thread ledger)
+- [ ] **Step 4: Implement, `WatchContext`** (add props, read creation time, load baseline, thread ledger)
 
 In `WatchContext.cs`, add the two properties after `PlayerWindows`:
 
@@ -515,7 +515,7 @@ Add the baseline loader (and `using ClipMetaCore.Read;` at the top of the file):
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            // Treat a corrupt/locked index as "no baseline" — never let it abort a resolution pass.
+            // Treat a corrupt/locked index as "no baseline", never let it abort a resolution pass.
         }
         return known;
     }
@@ -528,7 +528,7 @@ Expected: PASS (2 tests).
 
 - [ ] **Step 6: Fix every `new LibraryClip(...)` call site** (the added param breaks construction)
 
-Run: `dotnet build clipmeta.core --nologo -v q` — expect compile errors at each `new LibraryClip(...)` in tests/helpers. Add a creation-time argument to each. For test fixtures, pass the access or write time when creation isn't under test; where "old vs new" matters, pass an explicit value.
+Run: `dotnet build clipmeta.core --nologo -v q`, expect compile errors at each `new LibraryClip(...)` in tests/helpers. Add a creation-time argument to each. For test fixtures, pass the access or write time when creation isn't under test; where "old vs new" matters, pass an explicit value.
 
 - [ ] **Step 7: Build all + run the watching tests**
 
@@ -545,7 +545,7 @@ git commit -m "feat(watching): creation-time + index baseline + ledger on WatchC
 
 ---
 
-## Task 4: `RecentWriteSignal` rework — gaming-mode novelty (P0-2)
+## Task 4: `RecentWriteSignal` rework, gaming-mode novelty (P0-2)
 
 **Files:**
 - Modify: `clipmeta.core/Watching/RecentWriteSignal.cs`
@@ -558,7 +558,7 @@ git commit -m "feat(watching): creation-time + index baseline + ledger on WatchC
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// clipmetascribe.Tests/RecentWriteSignalTests.cs — ADD these (keep existing file's usings/helpers)
+// clipmetascribe.Tests/RecentWriteSignalTests.cs, ADD these (keep existing file's usings/helpers)
 [TestMethod]
 public void NewClip_FreshCreation_OldWriteTime_IsDetected()
 {
@@ -598,7 +598,7 @@ public void SelfWrittenPath_IsExcluded()
     Assert.AreEqual(0, new RecentWriteSignal(() => now).Detect(ctx).Count());
 }
 
-// Helper — add to the test class:
+// Helper, add to the test class:
 private static WatchContext ContextWith(
     IReadOnlyList<LibraryClip> clips, IEnumerable<string> baseline, SelfActionLedger? ledger)
 {
@@ -620,12 +620,12 @@ private static WatchContext ContextWith(
 - [ ] **Step 2: Run to verify the new tests fail**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter RecentWriteSignalTests`
-Expected: FAIL — old predicate keys on write time, so the new-creation/old-write case returns 0 and baseline/ledger are ignored.
+Expected: FAIL, old predicate keys on write time, so the new-creation/old-write case returns 0 and baseline/ledger are ignored.
 
 - [ ] **Step 3: Implement the new predicate**
 
 ```csharp
-// clipmeta.core/Watching/RecentWriteSignal.cs — replace Detect's body
+// clipmeta.core/Watching/RecentWriteSignal.cs, replace Detect's body
     public IEnumerable<SignalHit> Detect(WatchContext context)
     {
         DateTime now = _clock();
@@ -653,7 +653,7 @@ Update the class doc comment to say "identified by a fresh `CreationTimeUtc`, ex
 - [ ] **Step 4: Run to verify they pass**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter RecentWriteSignalTests`
-Expected: PASS (new + any pre-existing reconciled — see Step 5).
+Expected: PASS (new + any pre-existing reconciled, see Step 5).
 
 - [ ] **Step 5: Reconcile pre-existing `RecentWriteSignalTests`**
 
@@ -729,12 +729,12 @@ public class AccessTimeSignalTests
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter AccessTimeSignalTests`
-Expected: FAIL — `read.mp4` is still emitted.
+Expected: FAIL, `read.mp4` is still emitted.
 
 - [ ] **Step 3: Implement the exclusion**
 
 ```csharp
-// clipmeta.core/Watching/AccessTimeSignal.cs — replace Detect's body
+// clipmeta.core/Watching/AccessTimeSignal.cs, replace Detect's body
     public IEnumerable<SignalHit> Detect(WatchContext context)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -775,10 +775,10 @@ git commit -m "fix(watching): access_time excludes ClipMeta's own reads (P1-1)"
 - Consumes: `SelfActionLedger`; `WatchContext.Build(root, source, names, ledger)` / `Build(root, windows, ledger)` (Task 3).
 - Produces: `WatchingResolver` ctor gains a trailing `SelfActionLedger? ledger = null`; `CreateDefault(IProcessWindowSource, SelfActionLedger? ledger = null)`; `Resolve`/`ResolveReview` pass the held ledger into `WatchContext.Build`.
 
-- [ ] **Step 1: Write the failing test** — a self-written fresh clip is not a gaming live target
+- [ ] **Step 1: Write the failing test**, a self-written fresh clip is not a gaming live target
 
 ```csharp
-// clipmetascribe.Tests/WatchingResolverTests.cs — ADD
+// clipmetascribe.Tests/WatchingResolverTests.cs, ADD
 [TestMethod]
 public void Resolve_SingleFreshClip_SelfWritten_IsNotLiveTarget()
 {
@@ -805,12 +805,12 @@ public void Resolve_SingleFreshClip_SelfWritten_IsNotLiveTarget()
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter WatchingResolverTests`
-Expected: FAIL — `CreateDefault` has no ledger overload; the fresh clip still resolves as `recent_write`.
+Expected: FAIL, `CreateDefault` has no ledger overload; the fresh clip still resolves as `recent_write`.
 
 - [ ] **Step 3: Implement the threading**
 
 ```csharp
-// WatchingResolver.cs — add field + ctor param
+// WatchingResolver.cs, add field + ctor param
     private readonly SelfActionLedger? _ledger;
 
     public WatchingResolver(
@@ -847,7 +847,7 @@ Pass `_ledger` at both `WatchContext.Build` call sites:
 - [ ] **Step 4: Run to verify it passes + reconcile existing resolver tests**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter WatchingResolverTests`
-Expected: PASS. Existing gaming-mode tests that created a fresh file and expected a `recent_write` live target still pass (empty baseline, null ledger). Any that relied on a back-dated **write** time to look "old" must also back-date **creation** time — update the `TouchStale` helper to set both, and add a `TouchCreated(path, DateTime)` helper:
+Expected: PASS. Existing gaming-mode tests that created a fresh file and expected a `recent_write` live target still pass (empty baseline, null ledger). Any that relied on a back-dated **write** time to look "old" must also back-date **creation** time, update the `TouchStale` helper to set both, and add a `TouchCreated(path, DateTime)` helper:
 
 ```csharp
 // In the test helper region:
@@ -889,12 +889,12 @@ git commit -m "feat(watching): inject SelfActionLedger through the resolver"
 - Consumes: `SelfActionLedger` (Task 1); `WatchingResolver.CreateDefault(source, ledger)` (Task 6).
 - Produces: a single process-wide `SelfActionLedger` threaded into the read/write tool registrations. Final registration signatures (trailing optionals, accumulated across tasks): `ReadTools.RegisterAll(registry, sandbox, ReviewWatcher? watcher = null, SelfActionLedger? ledger = null, DrainJournal? journal = null)` (this task adds `ledger`; Task 8 adds `journal`); `WriteTools.RegisterAll(registry, sandbox, SelfActionLedger? ledger = null)`.
 
-> Why this task is separate from Task 6: Task 6 lets the resolver *read* a ledger (Core, unit-tested). This task *populates* it in production — without it the ledger is always empty and P0-2/P1-1's exclusions never fire in real use.
+> Why this task is separate from Task 6: Task 6 lets the resolver *read* a ledger (Core, unit-tested). This task *populates* it in production, without it the ledger is always empty and P0-2/P1-1's exclusions never fire in real use.
 
-- [ ] **Step 1: Write the failing test** — a clip ClipMeta just wrote is not a `recent_write` live target
+- [ ] **Step 1: Write the failing test**, a clip ClipMeta just wrote is not a `recent_write` live target
 
 ```csharp
-// clipmetamcp.Tests — in the write/watching integration test class
+// clipmetamcp.Tests, in the write/watching integration test class
 [TestMethod]
 public void Watching_DoesNotSurface_AClipThisSessionWrote_AsRecentWrite()
 {
@@ -912,12 +912,12 @@ public void Watching_DoesNotSurface_AClipThisSessionWrote_AsRecentWrite()
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetamcp.Tests --nologo --filter Watching_DoesNotSurface`
-Expected: FAIL — nothing marks the write, so the fresh clip resolves as `recent_write`.
+Expected: FAIL, nothing marks the write, so the fresh clip resolves as `recent_write`.
 
 - [ ] **Step 3: Build the ledger in `Program.cs` and inject it**
 
 ```csharp
-// Program.cs — one ledger for the process, shared by writers (mark) and the resolver (read)
+// Program.cs, one ledger for the process, shared by writers (mark) and the resolver (read)
             var selfLedger = new SelfActionLedger();
 ```
 
@@ -945,7 +945,7 @@ Pass it to the registrations: `WriteTools.RegisterAll(registry, sandbox, selfLed
         var resolver = WatchingResolver.CreateDefault(ProcessWindowSource.ForCurrentPlatform(), ledger);
 ```
 
-Do NOT mark in `ListLibrary` (directory names only — low pollution, safe for baseline).
+Do NOT mark in `ListLibrary` (directory names only, low pollution, safe for baseline).
 
 - [ ] **Step 6: Run to verify it passes + build**
 
@@ -961,7 +961,7 @@ git commit -m "feat(mcp): populate SelfActionLedger from writes/reads, inject in
 
 ---
 
-## Task 8: Drain visibility — `onWritten` callback + pump journal + MCP surface (P0-1)
+## Task 8: Drain visibility, `onWritten` callback + pump journal + MCP surface (P0-1)
 
 **Files:**
 - Modify: `clipmeta.core/Watching/TagQueue.cs` (callback + extract `ChangedFields`)
@@ -975,10 +975,10 @@ git commit -m "feat(mcp): populate SelfActionLedger from writes/reads, inject in
 - Consumes: `DrainedTag`, `DrainJournal` (Task 2).
 - Produces: `TagQueue.Drain(..., Action<DrainedTag>? onWritten = null)`; `QueueDrainPump` ctor gains trailing `DrainJournal? journal = null`; MCP `RegisterAll` overloads gain `DrainJournal? journal`.
 
-- [ ] **Step 1: Write the failing test** — the pump records each auto-flush
+- [ ] **Step 1: Write the failing test**, the pump records each auto-flush
 
 ```csharp
-// clipmetascribe.Tests/QueueDrainPumpTests.cs — ADD (use this file's existing fakes/helpers)
+// clipmetascribe.Tests/QueueDrainPumpTests.cs, ADD (use this file's existing fakes/helpers)
 [TestMethod]
 public void Pump_RecordsAutoFlush_IntoJournal()
 {
@@ -999,18 +999,18 @@ public void Pump_RecordsAutoFlush_IntoJournal()
     pump.Wake();
 
     Assert.IsTrue(SpinUntil(() => journal.TakePending().Count > 0, seconds: 15) == false
-        ? false : true);   // see note below — prefer a single TakePending after the wait
+        ? false : true);   // see note below, prefer a single TakePending after the wait
 }
 ```
 
-> Replace the awkward assert with the file's existing wait idiom: spin (generously, 15s — the pass-3 background-timing lesson) until a drain lands, then `var taken = journal.TakePending();` and assert `taken.Single().Path == clip` and `taken[0].Fields` contains `"tags"`. Take ONCE (report-once clears).
+> Replace the awkward assert with the file's existing wait idiom: spin (generously, 15s, the pass-3 background-timing lesson) until a drain lands, then `var taken = journal.TakePending();` and assert `taken.Single().Path == clip` and `taken[0].Fields` contains `"tags"`. Take ONCE (report-once clears).
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter QueueDrainPumpTests`
-Expected: FAIL — pump ctor has no `journal` param.
+Expected: FAIL, pump ctor has no `journal` param.
 
-- [ ] **Step 3: Implement — `TagQueue` callback + `ChangedFields`**
+- [ ] **Step 3: Implement, `TagQueue` callback + `ChangedFields`**
 
 In `TagQueue.Drain`, add the trailing param and invoke on success:
 
@@ -1047,10 +1047,10 @@ Extract the changed-field logic (reused by `Status`):
 
 In `Status`, replace the three `changed.AddRange(...)` lines with `var changed = ChangedFields(e.Mutation);`.
 
-- [ ] **Step 4: Implement — pump records to journal**
+- [ ] **Step 4: Implement, pump records to journal**
 
 ```csharp
-// QueueDrainPump.cs — add field + ctor param
+// QueueDrainPump.cs, add field + ctor param
     private readonly DrainJournal? _journal;
 
     public QueueDrainPump(
@@ -1064,7 +1064,7 @@ In `Status`, replace the three `changed.AddRange(...)` lines with `var changed =
 ```
 
 ```csharp
-// DrainOnce — record each auto-flush
+// DrainOnce, record each auto-flush
     private DrainReport DrainOnce()
     {
         DrainReport result = new(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
@@ -1078,12 +1078,12 @@ In `Status`, replace the three `changed.AddRange(...)` lines with `var changed =
 - [ ] **Step 5: Run the pump test**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter QueueDrainPumpTests`
-Expected: PASS. (Synchronous drains pass `onWritten: null`, so they never double-record — only the pump feeds the journal.)
+Expected: PASS. (Synchronous drains pass `onWritten: null`, so they never double-record, only the pump feeds the journal.)
 
-- [ ] **Step 6: Implement — MCP wiring (`Program.cs`)**
+- [ ] **Step 6: Implement, MCP wiring (`Program.cs`)**
 
 ```csharp
-// Program.cs — build the journal once, inject into pump + tool registration
+// Program.cs, build the journal once, inject into pump + tool registration
             var drainJournal = new DrainJournal();
             QueueDrainPump? pump = null;
             if (sandbox.Root is { } libraryRoot)
@@ -1099,7 +1099,7 @@ Expected: PASS. (Synchronous drains pass `onWritten: null`, so they never double
 
 Pass `drainJournal` to the read/queue registrations. `ReadTools.RegisterAll` now takes both the Task-7 `selfLedger` and the journal: `ReadTools.RegisterAll(registry, sandbox, reviewWatcher, selfLedger, drainJournal);` and `QueueTools.RegisterAll(registry, sandbox, pump, drainJournal);`.
 
-- [ ] **Step 7: Implement — surface `autoFlushed` in `library_watching`**
+- [ ] **Step 7: Implement, surface `autoFlushed` in `library_watching`**
 
 In `ReadTools.RegisterAll`, add a trailing `DrainJournal? journal = null` and thread it to the `Watching` handler. In `Watching(...)`, before `return response;`:
 
@@ -1121,7 +1121,7 @@ In `ReadTools.RegisterAll`, add a trailing `DrainJournal? journal = null` and th
         response["autoFlushed"] = autoFlushed;
 ```
 
-- [ ] **Step 8: Implement — surface `autoFlushed` in flush/status**
+- [ ] **Step 8: Implement, surface `autoFlushed` in flush/status**
 
 In `QueueTools.RegisterAll`, add a trailing `DrainJournal? journal = null`; thread to `FlushQueue` and `QueueStatus`. Add a shared helper and include it:
 
@@ -1149,7 +1149,7 @@ In `QueueTools.RegisterAll`, add a trailing `DrainJournal? journal = null`; thre
 - [ ] **Step 9: Write the MCP behavior test**
 
 ```csharp
-// clipmetamcp.Tests — in the watching/queue test class
+// clipmetamcp.Tests, in the watching/queue test class
 [TestMethod]
 public void Watching_SurfacesAutoFlushed_FromJournal()
 {
@@ -1165,7 +1165,7 @@ public void Watching_SurfacesAutoFlushed_FromJournal()
 - [ ] **Step 10: Build + FULL MCP suite**
 
 Run: `dotnet build --nologo -v q` then `dotnet test clipmetamcp.Tests --nologo`
-Expected: build 0/0; full MCP suite green (run the WHOLE project — `ToolsList_ContainsTheFullToolSurface` still asserts 17 tools, unaffected).
+Expected: build 0/0; full MCP suite green (run the WHOLE project, `ToolsList_ContainsTheFullToolSurface` still asserts 17 tools, unaffected).
 
 - [ ] **Step 11: Commit**
 
@@ -1229,7 +1229,7 @@ public class PlayerRosterGuardTests
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `dotnet test clipmetascribe.Tests --nologo --filter PlayerRosterGuardTests`
-Expected: FAIL — `PlayerRosterGuard` does not exist.
+Expected: FAIL, `PlayerRosterGuard` does not exist.
 
 - [ ] **Step 3: Implement the Core guard**
 
@@ -1239,7 +1239,7 @@ namespace ClipMetaCore.Schema;
 
 /// <summary>
 /// Pure check behind the soft "unknown player" advisory: given a pipe-delimited players value and the
-/// known-player set (library vocab ∪ a session roster), returns the tokens that match neither — names
+/// known-player set (library vocab ∪ a session roster), returns the tokens that match neither, names
 /// the model should confirm with the user before they stick (e.g. "miami element" is a warpaint, not a
 /// person). The write is never blocked here; this only identifies what to flag.
 /// </summary>
@@ -1357,7 +1357,7 @@ Also append a one-line "name players up front…" sentence to the `library_queue
 - [ ] **Step 8: Write the MCP behavior tests**
 
 ```csharp
-// clipmetamcp.Tests — write tools
+// clipmetamcp.Tests, write tools
 // (a) clip_set_fields players "miami element" with no roster + empty vocab -> result["review"][0]["type"]=="unknownPlayer", token=="miami element", AND the write still landed (fields contains players).
 // (b) same call with roster:["miami element"] -> no "review" key.
 // (c) players "chuck" when "chuck" already in vocab (seed a clip first) -> no "review" key.
@@ -1393,7 +1393,7 @@ In `clipmetamcp/clipmetamcp.csproj` set both `<AssemblyVersion>1.4.0</AssemblyVe
 Append to `docs/PITFALLS.md`:
 - Two silent drainers: the background pump writes correctly but discards its report, so user-facing drains saw an empty queue → always wire a silent background writer to a report-once journal the foreground surfaces.
 - `recent_write` must key on **creation** time, not write time: copy-into-library preserves source mtime (fresh looks old) and ClipMeta's own `File.Replace` bumps mtime (self-write looks fresh). Creation time + index baseline + self-ledger is the fix.
-- Adding the ledger turns any fixture's implicit access/write/creation time into signal input — `TouchStale` must set all three; assert with explicit timestamps.
+- Adding the ledger turns any fixture's implicit access/write/creation time into signal input, `TouchStale` must set all three; assert with explicit timestamps.
 
 - [ ] **Step 3: Full build + both suites**
 
@@ -1411,7 +1411,7 @@ git add clipmetamcp/clipmetamcp.csproj tools/mcpb-manifest.json docs/PITFALLS.md
 git commit -m "chore: bump to v1.4.0, record pass-5 pitfalls, repack .mcpb"
 ```
 
-> Do NOT `git add` `dist/clipmeta.mcpb` unless the repo already tracks it (check `git status` first — match the existing convention from the last repack). Do NOT touch `docs/index.html` / `docs/BUILD-LOG.md`.
+> Do NOT `git add` `dist/clipmeta.mcpb` unless the repo already tracks it (check `git status` first, match the existing convention from the last repack). Do NOT touch `docs/index.html` / `docs/BUILD-LOG.md`.
 
 ---
 

@@ -133,7 +133,7 @@ public class ClipGetMetadataToolTests
     [TestMethod]
     public void GetMetadata_PathOutsideRoot_IsRefused()
     {
-        // Clip lives in _tempDir, but the sandbox root is a subdirectory — the absolute path
+        // Clip lives in _tempDir, but the sandbox root is a subdirectory, the absolute path
         // points outside the library and must be refused, not read.
         string clip = PrepareClip("clip.mp4", "game", "TF2");
         string innerRoot = Path.Combine(_tempDir, "library");
@@ -176,7 +176,7 @@ public class ClipGetMetadataToolTests
     {
         // A file with an .mp4 name but garbage bytes. Mp4Parser is deliberately lenient
         // (clamps oversized boxes, stops at damage) so this parses to a tree with no metadata
-        // rather than throwing — the contract at the MCP layer is: a result (here: empty
+        // rather than throwing, the contract at the MCP layer is: a result (here: empty
         // fields), never a JSON-RPC error, never a dead session.
         string fake = Path.Combine(_tempDir, "fake.mp4");
         File.WriteAllBytes(fake, [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03]);

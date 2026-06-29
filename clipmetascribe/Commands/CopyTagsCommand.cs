@@ -37,7 +37,7 @@ internal static class CopyTagsCommand
             return 1;
         }
 
-        // May throw UnsupportedFormatException/InvalidDataException — Program maps those to exit 1.
+        // May throw UnsupportedFormatException/InvalidDataException, Program maps those to exit 1.
         BoxNode source = Mp4Parser.ParseFile(sourcePath);
         MetadataMutation mutation = ClipMetaCopier.BuildCopyMutation(source);
         MergeExplicit(mutation, extra);

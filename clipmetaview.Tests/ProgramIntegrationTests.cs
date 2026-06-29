@@ -79,7 +79,7 @@ public class ProgramIntegrationTests
 
         var ilstNode = FindBoxByType(root, "ilst");
         if (ilstNode == null)
-            Assert.Inconclusive($"No ilst box found in {Path.GetFileName(clipPath)} — skipping editable-check.");
+            Assert.Inconclusive($"No ilst box found in {Path.GetFileName(clipPath)}, skipping editable-check.");
 
         bool hasEditable = ilstNode!.Children.Any(c => c.IsEditable);
         Assert.IsTrue(hasEditable, $"ilst box in {Path.GetFileName(clipPath)} has no editable children");

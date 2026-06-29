@@ -1,8 +1,8 @@
-# Write Engine — Focused Implementation Plan
+# Write Engine, Focused Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract ClipMeta.Core and implement a safe, thoroughly-tested MP4 write engine, then deliver a minimal `clipmetascribe write` CLI — leaving reporting, search, and batch features for a future round.
+**Goal:** Extract ClipMeta.Core and implement a safe, thoroughly-tested MP4 write engine, then deliver a minimal `clipmetascribe write` CLI, leaving reporting, search, and batch features for a future round.
 
 **Architecture:** ClipMeta.Core is a zero-NuGet-dependency class library holding all parsing and writing logic. Both CLIs (clipmetaview, clipmetascribe) are thin shells referencing Core. The write engine uses a temp-file strategy: the source file is never opened for writing; if anything fails the original is untouched.
 
@@ -31,9 +31,9 @@ Implement Tasks 1 through 10 **verbatim** from the reviewed plan at:
 
 `docs/superpowers/plans/2026-05-21-clipmeta-core-write-engine.md`
 
-**Modifications and exceptions — read carefully before starting:**
+**Modifications and exceptions, read carefully before starting:**
 
-1. **Task 5 test project scope:** The `.csproj`, `ScratchClips.cs`, `TestClipsLocator.cs`, and `MinimalMp4Builder.cs` are all needed. The following test class files ARE in scope for Task 5: `BigEndianWriterTests.cs`, `FreeformAtomWriterTests.cs`, `FileLoggerTests.cs`, `Mp4WriterTests.cs`, `Mp4WriterIntegrationTests.cs`, `NormalizationTests.cs`. **Do NOT create** `SearchIndexTests.cs` or `BatchOperationTests.cs` — those belong to a future round.
+1. **Task 5 test project scope:** The `.csproj`, `ScratchClips.cs`, `TestClipsLocator.cs`, and `MinimalMp4Builder.cs` are all needed. The following test class files ARE in scope for Task 5: `BigEndianWriterTests.cs`, `FreeformAtomWriterTests.cs`, `FileLoggerTests.cs`, `Mp4WriterTests.cs`, `Mp4WriterIntegrationTests.cs`, `NormalizationTests.cs`. **Do NOT create** `SearchIndexTests.cs` or `BatchOperationTests.cs`, those belong to a future round.
 
 2. **Task 11 (Search Index) in the existing plan:** **Skip entirely.**
 
@@ -374,7 +374,7 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("""
-            clipmetascribe — MP4 metadata writer (Peckworks Lab)
+            clipmetascribe, MP4 metadata writer (Peckworks Lab)
 
             Usage:
               clipmetascribe "clip.mp4" --set <field> <value>
@@ -413,7 +413,7 @@ dotnet build clipmetascribe/clipmetascribe.csproj
 ```
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)`
 
-- [ ] **Step 11.8: Smoke test — no args shows usage, exits 1**
+- [ ] **Step 11.8: Smoke test, no args shows usage, exits 1**
 
 ```powershell
 dotnet run --project clipmetascribe
@@ -421,7 +421,7 @@ $LASTEXITCODE  # should be 1
 ```
 Expected: usage text is printed, exit code 1.
 
-- [ ] **Step 11.9: Smoke test — --version**
+- [ ] **Step 11.9: Smoke test, --version**
 
 ```powershell
 dotnet run --project clipmetascribe -- --version
@@ -429,7 +429,7 @@ $LASTEXITCODE  # should be 0
 ```
 Expected: `clipmetascribe 1.0.0 (ClipMeta.Core 1.0.0)`, exit code 0.
 
-- [ ] **Step 11.10: Smoke test — missing file exits 1**
+- [ ] **Step 11.10: Smoke test, missing file exits 1**
 
 ```powershell
 dotnet run --project clipmetascribe -- "nonexistent.mp4" --set game "TF2"
@@ -437,7 +437,7 @@ $LASTEXITCODE  # should be 1
 ```
 Expected: `Error: File not found: nonexistent.mp4`, exit code 1.
 
-- [ ] **Step 11.11: Smoke test — write a field, verify with clipmetaview**
+- [ ] **Step 11.11: Smoke test, write a field, verify with clipmetaview**
 
 ```powershell
 # Copy a pristine clip to scratch
@@ -457,7 +457,7 @@ dotnet run --project clipmetaview -- $scratch
 ```
 Expected: tree shows `----` atoms for game, tags, rating marked `← [EDITABLE]` with the correct values.
 
-- [ ] **Step 11.12: Smoke test — append to existing tag list**
+- [ ] **Step 11.12: Smoke test, append to existing tag list**
 
 ```powershell
 dotnet run --project clipmetascribe -- $scratch --append tags "market garden"
@@ -465,9 +465,9 @@ dotnet run --project clipmetaview -- $scratch
 ```
 Expected: tags value is `"rocket jump|market garden|headshot"` (rocket jump and headshot from previous write, market garden appended, deduplication preserves order).
 
-Note: the actual order may be `"rocket jump|headshot|market garden"` depending on normalization — what matters is all three tokens are present exactly once.
+Note: the actual order may be `"rocket jump|headshot|market garden"` depending on normalization, what matters is all three tokens are present exactly once.
 
-- [ ] **Step 11.13: Smoke test — clear a field**
+- [ ] **Step 11.13: Smoke test, clear a field**
 
 ```powershell
 dotnet run --project clipmetascribe -- $scratch --clear rating
@@ -475,7 +475,7 @@ dotnet run --project clipmetaview -- $scratch
 ```
 Expected: `rating` atom is no longer present in the tree.
 
-- [ ] **Step 11.14: Smoke test — dry-run makes no change**
+- [ ] **Step 11.14: Smoke test, dry-run makes no change**
 
 ```powershell
 $before = (Get-FileHash $scratch -Algorithm MD5).Hash
@@ -485,15 +485,15 @@ if ($before -eq $after) { Write-Host "PASS: file unchanged" } else { Write-Host 
 ```
 Expected: `PASS: file unchanged`
 
-- [ ] **Step 11.15: Smoke test — backup creates .bak file**
+- [ ] **Step 11.15: Smoke test, backup creates .bak file**
 
 ```powershell
 dotnet run --project clipmetascribe -- $scratch --set notes "backup test" --backup
 Test-Path ($scratch + ".bak")  # should be True
 ```
-Expected: `True` — `.bak` file exists next to the written file.
+Expected: `True`, `.bak` file exists next to the written file.
 
-- [ ] **Step 11.16: Smoke test — run against all pristine clips**
+- [ ] **Step 11.16: Smoke test, run against all pristine clips**
 
 ```powershell
 foreach ($clip in (Get-ChildItem testclips/pristine/*.mp4)) {
@@ -517,14 +517,14 @@ git commit -m "feat: clipmetascribe write command with --set/--append/--clear/--
 
 ## Task 12: Final Verification
 
-- [ ] **Step 12.1: Full solution build — zero errors and zero warnings**
+- [ ] **Step 12.1: Full solution build, zero errors and zero warnings**
 
 ```powershell
 dotnet build
 ```
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)` across all projects.
 
-- [ ] **Step 12.2: Full test suite — all tests pass**
+- [ ] **Step 12.2: Full test suite, all tests pass**
 
 ```powershell
 dotnet test
@@ -546,7 +546,7 @@ dotnet test clipmetaview.Tests/clipmetaview.Tests.csproj
 ```
 Expected: exactly 80 tests pass. Zero failures. This confirms the Mp4/ move to ClipMeta.Core did not break anything.
 
-- [ ] **Step 12.5: Full round-trip — write then read back with clipmetaview**
+- [ ] **Step 12.5: Full round-trip, write then read back with clipmetaview**
 
 ```powershell
 foreach ($clip in (Get-ChildItem testclips/pristine/*.mp4)) {
@@ -585,8 +585,8 @@ Expected: no `.tmp` files present. All write operations cleaned up after themsel
 
 This plan is complete when ALL of the following are true:
 
-1. `dotnet build` — zero errors, zero warnings across all projects
-2. `dotnet test` — all tests pass including all Mp4WriterIntegrationTests against real pristine clips
+1. `dotnet build`, zero errors, zero warnings across all projects
+2. `dotnet test`, all tests pass including all Mp4WriterIntegrationTests against real pristine clips
 3. `clipmetaview` still passes all 80 original tests after the Mp4/ → ClipMeta.Core move
 4. Round-trip verified: `clipmetascribe --set` → `clipmetaview` shows the written value
 5. `clipmetascribe "missing.mp4" --set game "TF2"` → exits 1 with useful error message

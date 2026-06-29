@@ -21,7 +21,7 @@ public sealed class WatchingResolver
 
     /// <summary>
     /// Creates a resolver over the given signals and process source. The trailing
-    /// <paramref name="ledger"/> — when supplied — is threaded into every
+    /// <paramref name="ledger"/>, when supplied, is threaded into every
     /// <see cref="WatchContext"/> so self-written clips are excluded from gaming-mode detection.
     /// </summary>
     public WatchingResolver(
@@ -38,7 +38,7 @@ public sealed class WatchingResolver
 
     /// <summary>
     /// The default resolver: player-title, then recent-write (gaming mode), then access-time signals.
-    /// Order is informational only — the scorer ranks by source, not registration order.
+    /// Order is informational only, the scorer ranks by source, not registration order.
     /// The optional <paramref name="ledger"/> excludes paths ClipMeta itself wrote from the gaming-mode
     /// signal so a tag-write is never mistaken for a fresh user game-save.
     /// </summary>
@@ -50,7 +50,7 @@ public sealed class WatchingResolver
 
     /// <summary>The caveat attached to a bare-name match whose file is not currently locked.</summary>
     private const string NotLockedNote =
-        "not currently locked — may be a same-named file elsewhere; confirm before tagging";
+        "not currently locked, may be a same-named file elsewhere; confirm before tagging";
 
     /// <summary>
     /// Resolves the watched-clip candidates under <paramref name="libraryRoot"/>, best first, capped
@@ -94,7 +94,7 @@ public sealed class WatchingResolver
 
         // TIME-BASE 1 (live reality): diagnostics, wrong-directory suppression, gaming (recent_write)
         // and access fallback all reflect what is open RIGHT NOW. A player closed a turn ago is simply
-        // absent here — so it can raise no "do not tag" warning (the ghost) and skew no suppression.
+        // absent here, so it can raise no "do not tag" warning (the ghost) and skew no suppression.
         WatchContext liveContext = WatchContext.Build(libraryRoot, _windowSource.GetPlayerWindows(_playerNames), _ledger);
         WatchingResult core = ResolveCore(liveContext, limit, includeAccessFallback);
 
@@ -104,7 +104,7 @@ public sealed class WatchingResolver
 
         // TIME-BASE 2 (history): which recorded title did the user describe? Resolve the chosen segment
         // against the SAME (already-enumerated) library. Only when it resolves to a single in-library
-        // player-title candidate is it a real "what you watched" bind — and then it IS the answer, so a
+        // player-title candidate is it a real "what you watched" bind, and then it IS the answer, so a
         // background save (recent_write) and recency guesses are noise and drop out. When the chosen
         // segment is foreign/closed/unresolved, there is no bind: the live `core` result stands, so a
         // fresh game-save (Policy A) survives and a live foreign player demotes to an advisory downstream.
@@ -133,7 +133,7 @@ public sealed class WatchingResolver
             }
         }
 
-        // #2 cap: when two or more players are open, the bind is ambiguous — force confirm-first. Nothing
+        // #2 cap: when two or more players are open, the bind is ambiguous, force confirm-first. Nothing
         // is an auto-tag target and no candidate may read high, even a locked one.
         bool multiPlayer = binding.Flags.Any(f => f.Type == ReviewFlag.TypeMultiplePlayersActive);
         if (multiPlayer)
@@ -152,9 +152,9 @@ public sealed class WatchingResolver
     }
 
     /// <summary>
-    /// Resolves over an already-built context — holds the entire scoring/ranking pipeline.
+    /// Resolves over an already-built context, holds the entire scoring/ranking pipeline.
     /// Called once by <see cref="Resolve"/> over a live snapshot; called twice by
-    /// <see cref="ResolveReview"/> — once over the live snapshot for diagnostics/gaming/access,
+    /// <see cref="ResolveReview"/>, once over the live snapshot for diagnostics/gaming/access,
     /// and once over the chosen segment's synthetic window for the historical bind.
     /// </summary>
     private WatchingResult ResolveCore(WatchContext context, int limit, bool includeAccessFallback)
@@ -194,11 +194,11 @@ public sealed class WatchingResolver
             bool hasRecentWrite = hits.Any(h => h.Source == RecentWriteSignal.SourceName);
 
             // includeAccessFallback gates every non-player signal (its contract is "only open-player
-            // candidates when false") — recent-write included, since it is also a no-player fallback.
+            // candidates when false"), recent-write included, since it is also a no-player fallback.
             if (!hasPlayer && !includeAccessFallback)
                 continue;
             // The wrong-directory suppression (a player on a foreign file) means the user is NOT
-            // gaming — so it suppresses access-time guesses. EXCEPTION (#1, Policy A): a single
+            // gaming, so it suppresses access-time guesses. EXCEPTION (#1, Policy A): a single
             // unambiguous just-saved clip is a legitimate in-library gaming target and the foreign
             // lock (on a file you cannot tag anyway) must not hide it. Several fresh saves at once
             // are ambiguous and stay suppressed.
@@ -239,7 +239,7 @@ public sealed class WatchingResolver
             working.Add(new WorkingCandidate(candidate, hasPlayer, bareNameUnambiguous));
         }
 
-        // Collision guard: probe player-hit candidates now (there are at most a few — one per open
+        // Collision guard: probe player-hit candidates now (there are at most a few, one per open
         // player), so a bare-name high hit whose file is NOT locked is demoted to low + note. This
         // is the only probing done before the cap; access-time candidates are still probed after it.
         for (int i = 0; i < working.Count; i++)
@@ -275,18 +275,18 @@ public sealed class WatchingResolver
             .ThenByDescending(c => c.LastAccessTimeUtc)
             .ToList();
 
-        // #6 — attribute the player for a locked clip whose title we could not resolve. When exactly
+        // #6, attribute the player for a locked clip whose title we could not resolve. When exactly
         // one open recognized player produced no resolved candidate, it is almost certainly the one
         // holding the lock, so name it rather than returning player:null on a live clip. Two such
-        // players is genuinely ambiguous — never guess between them.
+        // players is genuinely ambiguous, never guess between them.
         string? soleHolder = SoleUnresolvedPlayer(context, playerMatches);
         if (soleHolder is not null)
             for (int i = 0; i < finalCandidates.Count; i++)
                 if (finalCandidates[i].InUse && finalCandidates[i].Player is null)
                     finalCandidates[i] = finalCandidates[i] with { Player = soleHolder, Note = PlayerAttributedNote };
 
-        // #8a — once a clip is positively identified, the weaker guesses below it are noise; drop them.
-        // A high-confidence PLAYER hit wins outright (it drops recent-write saves too — a background
+        // #8a, once a clip is positively identified, the weaker guesses below it are noise; drop them.
+        // A high-confidence PLAYER hit wins outright (it drops recent-write saves too, a background
         // capture must never dilute the clip you were actually watching). Otherwise, when a recent-write
         // (gaming) candidate is present, it supersedes the access-time recency guesses. With neither,
         // the access-time fallback is all we have, so it stays.
@@ -301,7 +301,7 @@ public sealed class WatchingResolver
                 .Where(c => c.Source != AccessTimeSignal.SourceName)
                 .ToList();
 
-        // #3 — a live target is one a player named, one currently locked, OR a confidently just-saved
+        // #3, a live target is one a player named, one currently locked, OR a confidently just-saved
         // clip (gaming mode, Policy A). When false, every candidate is an unverified recency guess and
         // the caller must confirm before tagging. Shared with ResolveReview so the two paths cannot drift.
         bool anyLiveTarget = finalCandidates.Any(IsLiveTarget);
@@ -311,7 +311,7 @@ public sealed class WatchingResolver
 
     /// <summary>The caveat attached to a lock attributed to a player by the open-window heuristic.</summary>
     private const string PlayerAttributedNote =
-        "player title not recognized — player attributed from the single open player window";
+        "player title not recognized, player attributed from the single open player window";
 
     /// <summary>
     /// Whether a candidate is an actually-live tag target: a player named it, it is currently locked,
@@ -325,7 +325,7 @@ public sealed class WatchingResolver
 
     /// <summary>
     /// The process name of the one open recognized player that resolved no candidate, or null when
-    /// none — or more than one — such player is open (ambiguous, so we attribute nothing).
+    /// none, or more than one, such player is open (ambiguous, so we attribute nothing).
     /// </summary>
     private static string? SoleUnresolvedPlayer(
         WatchContext context, IReadOnlyList<PlayerMatch> playerMatches)

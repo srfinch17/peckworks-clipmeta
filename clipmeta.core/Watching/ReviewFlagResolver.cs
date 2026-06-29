@@ -3,7 +3,7 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Rewrites review-flag clip strings (raw player-window titles) into clean, deduped library
 /// basenames using the same library-aware matcher the resolver uses, so advisories never expose
-/// raw titles, OSD/timecode text, or duplicate entries. Pure: no IO — library identity comes from
+/// raw titles, OSD/timecode text, or duplicate entries. Pure: no IO, library identity comes from
 /// the supplied <see cref="WatchContext"/>. Flag <see cref="ReviewFlag.Type"/> and
 /// <see cref="ReviewFlag.StableSeconds"/> are untouched; only the clip payload changes.
 /// </summary>

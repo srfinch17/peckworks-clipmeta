@@ -36,7 +36,7 @@ internal static class WatchingCommand
                 string where = up.ForeignDirectory is null ? "" : $" from \"{up.ForeignDirectory}\"";
                 output.WriteLine(
                     $"WARNING: {up.Player} is playing \"{up.ReferencedName}\"{where}, which is not in this " +
-                    "library — you may be in the wrong folder. Do not tag until you've confirmed.");
+                    "library, you may be in the wrong folder. Do not tag until you've confirmed.");
             }
             output.WriteLine();
         }
@@ -52,7 +52,7 @@ internal static class WatchingCommand
         output.WriteLine("Watched-clip candidates (most likely first):");
         if (!result.AnyLiveTarget)
             output.WriteLine(
-                "  (nothing is currently open or locked — these are most-recently-touched guesses; " +
+                "  (nothing is currently open or locked, these are most-recently-touched guesses; " +
                 "confirm the file before tagging.)");
         foreach (WatchingCandidate c in candidates)
         {

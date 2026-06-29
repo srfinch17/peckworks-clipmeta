@@ -1,7 +1,7 @@
-# Review-Mode Watcher — Design Spec
+# Review-Mode Watcher, Design Spec
 
 **Date:** 2026-06-26
-**Round:** Watch-and-tag, pass 4 (binding correctness — review mode)
+**Round:** Watch-and-tag, pass 4 (binding correctness, review mode)
 **Author:** Peckworks Lab
 **Predecessors:** pass-1/1.5 (#27/#28), pass-2 deferred queue (#30), pass-3 detection + write semantics (#32/#33).
 **Source evidence:** `clipmeta_testrun_log.md` (two live dogfood runs, 2026-06-26) and the owner's
@@ -14,7 +14,7 @@ that larger document (see §9 for what is deliberately deferred).
 
 The watch-and-tag loop has a **silent data-integrity bug**: a spoken tag can bind to the *wrong*
 clip. `library_watching` resolves "which clip" by inspecting open player windows **at the moment the
-tool executes** — a full assistant turn *after* the user dictated. The user's natural rhythm is
+tool executes**, a full assistant turn *after* the user dictated. The user's natural rhythm is
 *watch clip N → dictate → advance to N+1*; if the advance lands before the (late) poll, the poll
 reads N+1 and the tag binds there.
 
@@ -23,12 +23,12 @@ Two live runs isolated the root cause:
 - **Run 1 (MPC-HC, 5 dictations):** binding drifted by one from clip 2 on; one clip skipped, another
   double-tagged. Entangled with a separate, intermittent MPC title dropout.
 - **Run 2 (VLC, 5 clips, clean playlist order):** clips 1–3 bound correctly; **clip 4 bound to clip 5,
-  skipping clip 4.** VLC's title detection was flawless on *every* poll — yet drift still occurred.
+  skipping clip 4.** VLC's title detection was flawless on *every* poll, yet drift still occurred.
 
 Run 2 is decisive: drift is **not** a title-detection problem and **not** player-specific. It is a
 race between the user's advance and the assistant's poll, and it is **silent and intermittent**
 (1 of 5, on the shortest clip). Every wrong binding showed the polled clip at
-`secondsSinceAccess ≈ 0–0.1` — the clip had *just started*. A clip the user actually watched and is
+`secondsSinceAccess ≈ 0–0.1`, the clip had *just started*. A clip the user actually watched and is
 describing would have been playing for several seconds. **That distinction is the lever.**
 
 The current architecture cannot exploit it: `WatchContext.Build` snapshots player windows *once per
@@ -38,17 +38,17 @@ is no history, so the resolver cannot know a clip *just* started versus has been
 > **Reconciliation note (symptom-log triage).** Several other testrun findings were reconciled
 > against `main` and are **not** code bugs in the current build: provenance *is* stamped on the queue
 > drain (default `StampProvenance=true` flows through `QueuedMutation.ToMutation` → `Mp4Writer`), but
-> `tagged_by` is `IsInternal` and hidden from `clip_get_metadata` by design — the log "verified" via a
+> `tagged_by` is `IsInternal` and hidden from `clip_get_metadata` by design, the log "verified" via a
 > surface that hides it. `anyLiveTarget` is emitted unconditionally on `main` (`ReadTools.cs:562`).
 > Those are measurement artifacts. Genuine residual items (MPC title-retry, dry-run preview, notes
-> separator, a queue-drain→provenance test, lock backoff) are real but **out of scope here** — they
+> separator, a queue-drain→provenance test, lock backoff) are real but **out of scope here**, they
 > are the secondary-fixes batch (§9). This spec targets the one architectural bug: the binding race.
 
 ---
 
 ## Scope of This Round
 
-**In scope** — review mode (manual walk through clips in a media player) only:
+**In scope**, review mode (manual walk through clips in a media player) only:
 
 - A continuous, **read-only** `ReviewWatcher` background thread (Core) that records cheap **title
   segments** (raw player title + start/end), never resolving clips in its hot loop.
@@ -59,13 +59,13 @@ is no history, so the resolver cannot know a clip *just* started versus has been
   derived purely from segment Ids + one `MarkBound` call. **No new MCP tool.**
 - `QueueDrainPump`-style lifecycle wiring in the MCP shell.
 
-**Out of scope** (each its own future spec — §9): timestamp ingestion / fire-N-ahead (AC2), gaming
+**Out of scope** (each its own future spec, §9): timestamp ingestion / fire-N-ahead (AC2), gaming
 mode / `FileSystemWatcher` (AC7–AC8), the §7 secondary-fix batch, a persisted review file or
 dedicated review tool, and field-normalization depth.
 
 **Acceptance criteria covered this round:** AC1 (race immunity, single off-by-one), AC3
 (same-clip-twice flag + accumulation), AC4 (skip detection), AC5 (cold start), AC6 (locked-file
-deferral — unchanged, already works). **AC2 (fire-N-ahead) is explicitly deferred** — it requires a
+deferral, unchanged, already works). **AC2 (fire-N-ahead) is explicitly deferred**, it requires a
 per-dictation timestamp key the heuristic cannot synthesize (see §9).
 
 ---
@@ -75,7 +75,7 @@ per-dictation timestamp key the heuristic cannot synthesize (see §9).
 Three units, each with one job, all decoupled through existing seams:
 
 ```
-ClipMetaCore.Watching (Core — testable, no MCP/OS coupling)
+ClipMetaCore.Watching (Core, testable, no MCP/OS coupling)
  ┌─────────────────────────────────────────────────────────────────────┐
  │  ReviewWatcher  (background thread; IDisposable)                      │
  │   • polls IProcessWindowSource every ~250ms                          │
@@ -92,7 +92,7 @@ ClipMetaCore.Watching (Core — testable, no MCP/OS coupling)
    WatchingResolver.ResolveReview  ── reuses Resolve: PlayerTitleResolution,
    (new Core entry, wraps Resolve)    LibraryTitleMatcher, access-time fallback,
                                       wrong-dir diagnostics, lock probe, §6 attrib,
-                                      anyLiveTarget — all preserved.
+                                      anyLiveTarget, all preserved.
                                ▲
  clipmetamcp (thin shell)      │
    • Program.Serve(): construct ReviewWatcher after sandbox (library configured),
@@ -105,7 +105,7 @@ ClipMetaCore.Watching (Core — testable, no MCP/OS coupling)
 clips or MP4s. The heuristic is a *pure function* over those facts (trivially testable with a fake
 clock). The heavy library/title resolution stays in the already-tested `WatchingResolver`. This
 mirrors the `QueueDrainPump` precedent: a Core background driver, OS/MCP coupling injected, the shell
-wires only lifecycle. SOLID preserved — every change is additive; no existing signal, the queue, or
+wires only lifecycle. SOLID preserved, every change is additive; no existing signal, the queue, or
 any write path is touched.
 
 **Key reuse seam.** `WatchContext.Build` gains an overload that accepts a supplied
@@ -114,11 +114,11 @@ over the heuristic-chosen title with zero downstream change.
 
 ---
 
-## 2. ReviewWatcher (Core) — data model & loop
+## 2. ReviewWatcher (Core), data model & loop
 
 ```csharp
 public sealed record TitleSegment(
-    long Id,                       // monotonic, assigned on open — enables cross-call bind tracking
+    long Id,                       // monotonic, assigned on open, enables cross-call bind tracking
     string ProcessName,
     string RawTitle,
     DateTimeOffset StartedAt,
@@ -149,7 +149,7 @@ public sealed class ReviewWatcher : IDisposable
    next `Id`. A player that vanished closes its open segment.
 3. Ring buffer keeps the last `maxSegments`; oldest dropped.
 
-**Cost.** Title polling only — no library enumeration, no MP4 parsing, no clip resolution in the loop.
+**Cost.** Title polling only, no library enumeration, no MP4 parsing, no clip resolution in the loop.
 A no-player tick is a near-empty list. This is the same `GetPlayerWindows` call `library_watching`
 already makes once per call, now on a timer; the per-call cost is unchanged in kind.
 
@@ -158,7 +158,7 @@ resolver never reads a mutating buffer. `MarkBound` is a cheap locked write.
 
 ---
 
-## 3. ReviewBindingResolver (pure) — the previous-stable rule
+## 3. ReviewBindingResolver (pure), the previous-stable rule
 
 ```csharp
 public sealed record ReviewBinding(
@@ -182,7 +182,7 @@ public sealed record ReviewBinding(
    Else `Chosen = current` (no correction).
 
 **This pure function is the entire fix for the reproduced bug.** It is unit-tested by feeding
-synthetic segments over a fake clock — including the exact Run-2 dict4 replay (`_5` open 0.1 s, `_4`
+synthetic segments over a fake clock, including the exact Run-2 dict4 replay (`_5` open 0.1 s, `_4`
 stable before → binds `_4`).
 
 **Flags** (derived from segment Ids + `lastBoundId`):
@@ -190,12 +190,12 @@ stable before → binds `_4`).
 | Flag | Condition | Surfaced meaning |
 |---|---|---|
 | `autoCorrected` | `Chosen != current` | "Bound *‹prev›*; you'd advanced to *‹current›* (open Ns)." |
-| `sameClipTwice` | `Chosen.Id == lastBoundId` | "Second narration on the same clip — it accumulates." (AC3) |
+| `sameClipTwice` | `Chosen.Id == lastBoundId` | "Second narration on the same clip, it accumulates." (AC3) |
 | `sequenceSkip` | stable, never-bound segments exist with `Id` strictly between `lastBoundId` and `Chosen.Id` | "Played but never tagged: […]." (AC4) |
 
 ---
 
-## 4. ResolveReview (Core) — reuse, don't reinvent
+## 4. ResolveReview (Core), reuse, don't reinvent
 
 New entry point on `WatchingResolver` (or a thin `ReviewWatchingResolver` collaborator):
 
@@ -218,7 +218,7 @@ Steps:
 
 - **Not-locked demotion guard.** Today an unlocked bare-name hit is demoted to low with
   *"may be a same-named file elsewhere"* (`WatchingResolver.cs:120-121`). A **corrected** bind is, by
-  definition, the clip the user just advanced *away* from — *expected* to be unlocked, and the watcher
+  definition, the clip the user just advanced *away* from, *expected* to be unlocked, and the watcher
   saw that title play for `StableSeconds`. So **the not-locked demotion does not apply to a
   history-confirmed corrected bind.** It is reported with its true (unlocked) lock state but kept
   high-confidence, with a review note instead of the misleading caveat. Genuine basename ambiguity
@@ -226,28 +226,28 @@ Steps:
   `Ambiguous` → low, unchanged.
 - **`anyLiveTarget`.** Extended: true if a `player_title` hit **or** `inUse` **or** a history-confirmed
   corrected bind. A corrected clip is a real, confident identification even though it is now writable
-  (unlocked) — the caller treats it as a live target, not a recency guess.
+  (unlocked), the caller treats it as a live target, not a recency guess.
 - **The just-started current clip.** When corrected to the previous, the current (just-started) clip is
-  demoted beneath the bind with a note (*"open now but only started Ns ago — probably not what you're
+  demoted beneath the bind with a note (*"open now but only started Ns ago, probably not what you're
   describing"*), kept visible for transparency rather than hidden.
 
 ### 4.2 Multi-player ambiguity
 
 When `AmbiguousMultiPlayer`, `ResolveReview` makes **no** correction and adds a `warning` of type
 `multiple_players_active` (same inline mechanism as the existing `player_outside_library` warning):
-*"More than one media player is active — too ambiguous to bind a clip safely. Confirm the exact path
+*"More than one media player is active, too ambiguous to bind a clip safely. Confirm the exact path
 with the user before tagging."* Raw candidates still return; nothing is auto-recommended.
 
 ---
 
 ## 5. Inline surface & MCP wiring
 
-### 5.1 `library_watching` response (additive — no breaking change)
+### 5.1 `library_watching` response (additive, no breaking change)
 
 Existing fields (`candidates`, `anyLiveTarget`, `warning`, `drainedFromQueue`, `queuePending`) plus a
 `review[]` array of `{ type, … }` objects; the recommended clip carries its note via the existing
 `Candidate.Note`. The **tool description** is updated to instruct: prefer the top candidate; pass any
-`review` entries to the user as a **non-blocking** heads-up (the user reconciles later — never a
+`review` entries to the user as a **non-blocking** heads-up (the user reconciles later, never a
 blocking prompt, per the testrun UX finding); note that a recommended clip may be a now-unlocked
 previous clip (directly writable). The model holds the running "needs review" list in its own context.
 
@@ -256,7 +256,7 @@ previous clip (directly writable). The model holds the running "needs review" li
 
 `ResolveReview` surfaces the chosen segment's `Id` (and whether it was a confident single-match
 recommendation) on the `WatchingResult`. The **shell** (`ReadTools.Watching`) then calls
-`watcher.MarkBound(chosenId)` — but only on a confident single-match recommendation, so a
+`watcher.MarkBound(chosenId)`, but only on a confident single-match recommendation, so a
 low-confidence/ambiguous call never creates a false `sameClipTwice`. `ResolveReview` itself stays a
 pure function of `(segments, lastBoundId, now, …)`, holding no watcher reference. Documented
 assumption: a `library_watching` call in this workflow precedes a tag, so "recommended = bound" is a
@@ -268,10 +268,10 @@ fair proxy.
   configured**, with `ProcessWindowSource.ForCurrentPlatform()`, `() => DateTimeOffset.UtcNow`, 250 ms;
   `Start()`s it before `session.Run()`; `Dispose()`s it after `Run()` returns on stdin EOF.
 - `ReadTools.RegisterAll` gains the watcher as a **trailing optional injectable (default null)**. When
-  null — tests, or no library — `library_watching` uses today's live-poll `Resolve` verbatim (graceful
+  null, tests, or no library, `library_watching` uses today's live-poll `Resolve` verbatim (graceful
   degradation; existing tests keep exercising that path).
 - The watcher and the drain pump coexist as independent Core background drivers owned by the shell. The
-  watcher is **read-only** (never writes a file), so it cannot race the pump or any writer — no
+  watcher is **read-only** (never writes a file), so it cannot race the pump or any writer, no
   `WriteGate` involvement.
 - **Post-install restart quirk:** `Start()` only launches a thread (no library scan, no blocking work),
   so it adds nothing to `initialize` latency and comes up cleanly after the documented Desktop restart.
@@ -288,7 +288,7 @@ fair proxy.
 - Clip renamed mid-session (seen in the log) → resolution is fresh at call time, so the new name
   resolves; a stale old-title segment won't match and is ignored.
 - Threshold boundary → `<` strict; one named constant, tunable.
-- Two narrations, no advance → `sameClipTwice`; existing per-field append accumulates both — no loss.
+- Two narrations, no advance → `sameClipTwice`; existing per-field append accumulates both, no loss.
 - Long session → ring buffer drops oldest beyond `maxSegments`.
 - Dispose race → stop-signal + join before `Serve()` returns.
 
@@ -305,7 +305,7 @@ fair proxy.
 | `ReviewBindingResolver` (new, Core, pure) | The previous-stable rule + flag derivation. |
 | `WatchContext` | + `Build` overload taking supplied `IReadOnlyList<ProcessWindow>`. |
 | `WatchingResolver` | + `ResolveReview`; not-locked-guard exception + `anyLiveTarget` extension for a corrected bind; just-started current demotion. |
-| `WatchingResult` | + `Review` flags (and any corrected-bind metadata) — additive. |
+| `WatchingResult` | + `Review` flags (and any corrected-bind metadata), additive. |
 | `clipmetamcp` `ReadTools` | `library_watching` takes the watcher (trailing injectable); calls `ResolveReview`; emits `review[]`; description update. |
 | `clipmetamcp` `Program` | Construct/Start/Dispose the `ReviewWatcher` around the session. |
 
@@ -315,7 +315,7 @@ No change to `IWatchSignal`, the signals' emission, the queue, the pump, or any 
 
 ## 8. Test strategy
 
-Run the **full** `clipmetascribe.Tests` and `clipmetamcp.Tests` (tool-description change) — not a
+Run the **full** `clipmetascribe.Tests` and `clipmetamcp.Tests` (tool-description change), not a
 `--filter` (CLAUDE.md surface rule).
 
 - **`ReviewBindingResolverTests`** (pure, fake clock): previous-stable correction (Run-2 dict4 replay
@@ -351,11 +351,11 @@ Run the **full** `clipmetascribe.Tests` and `clipmetamcp.Tests` (tool-descriptio
 
 ## 10. Definition of Done
 
-1. `dotnet build` — 0 warnings, 0 errors, all projects.
-2. `dotnet test` — full `clipmetascribe.Tests` and `clipmetamcp.Tests` pass (not filtered), including
+1. `dotnet build`, 0 warnings, 0 errors, all projects.
+2. `dotnet test`, full `clipmetascribe.Tests` and `clipmetamcp.Tests` pass (not filtered), including
    the new `ReviewBindingResolverTests` (Run-2 dict4 regression), `ReviewWatcherTests`, and the
    `ResolveReview` integration + `library_watching` `review[]` tests.
-3. The reproduced off-by-one binds the correct (previous-stable) clip — AC1 closed.
+3. The reproduced off-by-one binds the correct (previous-stable) clip, AC1 closed.
 4. `sameClipTwice` (AC3) and `sequenceSkip` (AC4) flags emit; cold start (AC5) binds via one live poll.
 5. `anyLiveTarget` covers a corrected bind; the not-locked guard does not demote it.
 6. No MCP tool added/removed; `ToolsList_ContainsTheFullToolSurface` green.
@@ -370,11 +370,11 @@ Run the **full** `clipmetascribe.Tests` and `clipmetamcp.Tests` (tool-descriptio
 - **Timestamp ingestion / fire-N-ahead (AC2):** the next increment. The no-timestamp heuristic resolves
   *one* dictation against the segment tail; mapping N backlogged dictations onto N historical segments
   needs a per-dictation submit-time key into the segment log. Sequenced after this watcher.
-- **Gaming mode / `FileSystemWatcher` (AC7–AC8):** separate spec — newest-written-file binding, no
+- **Gaming mode / `FileSystemWatcher` (AC7–AC8):** separate spec, newest-written-file binding, no
   player introspection.
 - **Secondary-fix batch (testrun §7):** dry-run preview computes current-state not predicted-state;
   MPC title-retry before access-time fallback; a queue-drain→provenance **test** (behavior correct on
   `main`, untested); notes prose separator (`" "` → `". "`); bounded retry on the initial source-open
   lock; `drainedFromQueue` echo on a no-op drain.
 - **Persisted review file / dedicated review tool:** only if in-session inline flags prove insufficient.
-- **Field-normalization depth:** local rules vs LLM — tuning, deferred.
+- **Field-normalization depth:** local rules vs LLM, tuning, deferred.

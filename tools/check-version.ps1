@@ -14,7 +14,7 @@
 
     HONEST LIMITATION: this sees the REPO-BUILT exe, not whatever .mcpb is actually installed in
     Claude Desktop. A bump is not live in Desktop until you repack (tools/pack-mcpb.ps1) and
-    reinstall — verify that by checking the version Desktop shows after reinstalling.
+    reinstall, verify that by checking the version Desktop shows after reinstalling.
 #>
 [CmdletBinding()]
 param([switch]$NoBuild)

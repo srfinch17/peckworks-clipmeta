@@ -3,8 +3,8 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Gaming-mode signal: surfaces clips the game JUST SAVED to the library, identified by a fresh
 /// <see cref="LibraryClip.CreationTimeUtc"/> within the freshness window, excluding paths already
-/// indexed (baseline) and paths ClipMeta itself just wrote (self-ledger). Creation time — not write
-/// time — is the right key: copying a clip into the library preserves the source's old write time
+/// indexed (baseline) and paths ClipMeta itself just wrote (self-ledger). Creation time, not write
+/// time, is the right key: copying a clip into the library preserves the source's old write time
 /// (fresh clip looks old) while always stamping a new creation time; and ClipMeta's tag-write bumps
 /// write time (self-write looks fresh). Exactly one clip in the window is the unambiguous just-saved
 /// case; two or more is ambiguous (the resolver demotes those to confirm-first).
@@ -40,7 +40,7 @@ public sealed class RecentWriteSignal : IWatchSignal
 
         List<LibraryClip> fresh = context.LibraryClips
             .Where(c =>
-                // (a) genuinely new to the library — not already in the persisted index
+                // (a) genuinely new to the library, not already in the persisted index
                 !context.KnownBaselinePaths.Contains(c.FullPath) &&
                 // (b) created within the freshness window (creation time, not write time)
                 now - c.CreationTimeUtc <= _window && now - c.CreationTimeUtc >= TimeSpan.Zero &&

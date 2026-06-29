@@ -34,7 +34,7 @@ internal static class Program
         bool backup = args.Contains("--backup");
 
         string? logPath = GetFlag(args, "--log");
-        // --log present but its "value" is missing or is the next flag — without this check the
+        // --log present but its "value" is missing or is the next flag, without this check the
         // logger would happily create a file literally named "--set" (and the swallowed flag
         // would still be parsed as a flag elsewhere, compounding the confusion).
         if (ContainsFlag(args, "--log") && (logPath == null || KnownFlags.Contains(logPath)))
@@ -251,7 +251,7 @@ internal static class Program
         }
 
         // A directory plus a write operation → batch the write across every .mp4 in the directory.
-        // (Directory READ commands — find/vocab/index/export — were handled and returned above.)
+        // (Directory READ commands, find/vocab/index/export, were handled and returned above.)
         if (filePath != null && Directory.Exists(filePath) && IsWriteOp(args))
         {
             try
@@ -264,7 +264,7 @@ internal static class Program
                 return 1;
             }
             // Enumerating the directory (or reading a --copy-from source) can surface an IO or
-            // permission error — e.g. a disconnected share or an unreadable subfolder. Report it
+            // permission error, e.g. a disconnected share or an unreadable subfolder. Report it
             // cleanly instead of crashing the batch with an unhandled stack trace.
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -384,7 +384,7 @@ internal static class Program
     /// Validates that a positional argument following a flag is usable, throwing a precise
     /// <see cref="ArgumentException"/> (which Main reports as exit code 1) when it is missing
     /// or is actually the NEXT flag. Values that merely look dashy (e.g. notes of
-    /// "--great clip--") are accepted — only exact matches of known flags are rejected,
+    /// "--great clip--") are accepted, only exact matches of known flags are rejected,
     /// so expressiveness is not lost.
     /// </summary>
     /// <param name="args">The full argument array.</param>
@@ -531,7 +531,7 @@ internal static class Program
             string sourceFull = Path.GetFullPath(source);
             return BatchCommand.Run(files, file =>
             {
-                // Copying a clip onto itself is a no-op, not a failure — skip the source.
+                // Copying a clip onto itself is a no-op, not a failure, skip the source.
                 if (string.Equals(Path.GetFullPath(file), sourceFull, StringComparison.OrdinalIgnoreCase))
                     return null;
 
@@ -580,7 +580,7 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("""
-            clipmetascribe — MP4 metadata writer (Peckworks Lab)
+            clipmetascribe, MP4 metadata writer (Peckworks Lab)
 
             Usage:
               clipmetascribe "clip.mp4" --list

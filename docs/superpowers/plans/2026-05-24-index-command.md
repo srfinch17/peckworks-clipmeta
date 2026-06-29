@@ -4,7 +4,7 @@
 
 **Goal:** Build `--index` and `--index-search` commands that cache MP4 metadata to a file so repeat searches don't require scanning every clip.
 
-**Architecture:** `ClipMetaIndex` (core library) scans a directory, builds an `IndexData` snapshot, and serializes it to a line-based text file (`.clipmeta-index`) inside the directory. `ClipMetaSearch` does in-memory substring searches over a loaded `IndexData`. Two thin CLI commands — `IndexCommand` and `IndexSearchCommand` — wire these classes to the `clipmetascribe` argument parser.
+**Architecture:** `ClipMetaIndex` (core library) scans a directory, builds an `IndexData` snapshot, and serializes it to a line-based text file (`.clipmeta-index`) inside the directory. `ClipMetaSearch` does in-memory substring searches over a loaded `IndexData`. Two thin CLI commands, `IndexCommand` and `IndexSearchCommand`, wire these classes to the `clipmetascribe` argument parser.
 
 **Tech Stack:** C# / .NET 10, MSTest 4, zero external NuGet packages. All serialization hand-written using `TextWriter`/`TextReader` with a simple line-keyword format.
 
@@ -28,14 +28,14 @@ from the solution root.
 - All tests use a `_tempDir` created in `[TestInitialize]` and deleted in `[TestCleanup]`
 - `TestClipsLocator.AllPristine().First()` provides a real MP4 for integration tests
 - `PrepareClip` helper copies a pristine clip and calls `Mp4Writer.WriteMetadata` to set metadata
-- Zero external NuGet packages — all serialization hand-written
+- Zero external NuGet packages, all serialization hand-written
 
 **Key types already defined:**
-- `ClipMetaSchema.Schema` — the internal schema field name to exclude from output
-- `ClipMetaReader.GetFields(BoxNode root)` — returns `IReadOnlyList<(string Field, string Value)>`
-- `Mp4Parser.ParseFile(string path)` — throws `IOException`, `UnauthorizedAccessException`, `InvalidDataException` on bad files
-- `ExportRecord(string FilePath, IReadOnlyList<(string Field, string Value)> Fields)` — pattern for field data
-- `ClipMetaSchema.AtomName(field)` — converts bare field name to full atom name for `MetadataMutation.SetFields`
+- `ClipMetaSchema.Schema`, the internal schema field name to exclude from output
+- `ClipMetaReader.GetFields(BoxNode root)`, returns `IReadOnlyList<(string Field, string Value)>`
+- `Mp4Parser.ParseFile(string path)`, throws `IOException`, `UnauthorizedAccessException`, `InvalidDataException` on bad files
+- `ExportRecord(string FilePath, IReadOnlyList<(string Field, string Value)> Fields)`, pattern for field data
+- `ClipMetaSchema.AtomName(field)`, converts bare field name to full atom name for `MetadataMutation.SetFields`
 
 **Index file format** (`.clipmeta-index`, UTF-8 text, line-keyword format):
 ```
@@ -75,7 +75,7 @@ Parsing rules: each line is split on the **first space** to get `keyword` and `v
 
 ---
 
-## Task 1: ClipMetaIndex — build, serialize, deserialize
+## Task 1: ClipMetaIndex, build, serialize, deserialize
 
 **Files:**
 - Create: `clipmeta.core/Read/ClipMetaIndex.cs`
@@ -251,7 +251,7 @@ public class ClipMetaIndexTests
 dotnet test clipmetascribe.Tests --filter ClipMetaIndexTests
 ```
 
-Expected: compilation error — `ClipMetaIndex`, `IndexEntry`, `IndexData` not defined.
+Expected: compilation error, `ClipMetaIndex`, `IndexEntry`, `IndexData` not defined.
 
 - [ ] **Step 3: Implement ClipMetaIndex**
 
@@ -442,7 +442,7 @@ git commit -m "feat: add ClipMetaIndex with build/serialize/deserialize"
 
 ---
 
-## Task 2: ClipMetaSearch — in-memory index search
+## Task 2: ClipMetaSearch, in-memory index search
 
 **Files:**
 - Create: `clipmeta.core/Read/ClipMetaSearch.cs`
@@ -550,7 +550,7 @@ public class ClipMetaSearchTests
 dotnet test clipmetascribe.Tests --filter ClipMetaSearchTests
 ```
 
-Expected: compilation error — `ClipMetaSearch` not defined.
+Expected: compilation error, `ClipMetaSearch` not defined.
 
 - [ ] **Step 3: Implement ClipMetaSearch**
 
@@ -600,7 +600,7 @@ Expected: all 7 tests PASS.
 dotnet test clipmetascribe.Tests
 ```
 
-Expected: all existing tests still pass (one pre-existing flaky test `Write_NoTempFileLeft_AfterSuccess` may occasionally fail — this is an OS-level race condition unrelated to this work).
+Expected: all existing tests still pass (one pre-existing flaky test `Write_NoTempFileLeft_AfterSuccess` may occasionally fail, this is an OS-level race condition unrelated to this work).
 
 - [ ] **Step 6: Commit**
 
@@ -811,7 +811,7 @@ public class IndexSearchCommandTests
     [TestMethod]
     public void Run_NoIndexFile_ReturnsOne()
     {
-        // No index built — directory exists but .clipmeta-index doesn't
+        // No index built, directory exists but .clipmeta-index doesn't
         using var writer = new StringWriter();
 
         int exitCode = IndexSearchCommand.Run(_tempDir, "game", "TF2", writer);
@@ -859,7 +859,7 @@ public class IndexSearchCommandTests
 dotnet test clipmetascribe.Tests --filter "IndexCommandTests|IndexSearchCommandTests"
 ```
 
-Expected: compilation error — `IndexCommand`, `IndexSearchCommand` not defined.
+Expected: compilation error, `IndexCommand`, `IndexSearchCommand` not defined.
 
 - [ ] **Step 3: Implement IndexCommand**
 
@@ -1014,7 +1014,7 @@ Open `clipmetascribe/Program.cs`. Make these three changes:
     }
 ```
 
-**Change 3:** Update `PrintUsage` — add these two lines to the Usage section:
+**Change 3:** Update `PrintUsage`, add these two lines to the Usage section:
 
 ```
               clipmetascribe "C:\clips\" --index
@@ -1042,7 +1042,7 @@ Expected: all 11 tests PASS.
 dotnet test clipmetascribe.Tests
 ```
 
-Expected: all tests pass (one pre-existing flaky test `Write_NoTempFileLeft_AfterSuccess` may occasionally fail — ignore it).
+Expected: all tests pass (one pre-existing flaky test `Write_NoTempFileLeft_AfterSuccess` may occasionally fail, ignore it).
 
 - [ ] **Step 8: Build the full solution**
 
@@ -1064,13 +1064,13 @@ git commit -m "feat: add --index and --index-search commands"
 ## Self-Review
 
 **Spec coverage:**
-- ✅ `ClipMetaIndex.Build` — scans directory, returns `IndexData`
-- ✅ `ClipMetaIndex.Write`/`Read` — serialize/deserialize index to line-keyword format
-- ✅ `ClipMetaIndex.WriteToFile`/`ReadFromFile` — convenience file-based wrappers
-- ✅ `ClipMetaSearch.Find` — case-insensitive substring search over `IndexData`
-- ✅ `IndexCommand` — `--index` CLI command, writes `.clipmeta-index` to directory
-- ✅ `IndexSearchCommand` — `--index-search <field> <value>` CLI command
-- ✅ Program.cs wiring — both flags handled before `File.Exists` check
+- ✅ `ClipMetaIndex.Build`, scans directory, returns `IndexData`
+- ✅ `ClipMetaIndex.Write`/`Read`, serialize/deserialize index to line-keyword format
+- ✅ `ClipMetaIndex.WriteToFile`/`ReadFromFile`, convenience file-based wrappers
+- ✅ `ClipMetaSearch.Find`, case-insensitive substring search over `IndexData`
+- ✅ `IndexCommand`, `--index` CLI command, writes `.clipmeta-index` to directory
+- ✅ `IndexSearchCommand`, `--index-search <field> <value>` CLI command
+- ✅ Program.cs wiring, both flags handled before `File.Exists` check
 
 **Placeholder scan:** No TBDs, no "add appropriate error handling" phrases, all code blocks complete.
 

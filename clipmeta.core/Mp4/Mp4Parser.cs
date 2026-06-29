@@ -11,7 +11,7 @@ namespace ClipMetaCore.Mp4;
 public class Mp4Parser : IMediaParser
 {
     // Box types that contain child boxes and should be recursed into.
-    // Note: "meta" is also a FullBox — the parser consumes version+flags before recursing.
+    // Note: "meta" is also a FullBox, the parser consumes version+flags before recursing.
     private static readonly HashSet<string> ContainerTypes = new(StringComparer.Ordinal)
     {
         "moov", "trak", "mdia", "minf", "stbl", "udta", "edts", "dinf", "moof", "traf", "meta",
@@ -69,11 +69,11 @@ public class Mp4Parser : IMediaParser
     /// Parses the MP4 box hierarchy from an already-open stream, without taking ownership of it.
     /// </summary>
     /// <remarks>
-    /// Exists so the write engine can open the source file ONCE — with a share mode that denies
-    /// other writers — and keep that same handle for both the parse and the subsequent
+    /// Exists so the write engine can open the source file ONCE, with a share mode that denies
+    /// other writers, and keep that same handle for both the parse and the subsequent
     /// byte-copy. If the parse and the copy used separate opens (as <see cref="ParseFile"/>
     /// followed by a second open would), another process could modify the file in between,
-    /// and the chunk offsets baked into the output would describe bytes that no longer exist —
+    /// and the chunk offsets baked into the output would describe bytes that no longer exist, 
     /// e.g. tagging a clip a capture tool is still actively recording.
     /// The stream is left open; its position on return is unspecified.
     /// </remarks>
@@ -138,7 +138,7 @@ public class Mp4Parser : IMediaParser
             }
 
             // Corrupt box: size smaller than its own header. The parser deliberately STOPS here
-            // instead of throwing — a damaged file should still be viewable up to the damage.
+            // instead of throwing, a damaged file should still be viewable up to the damage.
             // NOTE FOR THE WRITE PATH: stopping means everything after this point is missing
             // from the tree. Mp4Writer.VerifyParseAccountsForWholeFile detects exactly this
             // (parsed boxes won't cover the whole file) and refuses to rewrite, because writing
@@ -157,7 +157,7 @@ public class Mp4Parser : IMediaParser
             bool isFullBox = FullBoxTypes.Contains(header.Type);
 
             // Apple QuickTime sometimes encodes meta without the FullBox prefix.
-            // A genuine FullBox meta has version=0, flags=0,0,0 — all four bytes zero.
+            // A genuine FullBox meta has version=0, flags=0,0,0, all four bytes zero.
             // If the first four bytes at the current position are non-zero, they are the
             // start of the first child box (hdlr), not a FullBox prefix.
             if (isFullBox && header.Type == "meta" && reader.BaseStream.Position + 4 <= boxEnd)
@@ -203,7 +203,7 @@ public class Mp4Parser : IMediaParser
 
             if (inIlst)
             {
-                // This is a metadata item (©nam, ©ART, trkn, ----, etc.) — mark editable and extract value.
+                // This is a metadata item (©nam, ©ART, trkn, ----, etc.), mark editable and extract value.
                 node.IsEditable = true;
                 node.EditableKey = header.Type;
 
@@ -273,7 +273,7 @@ public class Mp4Parser : IMediaParser
             }
             else
             {
-                // Leaf box — try to extract a human-readable display value.
+                // Leaf box, try to extract a human-readable display value.
                 ExtractLeafValue(reader, node, contentStart, boxEnd);
             }
 
@@ -304,12 +304,12 @@ public class Mp4Parser : IMediaParser
 
         reader.BaseStream.Position = contentOffset;
 
-        // version (1 byte) — always 0; type-indicator (3 bytes) packed as 24-bit int.
+        // version (1 byte), always 0; type-indicator (3 bytes) packed as 24-bit int.
         reader.ReadByte(); // version
         byte ti1 = reader.ReadByte(), ti2 = reader.ReadByte(), ti3 = reader.ReadByte();
         int typeIndicator = (ti1 << 16) | (ti2 << 8) | ti3;
 
-        reader.ReadBytes(4); // locale — always 0, skip it.
+        reader.ReadBytes(4); // locale, always 0, skip it.
 
         byte[] payload = reader.ReadBytes((int)Math.Min(valueSize, MaxMetadataPayload));
 
@@ -404,7 +404,7 @@ public class Mp4Parser : IMediaParser
                         }
                         else
                         {
-                            // QuickTime format — mark as user-editable track/handler name.
+                            // QuickTime format, mark as user-editable track/handler name.
                             node.IsEditable = true;
                             node.EditableKey = "name";
                             string direct = Encoding.UTF8.GetString(allBytes).TrimEnd('\0').Trim();
@@ -451,7 +451,7 @@ public class Mp4Parser : IMediaParser
                             string handlerName = Encoding.UTF8.GetString(reader.ReadBytes(nameLen))
                                                      .TrimEnd('\0').Trim();
                             if (handlerName.Length > 0 && handlerName.All(c => !char.IsControl(c)))
-                                suffix = $" — {handlerName}";
+                                suffix = $", {handlerName}";
                         }
                         node.DisplayValue = $"{typeName}{suffix}";
                     }
@@ -700,7 +700,7 @@ public class Mp4Parser : IMediaParser
         char c2 = (char)(((packed >> 5)  & 0x1F) + 0x60);
         char c3 = (char)((packed         & 0x1F) + 0x60);
         string lang = $"{c1}{c2}{c3}";
-        // "und" means undetermined — not worth displaying.
+        // "und" means undetermined, not worth displaying.
         return lang is "und" or "```" ? string.Empty : $", lang={lang}";
     }
 

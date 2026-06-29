@@ -5,10 +5,10 @@ namespace ClipMetaScribe.Tests.Helpers;
 /// <summary>
 /// Locates the solution-level testclips directories for the scribe test project.
 ///
-/// Graceful-skip for clip-less machines (e.g. CI — clips are git-ignored): when no pristine
+/// Graceful-skip for clip-less machines (e.g. CI, clips are git-ignored): when no pristine
 /// clips are present, the clip accessors call <see cref="Assert.Inconclusive"/> so the calling
 /// test reports as <b>skipped</b>, not failed. The skip lives here so it covers every caller
-/// automatically — a test that never touches a clip (the synthetic <c>MinimalMp4Builder</c>
+/// automatically, a test that never touches a clip (the synthetic <c>MinimalMp4Builder</c>
 /// fixtures) still runs. DynamicData sources are the one exception: they're enumerated outside a
 /// test body where Inconclusive can't be caught, so they use <see cref="PristineClipRows"/>
 /// (which emits a skip-sentinel row) plus <see cref="SkipIfMissing"/> at the top of the method.
@@ -40,7 +40,7 @@ internal static class TestClipsLocator
     public static string FindScratchPath() => TryFind("scratch") ?? SkipNoClips();
 
     /// <summary>
-    /// The smallest pristine clip by file size — fast to copy, and orders of magnitude less I/O
+    /// The smallest pristine clip by file size, fast to copy, and orders of magnitude less I/O
     /// than whatever the filesystem happens to enumerate first. Skips the calling test when no
     /// clips are present.
     /// </summary>
@@ -102,7 +102,7 @@ internal static class TestClipsLocator
     private static string SkipNoClips()
     {
         Assert.Inconclusive(
-            "No test clips found in testclips/pristine — integration test skipped. These run " +
+            "No test clips found in testclips/pristine, integration test skipped. These run " +
             "locally where real .mp4 clips exist; CI runs clip-less by design (graceful skip).");
         return null!; // unreachable: Assert.Inconclusive always throws
     }

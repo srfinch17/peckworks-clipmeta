@@ -28,7 +28,7 @@ public static class PlayerTitleResolution
             TitleExtraction? extraction = PlayerTitleParser.Extract(window.WindowTitle);
 
             // 1. Full-path title (MPC config): an exact, folder-disambiguating reference. A full
-            //    path that is NOT in the library is a genuine wrong-directory case — we do NOT fall
+            //    path that is NOT in the library is a genuine wrong-directory case, we do NOT fall
             //    back to basename containment, which could match a same-named file in a different
             //    library folder and mislead. It stays unresolved (feeds the wrong-directory warning).
             if (extraction is { Kind: TitleExtractionKind.FullPath } fullPath)

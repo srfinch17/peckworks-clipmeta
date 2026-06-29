@@ -1,7 +1,7 @@
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// A source that reports no players — the default on non-Windows platforms and anywhere a real
+/// A source that reports no players, the default on non-Windows platforms and anywhere a real
 /// source is not wired. Resolution then relies on the access-time signal alone.
 /// </summary>
 public sealed class EmptyProcessWindowSource : IProcessWindowSource

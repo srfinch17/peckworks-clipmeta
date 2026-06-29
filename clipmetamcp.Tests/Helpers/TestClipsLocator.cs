@@ -38,7 +38,7 @@ internal static class TestClipsLocator
     /// All pristine .mp4 clips, name-sorted for determinism. SKIPS the calling test when no clips
     /// are present. Safe to call from a test body or a <c>[TestInitialize]</c> (both catch the
     /// resulting Inconclusive); do NOT call from <c>[ClassInitialize]</c>, where it would fail the
-    /// whole class instead of skipping — guard those with <see cref="PristineClipsPresent"/>.
+    /// whole class instead of skipping, guard those with <see cref="PristineClipsPresent"/>.
     /// </summary>
     public static IEnumerable<string> AllPristine()
     {
@@ -49,7 +49,7 @@ internal static class TestClipsLocator
     }
 
     /// <summary>
-    /// The smallest pristine clip — deterministic, and orders of magnitude less I/O than
+    /// The smallest pristine clip, deterministic, and orders of magnitude less I/O than
     /// whatever the filesystem happens to enumerate first (pristine clips range ~70–400 MB and
     /// every PrepareClip is a full copy + write-engine rewrite of the chosen file).
     /// Skips the calling test when no clips are present.
@@ -60,7 +60,7 @@ internal static class TestClipsLocator
     private static string SkipNoClips()
     {
         Assert.Inconclusive(
-            "No test clips found in testclips/pristine — test skipped. These run locally where " +
+            "No test clips found in testclips/pristine, test skipped. These run locally where " +
             "real .mp4 clips exist; CI runs clip-less by design (graceful skip).");
         return null!; // unreachable: Assert.Inconclusive always throws
     }

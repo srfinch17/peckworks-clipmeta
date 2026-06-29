@@ -9,7 +9,7 @@ namespace ClipMetaMcp;
 /// One-command field diagnostic (spec §4): spawns this same executable exactly as an MCP host
 /// would, drives the real handshake over real pipes, and prints a pass/fail table. Distills the
 /// hard-won MCP debugging checklist ("is it even spawning? is stdout clean?") into something a
-/// support thread can ask any user to run. This mode owns stdout — it is human-facing.
+/// support thread can ask any user to run. This mode owns stdout, it is human-facing.
 /// </summary>
 internal static class SelfTest
 {
@@ -18,7 +18,7 @@ internal static class SelfTest
 
     // Request shapes per the MCP spec, built with JsonObject rather than string literals so
     // values are always correctly escaped, and with the protocol version derived from the
-    // session's own constant — a future bump cannot leave the selftest silently exercising a
+    // session's own constant, a future bump cannot leave the selftest silently exercising a
     // stale version.
     private static readonly string InitializeRequest = new JsonObject
     {
@@ -51,7 +51,7 @@ internal static class SelfTest
 
     /// <summary>
     /// Non-JSON stdout lines seen this run. The per-check failure already names the line; this
-    /// feeds the dedicated purity verdict at the end — the single most important property of
+    /// feeds the dedicated purity verdict at the end, the single most important property of
     /// the whole server (one stray byte = "Failed to connect").
     /// </summary>
     private static int _nonJsonLines;
@@ -61,7 +61,7 @@ internal static class SelfTest
         var (exePath, exeArgs) = ResolveServerCommand();
         if (exePath is null)
         {
-            Console.WriteLine("FAIL  cannot determine this executable's own path — aborting.");
+            Console.WriteLine("FAIL  cannot determine this executable's own path, aborting.");
             return 1;
         }
 
@@ -74,7 +74,7 @@ internal static class SelfTest
         // The child's stderr is its one out-of-band diagnostic channel; drain it continuously
         // (a full, undrained pipe would block the child) and show it on failure.
         var stderr = new StringBuilder();
-        // Once a read times out, an orphaned ReadLineAsync still owns the stream — any further
+        // Once a read times out, an orphaned ReadLineAsync still owns the stream, any further
         // read would race it and misattribute responses. Poison the channel instead: every
         // remaining read-dependent check fails fast with an honest "skipped" detail.
         bool channelDead = false;
@@ -174,7 +174,7 @@ internal static class SelfTest
     /// <summary>
     /// Works out how to re-launch this server. Normally that is <see cref="Environment.ProcessPath"/>
     /// itself; but under `dotnet run -- --selftest` ProcessPath is dotnet.exe, and spawning bare
-    /// dotnet would print CLI help to stdout — a false "stray stdout bytes" failure. In that
+    /// dotnet would print CLI help to stdout, a false "stray stdout bytes" failure. In that
     /// case the entry assembly is passed as the argument.
     /// </summary>
     private static (string? ExePath, string[] Args) ResolveServerCommand()
@@ -187,7 +187,7 @@ internal static class SelfTest
         if (hostName.Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             // Under the dotnet host, the first command-line arg is the managed dll path.
-            // (Not Assembly.Location — that trips IL3000 for the single-file publish, which
+            // (Not Assembly.Location, that trips IL3000 for the single-file publish, which
             // never takes this branch anyway because its host is the apphost exe.)
             string entryAssembly = Environment.GetCommandLineArgs()[0];
             if (string.IsNullOrEmpty(entryAssembly) || !File.Exists(entryAssembly))
@@ -210,7 +210,7 @@ internal static class SelfTest
             StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
         // The child gets the disposable sandbox, not whatever CLIPMETA_LIBRARY_ROOT this
-        // process inherited — the round-trip check needs a known-empty library.
+        // process inherited, the round-trip check needs a known-empty library.
         startInfo.Environment[Tools.LibrarySandbox.EnvVarName] = libraryRoot;
         foreach (string arg in args)
             startInfo.ArgumentList.Add(arg);
@@ -242,7 +242,7 @@ internal static class SelfTest
     /// Reads one response line with a timeout and parses it. On timeout the channel is poisoned
     /// (see <c>channelDead</c> at the call site) so later reads cannot race the orphaned one.
     /// <paramref name="detail"/> explains a null return: timeout, dead channel, EOF, or the raw
-    /// non-JSON line — the latter being exactly the stray-stdout corruption this diagnostic
+    /// non-JSON line, the latter being exactly the stray-stdout corruption this diagnostic
     /// exists to catch.
     /// </summary>
     private static JsonObject? ReadResponse(Process server, ref bool channelDead, out string? detail)
@@ -297,7 +297,7 @@ internal static class SelfTest
         lock (stderr) capturedStderr = stderr.ToString();
         if (!allPassed && capturedStderr.Length > 0)
         {
-            // The child's own explanation of its failure — show it instead of sending the user
+            // The child's own explanation of its failure, show it instead of sending the user
             // off to dig in the log file for information the diagnostic already holds.
             Console.WriteLine("server stderr:");
             foreach (string line in capturedStderr.TrimEnd().Split('\n'))

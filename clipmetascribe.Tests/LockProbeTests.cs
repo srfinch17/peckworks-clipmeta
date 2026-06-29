@@ -63,7 +63,7 @@ public class LockProbeTests
     public void IsInUse_MalformedPath_ReturnsFalseWithoutThrowing()
     {
         // A malformed-format path can make File.GetAttributes throw NotSupportedException; the probe
-        // must absorb it (never throw — that would crash resolution) and report not-in-use.
+        // must absorb it (never throw, that would crash resolution) and report not-in-use.
         string malformed = @"::\\not a real path::|*?";
         bool result = false;
         try

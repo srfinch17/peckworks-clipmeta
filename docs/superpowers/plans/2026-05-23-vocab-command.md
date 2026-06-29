@@ -4,7 +4,7 @@
 
 **Goal:** Add `--vocab <field>` to clipmetascribe so a user can enumerate all distinct values for a given field across every MP4 in a directory, with per-value clip counts.
 
-**Architecture:** `ClipMetaVocab.Enumerate` (in `clipmeta.core/Read/`) scans the directory, reads fields via `ClipMetaReader.GetFields`, and returns a `VocabResult` record containing a value→count dictionary and a total clip count. Pipe-separated fields (tags, players, timecode — defined in `ClipMetaSchema.PipeFields`) are split on `|` so each pipe-item is counted individually. `VocabCommand` in `clipmetascribe/Commands/` formats and prints the result. Program.cs wires `--vocab` before the `File.Exists` check (same pattern as `--find`), using the existing `GetFlag` helper to read the single field argument.
+**Architecture:** `ClipMetaVocab.Enumerate` (in `clipmeta.core/Read/`) scans the directory, reads fields via `ClipMetaReader.GetFields`, and returns a `VocabResult` record containing a value→count dictionary and a total clip count. Pipe-separated fields (tags, players, timecode, defined in `ClipMetaSchema.PipeFields`) are split on `|` so each pipe-item is counted individually. `VocabCommand` in `clipmetascribe/Commands/` formats and prints the result. Program.cs wires `--vocab` before the `File.Exists` check (same pattern as `--find`), using the existing `GetFlag` helper to read the single field argument.
 
 **Tech Stack:** C# / .NET, MSTest 4, no external packages. Solution root: `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`.
 
@@ -24,19 +24,19 @@
 
 ## Reference: Key Types You'll Use
 
-**`ClipMetaReader.GetFields(BoxNode root)`** — returns `IReadOnlyList<(string Field, string Value)>` where Field is the bare field name (e.g. `"game"`) and Value is the unquoted string (e.g. `"Team Fortress 2"`). Defined in `clipmeta.core/Read/ClipMetaReader.cs`.
+**`ClipMetaReader.GetFields(BoxNode root)`**, returns `IReadOnlyList<(string Field, string Value)>` where Field is the bare field name (e.g. `"game"`) and Value is the unquoted string (e.g. `"Team Fortress 2"`). Defined in `clipmeta.core/Read/ClipMetaReader.cs`.
 
-**`ClipMetaSchema.PipeFields`** — `IReadOnlySet<string>` containing `"players"`, `"tags"`, `"timecode"`. Fields in this set store pipe-separated lists. Defined in `clipmeta.core/Schema/ClipMetaSchema.cs`.
+**`ClipMetaSchema.PipeFields`**, `IReadOnlySet<string>` containing `"players"`, `"tags"`, `"timecode"`. Fields in this set store pipe-separated lists. Defined in `clipmeta.core/Schema/ClipMetaSchema.cs`.
 
-**`ClipMetaSchema.AtomName(field)`** — returns `"com.peckworkslab.clipmeta:field"`. Used in tests when writing metadata via `Mp4Writer`.
+**`ClipMetaSchema.AtomName(field)`**, returns `"com.peckworkslab.clipmeta:field"`. Used in tests when writing metadata via `Mp4Writer`.
 
-**`Mp4Parser.ParseFile(path)`** — parses an MP4, returns `BoxNode`. Can throw `IOException`, `UnauthorizedAccessException`, `InvalidDataException`.
+**`Mp4Parser.ParseFile(path)`**, parses an MP4, returns `BoxNode`. Can throw `IOException`, `UnauthorizedAccessException`, `InvalidDataException`.
 
-**`TestClipsLocator.AllPristine()`** — returns pristine `.mp4` paths from `testclips/pristine/`. Defined in `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`.
+**`TestClipsLocator.AllPristine()`**, returns pristine `.mp4` paths from `testclips/pristine/`. Defined in `clipmetascribe.Tests/Helpers/TestClipsLocator.cs`.
 
-**`Mp4Writer().WriteMetadata(dest, mutation, NullLogger.Instance)`** — writes metadata into an MP4 copy. `MetadataMutation.SetFields[atomName] = value`.
+**`Mp4Writer().WriteMetadata(dest, mutation, NullLogger.Instance)`**, writes metadata into an MP4 copy. `MetadataMutation.SetFields[atomName] = value`.
 
-**`GetFlag(args, "--vocab")`** — already in `Program.cs`. Returns `args[idx+1]` if `--vocab` is present and has a following argument, else null.
+**`GetFlag(args, "--vocab")`**, already in `Program.cs`. Returns `args[idx+1]` if `--vocab` is present and has a following argument, else null.
 
 ---
 
@@ -228,7 +228,7 @@ cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "ClipMetaVocabTests" --verbosity minimal
 ```
 
-Expected: build error — `ClipMetaVocab` does not exist.
+Expected: build error, `ClipMetaVocab` does not exist.
 
 - [ ] **Step 3: Implement ClipMetaVocab**
 
@@ -475,7 +475,7 @@ public class VocabCommandTests
 dotnet test clipmetascribe.Tests --filter "VocabCommandTests" --verbosity minimal
 ```
 
-Expected: build error — `VocabCommand` does not exist.
+Expected: build error, `VocabCommand` does not exist.
 
 - [ ] **Step 3: Implement VocabCommand**
 
@@ -593,7 +593,7 @@ Replace the PrintUsage content block (the entire `"""..."""` string):
 
 ```csharp
         Console.WriteLine("""
-            clipmetascribe — MP4 metadata writer (Peckworks Lab)
+            clipmetascribe, MP4 metadata writer (Peckworks Lab)
 
             Usage:
               clipmetascribe "clip.mp4" --list
@@ -661,24 +661,24 @@ git commit -m "feat: add --vocab command to enumerate distinct field values acro
 ## Self-Review
 
 **Spec coverage:**
-- ✅ `--vocab <field>` enumerates distinct values across a directory — Task 1 (ClipMetaVocab) + Task 2 (VocabCommand)
-- ✅ Per-value clip counts — `VocabResult.Counts` dictionary + footer line
-- ✅ Pipe fields split on `|` — `isPipeField` + `Split('|', ...)` in ClipMetaVocab
-- ✅ Case-insensitive field name matching — `StringComparison.OrdinalIgnoreCase` in field match
-- ✅ Case-insensitive value deduplication — `StringComparer.OrdinalIgnoreCase` on dictionary
-- ✅ Malformed files silently skipped — three-exception catch block (same as ClipMetaFinder)
-- ✅ Directory not file — `--vocab` block placed before `File.Exists` check, uses `Directory.Exists`
-- ✅ `--flag` guard on field arg — `vocabField.StartsWith("--")` check in Program.cs
-- ✅ IOException on directory access — wrapped in try/catch in Program.cs
-- ✅ Recursive/non-recursive — `SearchOption` parameter exposed and tested
-- ✅ Empty directory — returns empty result, tested
-- ✅ No clips have field — prints `(no clips have field '...')`, tested
-- ✅ PrintUsage updated — both Usage and Examples sections updated
+- ✅ `--vocab <field>` enumerates distinct values across a directory, Task 1 (ClipMetaVocab) + Task 2 (VocabCommand)
+- ✅ Per-value clip counts, `VocabResult.Counts` dictionary + footer line
+- ✅ Pipe fields split on `|`, `isPipeField` + `Split('|', ...)` in ClipMetaVocab
+- ✅ Case-insensitive field name matching, `StringComparison.OrdinalIgnoreCase` in field match
+- ✅ Case-insensitive value deduplication, `StringComparer.OrdinalIgnoreCase` on dictionary
+- ✅ Malformed files silently skipped, three-exception catch block (same as ClipMetaFinder)
+- ✅ Directory not file, `--vocab` block placed before `File.Exists` check, uses `Directory.Exists`
+- ✅ `--flag` guard on field arg, `vocabField.StartsWith("--")` check in Program.cs
+- ✅ IOException on directory access, wrapped in try/catch in Program.cs
+- ✅ Recursive/non-recursive, `SearchOption` parameter exposed and tested
+- ✅ Empty directory, returns empty result, tested
+- ✅ No clips have field, prints `(no clips have field '...')`, tested
+- ✅ PrintUsage updated, both Usage and Examples sections updated
 
 **Placeholder scan:** No TBD, TODO, or "similar to Task N" patterns. All steps contain actual code.
 
 **Type consistency:**
-- `VocabResult` defined in Task 1 (`ClipMetaVocab.cs`), used in Task 2 (`VocabCommand.cs`) — consistent
+- `VocabResult` defined in Task 1 (`ClipMetaVocab.cs`), used in Task 2 (`VocabCommand.cs`), consistent
 - `ClipMetaVocab.Enumerate(directory, field)` called correctly in `VocabCommand.Run`
-- `result.Counts` and `result.ClipsWithField` — correct property names from the record definition
-- `VocabCommand.Run(_tempDir, "game", writer)` — matches the `internal static int Run(string directory, string field, TextWriter? output = null)` signature
+- `result.Counts` and `result.ClipsWithField`, correct property names from the record definition
+- `VocabCommand.Run(_tempDir, "game", writer)`, matches the `internal static int Run(string directory, string field, TextWriter? output = null)` signature

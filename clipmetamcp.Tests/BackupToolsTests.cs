@@ -179,7 +179,7 @@ public class BackupToolsTests
     [TestMethod]
     public void Restore_MediaByteIdenticalToBackup()
     {
-        // Tag, snapshot, change — then restore and prove the media matches the snapshot exactly.
+        // Tag, snapshot, change, then restore and prove the media matches the snapshot exactly.
         var tagged = new MetadataMutation();
         tagged.SetFields[ClipMetaSchema.AtomName("tags")] = "a|b";
         new Mp4Writer().WriteMetadata(_clip, tagged, NullLogger.Instance);
@@ -231,7 +231,7 @@ public class BackupToolsTests
     {
         MakeBackup("20260101-120000");
         MakeBackup("20260612-120000");
-        string foreignBak = Path.Combine(_lib, "clip.mp4.bak");           // no timestamp — not ours
+        string foreignBak = Path.Combine(_lib, "clip.mp4.bak");           // no timestamp, not ours
         File.WriteAllText(foreignBak, "user's own backup");
 
         JsonObject result = Call("clip_prune_backups",

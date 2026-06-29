@@ -6,7 +6,7 @@ namespace ClipMetaScribe.Tests;
 /// Tests for clipmetascribe's argument parsing (<see cref="Program.BuildMutation"/>, made
 /// internal for exactly this purpose). The bug class under test: a flag where a value should
 /// be. Before validation, <c>--set notes --backup</c> silently stored the literal string
-/// "--backup" as the notes text — while ALSO still enabling backup mode, because flag
+/// "--backup" as the notes text, while ALSO still enabling backup mode, because flag
 /// detection scans the whole argument list independently of positional consumption.
 /// </summary>
 [TestClass]
@@ -62,7 +62,7 @@ public class ProgramArgumentTests
     [TestMethod]
     public void Set_MissingValueAtEndOfArgs_Throws()
     {
-        // Previously "--set tags" at the end of the line was silently IGNORED — the user
+        // Previously "--set tags" at the end of the line was silently IGNORED, the user
         // thought they tagged the clip and nothing happened. Now it is a hard error.
         var ex = Assert.ThrowsExactly<ArgumentException>(() => Build(File, "--set", "tags"));
         StringAssert.Contains(ex.Message, "--set");
@@ -85,7 +85,7 @@ public class ProgramArgumentTests
     [TestMethod]
     public void Set_DashyButNotAFlag_ValueAccepted()
     {
-        // Values that merely look dashy are legitimate — e.g. notes containing an em-dash
+        // Values that merely look dashy are legitimate, e.g. notes containing an em-dash
         // decoration. Only exact (case-insensitive) matches of this tool's flags reject.
         var mutation = Build(File, "--set", "notes", "--great clip--");
         Assert.AreEqual("--great clip--",
@@ -96,7 +96,7 @@ public class ProgramArgumentTests
     public void Set_KnownFlagRejectedCaseInsensitively()
     {
         // Flag matching is case-insensitive everywhere else in the CLI, so the swallowed-flag
-        // check must be too — "--BACKUP" still activates backup mode.
+        // check must be too, "--BACKUP" still activates backup mode.
         Assert.ThrowsExactly<ArgumentException>(() => Build(File, "--set", "notes", "--BACKUP"));
     }
 

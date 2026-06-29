@@ -1,4 +1,4 @@
-# ClipMeta.Core + Write Engine — Design Spec
+# ClipMeta.Core + Write Engine, Design Spec
 **Date:** 2026-05-21
 **Round:** 2 (clipmetaview complete; this round delivers Core + write capability)
 **Author:** Peckworks Lab
@@ -7,7 +7,7 @@
 
 ## Problem Statement
 
-Gamers and other content creators accumulate large libraries of MP4 clips named only by timestamp. Finding specific moments (a rocket jump, a funny death, a highlight play) requires re-watching everything. The goal is a tool that lets you tag clips at the moment of viewing — or at the moment of creation — so that later you can search a 5,000-clip library in seconds and pull exactly the footage you need for an edit.
+Gamers and other content creators accumulate large libraries of MP4 clips named only by timestamp. Finding specific moments (a rocket jump, a funny death, a highlight play) requires re-watching everything. The goal is a tool that lets you tag clips at the moment of viewing, or at the moment of creation, so that later you can search a 5,000-clip library in seconds and pull exactly the footage you need for an edit.
 
 Metadata must live **inside the MP4 file** so it travels with the file regardless of where it is moved, renamed, or copied. No sidecar files. No databases. No NTFS alternate data streams.
 
@@ -19,7 +19,7 @@ Metadata must live **inside the MP4 file** so it travels with the file regardles
 - Extract `ClipMeta.Core` as a standalone C# class library
 - Define format-agnostic interfaces (`IMediaParser`, `IMediaWriter`, `IClipMetaLogger`)
 - Move all MP4 parsing code from `clipmetaview` into Core
-- Implement `Mp4Writer` — safe metadata write engine
+- Implement `Mp4Writer`, safe metadata write engine
 - Define the `com.peckworkslab.clipmeta` tag schema
 - Implement `clipmetascribe` CLI (replaces "Hello World" stub)
 - Structured logging with simple and verbose levels
@@ -99,7 +99,7 @@ peckworks-clipmeta.slnx
 
 ## 2. Format-Agnostic Interfaces (SOLID)
 
-The architecture is open for extension and closed for modification. Adding MKV support in a future round means implementing two interfaces and registering them — zero changes to existing code.
+The architecture is open for extension and closed for modification. Adding MKV support in a future round means implementing two interfaces and registering them, zero changes to existing code.
 
 ```csharp
 /// <summary>Reads a media file and returns its box/atom tree.</summary>
@@ -144,7 +144,7 @@ public sealed class MediaHandlerRegistry
 }
 ```
 
-`BoxNode` keeps its existing name and all existing fields for this round — renaming it to something more generic is deferred until a second format is actually implemented and the abstraction earns its keep. `IMediaParser.ParseFile()` returns `BoxNode`. All 80 existing clipmetaview tests remain valid.
+`BoxNode` keeps its existing name and all existing fields for this round, renaming it to something more generic is deferred until a second format is actually implemented and the abstraction earns its keep. `IMediaParser.ParseFile()` returns `BoxNode`. All 80 existing clipmetaview tests remain valid.
 
 ---
 
@@ -256,11 +256,11 @@ File.Replace(tempFilePath, sourceFilePath, backupPath: null)
 
 ### Three Write Scenarios
 
-1. **Update existing** — a `----` atom with our domain and field name already exists → replace its `data` child value bytes; recalculate sizes up the tree.
+1. **Update existing**, a `----` atom with our domain and field name already exists → replace its `data` child value bytes; recalculate sizes up the tree.
 
-2. **Append to existing ilst** — our atom isn't in ilst yet → write a new `----` atom at the end of ilst; recalculate ilst and all ancestor sizes.
+2. **Append to existing ilst**, our atom isn't in ilst yet → write a new `----` atom at the end of ilst; recalculate ilst and all ancestor sizes.
 
-3. **Create from scratch** — ilst (or meta, or udta) doesn't exist → build the chain and insert into moov:
+3. **Create from scratch**, ilst (or meta, or udta) doesn't exist → build the chain and insert into moov:
    ```
    udta
    └── meta (FullBox: version=0, flags=0)
@@ -273,7 +273,7 @@ File.Replace(tempFilePath, sourceFilePath, backupPath: null)
 
 On the **first** write to a file that had no existing clipmeta atoms, append a `free` box of 512 bytes immediately after `ilst`. This padding absorbs future metadata additions without shifting `mdat`, eliminating the need to adjust stco/co64 on routine re-tags. When a future write exceeds the available padding, a full rewrite is performed and a new padding block is written.
 
-### FreeformAtomWriter — `----` Atom Structure
+### FreeformAtomWriter, `----` Atom Structure
 
 ```
 [4 bytes] size of ---- box (big-endian)
@@ -302,7 +302,7 @@ On the **first** write to a file that had no existing clipmeta atoms, append a `
 
 ### stco/co64 Adjustment
 
-- Every `trak` box has its own `stbl → stco` or `stbl → co64`. **All of them must be adjusted** — not just the first. A stereo video with separate video and audio tracks has two stco tables; missing one desynchronises that track.
+- Every `trak` box has its own `stbl → stco` or `stbl → co64`. **All of them must be adjusted**, not just the first. A stereo video with separate video and audio tracks has two stco tables; missing one desynchronises that track.
 - Adjustment applies only when `mdat` begins at a byte offset **after** the end of `moov`. If `mdat` precedes `moov`, chunk offsets are unaffected.
 - For `stco` (32-bit offsets): if `offset + delta > UInt32.MaxValue`, the write must fail with a clear error. In practice this means the file is approaching 4 GB and should use `co64` already; log a warning if the headroom is under 10%.
 - Log every adjusted entry at Verbose level: `stco[trak=1]: 3842 entries += 87 bytes`.
@@ -336,7 +336,7 @@ On startup, `clipmetascribe` scans the working directory for files matching `*.m
   clip007.mp4.tmp
 These can be safely deleted."
 ```
-It does not delete them automatically — the user confirms.
+It does not delete them automatically, the user confirms.
 
 ### `--set field ""` Semantics
 
@@ -458,7 +458,7 @@ clipmetascribe --dir ".\clips" --untagged game        # list files missing speci
 
 ```bash
 clipmetascribe --dir ".\clips" --clear-all --dry-run
-# Output: "DRY RUN — no files will be modified"
+# Output: "DRY RUN, no files will be modified"
 #         "[would clear] .\clips\clip001.mp4"
 #         "[would clear] .\clips\clip002.mp4"  ... etc.
 ```
@@ -546,7 +546,7 @@ Search checks for `clipmeta-index.json` first; falls back to full scan. Index en
 }
 ```
 
-Multi-value fields (players, tags, timecode) are stored as JSON arrays in the index for fast intersection queries. The index is the only place JSON appears — MP4 files store pipe-delimited strings.
+Multi-value fields (players, tags, timecode) are stored as JSON arrays in the index for fast intersection queries. The index is the only place JSON appears, MP4 files store pipe-delimited strings.
 
 ---
 
@@ -554,8 +554,8 @@ Multi-value fields (players, tags, timecode) are stored as JSON arrays in the in
 
 ### Two-directory discipline
 
-- `testclips/pristine/` — originals; never opened for writing; checked in; the ground truth
-- `testclips/scratch/` — regenerated by the test runner at the start of every write-test session by copying from pristine; any test that writes a file uses the scratch copy
+- `testclips/pristine/`, originals; never opened for writing; checked in; the ground truth
+- `testclips/scratch/`, regenerated by the test runner at the start of every write-test session by copying from pristine; any test that writes a file uses the scratch copy
 
 ```csharp
 internal static class ScratchClips
@@ -647,8 +647,8 @@ These are the things that will corrupt files silently if missed. Each should hav
 
 This round is complete when:
 
-1. `dotnet build` — zero errors, zero warnings across all projects
-2. `dotnet test` — all tests pass including integration tests against scratch clips
+1. `dotnet build`, zero errors, zero warnings across all projects
+2. `dotnet test`, all tests pass including integration tests against scratch clips
 3. Round-trip verified: write tags → read back with `clipmetaview` → tags visible in tree and summary
 4. VLC plays each scratch clip correctly after write (no audio/video desync)
 5. `--clear-all` requires explicit confirmation or `--yes` flag
@@ -662,7 +662,7 @@ This round is complete when:
 
 ## 12. Future Rounds (not in scope, recorded for continuity)
 
-- **Round 3:** MCP server — exposes Core as Claude-callable tools; voice → tag workflow; file watcher for new clip detection
-- **Round 4:** Web GUI — browser-based viewer (tree + summary), search UI with game/tag/player dropdowns and checkboxes, clip timeline showing timecodes
-- **Round 5:** `clipsearch` as a standalone CLI — output pipeable to robocopy/xcopy for building edit folders
-- **Round 6:** Additional format support — MKV, MOV (implement `IMediaParser`/`IMediaWriter`, register; Core unchanged)
+- **Round 3:** MCP server, exposes Core as Claude-callable tools; voice → tag workflow; file watcher for new clip detection
+- **Round 4:** Web GUI, browser-based viewer (tree + summary), search UI with game/tag/player dropdowns and checkboxes, clip timeline showing timecodes
+- **Round 5:** `clipsearch` as a standalone CLI, output pipeable to robocopy/xcopy for building edit folders
+- **Round 6:** Additional format support, MKV, MOV (implement `IMediaParser`/`IMediaWriter`, register; Core unchanged)

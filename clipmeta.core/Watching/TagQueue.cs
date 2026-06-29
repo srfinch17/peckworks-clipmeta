@@ -10,7 +10,7 @@ namespace ClipMetaCore.Watching;
 /// Durable deferred-tag queue stored in a library root. A clip that is playing is locked against
 /// our write (<see cref="System.IO.File.Replace(string, string, string?)"/> needs a delete-share
 /// the player does not grant), so spoken tags are persisted here and written as the locks clear.
-/// The queue stores only confirmed, already-resolved paths — it never resolves or guesses.
+/// The queue stores only confirmed, already-resolved paths, it never resolves or guesses.
 /// </summary>
 public static class TagQueue
 {
@@ -27,7 +27,7 @@ public static class TagQueue
 
     /// <summary>
     /// Reads the queue. A missing OR unreadable/corrupt file yields an empty queue and never
-    /// throws — the queue is opportunistic state on a watched-clip call, never a hard dependency.
+    /// throws, the queue is opportunistic state on a watched-clip call, never a hard dependency.
     /// </summary>
     public static TagQueueData Load(string libraryDir)
     {
@@ -114,7 +114,7 @@ public static class TagQueue
 
     /// <summary>
     /// Writes the queue atomically: serialize to a sibling temp file, then swap it into place with
-    /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c> — a crash
+    /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c>, a crash
     /// mid-write leaves the previous queue intact, never a half-written file.
     /// </summary>
     public static void Save(TagQueueData data, string libraryDir)
@@ -149,7 +149,7 @@ public static class TagQueue
     /// <param name="onWritten">
     /// Optional callback invoked for each clip successfully written. Only the background
     /// <see cref="QueueDrainPump"/> supplies this (to feed a <see cref="DrainJournal"/>);
-    /// synchronous callers pass <see langword="null"/> — they surface results directly in
+    /// synchronous callers pass <see langword="null"/>, they surface results directly in
     /// their own response and must not double-report. Never throws out of the drain.
     /// </param>
     public static DrainReport Drain(

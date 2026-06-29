@@ -33,7 +33,7 @@ public class WatchingResolverTests
     /// Touch, then back-date BOTH write time AND creation time well outside the recent-write window,
     /// so the file is a pure access-time fallback candidate (not a gaming-mode "just saved" clip).
     /// The predicate now keys on <see cref="LibraryClip.CreationTimeUtc"/>, so back-dating write time
-    /// alone was no longer sufficient — the file's real creation time would still look fresh.
+    /// alone was no longer sufficient, the file's real creation time would still look fresh.
     /// </summary>
     private string TouchStale(string name)
     {
@@ -157,8 +157,8 @@ public class WatchingResolverTests
     public void Resolve_HighWinnerPresent_SuppressesStaleAccessTimeRows()
     {
         // Spec A §6a (behavior CHANGE from pass-2): once a clip is positively identified by a
-        // high-confidence player hit, the leftover access-time guesses are pure noise — the session
-        // flagged them as such — so they are dropped from the result.
+        // high-confidence player hit, the leftover access-time guesses are pure noise, the session
+        // flagged them as such, so they are dropped from the result.
         string watched = Touch("watched.mp4");
         Touch("bystander.mp4");
 
@@ -212,8 +212,8 @@ public class WatchingResolverTests
     public void Resolve_NoPlayerNoLock_AnyLiveTargetIsFalse()
     {
         // Access-time candidates are still returned (a useful recency hint), but nothing is actually
-        // open/locked — the caller must not auto-tag. AnyLiveTarget makes that an explicit contract.
-        // (A stale write keeps this an access-time-only case; a FRESH save is a live target — see
+        // open/locked, the caller must not auto-tag. AnyLiveTarget makes that an explicit contract.
+        // (A stale write keeps this an access-time-only case; a FRESH save is a live target, see
         // Resolve_NoPlayer_SingleFreshWrite_IsLiveTarget.)
         TouchStale("a.mp4");
 
@@ -251,7 +251,7 @@ public class WatchingResolverTests
             .Resolve(_tempDir, 5, includeAccessFallback: true)
             .Candidates.Single(x => x.Name == "clip.mp4");
 
-        Assert.IsNull(c.Player, "two open players is ambiguous — never guess which holds the lock");
+        Assert.IsNull(c.Player, "two open players is ambiguous, never guess which holds the lock");
     }
 
     [TestMethod]
@@ -297,7 +297,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_PlayerOnForeignFile_NoResolution_WarnsAndSuppressesFallback()
     {
-        TouchStale("inlibrary.mp4"); // exists, not fresh — no gaming target, pure suppression case
+        TouchStale("inlibrary.mp4"); // exists, not fresh, no gaming target, pure suppression case
 
         WatchingResult result = Resolver(new ProcessWindow("mpc-hc64", @"D:\elsewhere\foreign.mp4 - MPC-HC"))
             .Resolve(_tempDir, 5, includeAccessFallback: true);
@@ -421,7 +421,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_NoPlayer_MultipleFreshWrites_AllLow_NotLive()
     {
-        // Several clips saved at once is ambiguous — surface them but make the model confirm.
+        // Several clips saved at once is ambiguous, surface them but make the model confirm.
         Touch("a.mp4");
         Touch("b.mp4");
 
@@ -430,13 +430,13 @@ public class WatchingResolverTests
         var fresh = result.Candidates.Where(c => c.Source == RecentWriteSignal.SourceName).ToList();
         Assert.AreEqual(2, fresh.Count);
         Assert.IsTrue(fresh.All(c => c.Confidence == "low"));
-        Assert.IsFalse(result.AnyLiveTarget, "multiple fresh saves are ambiguous — not an auto-tag target");
+        Assert.IsFalse(result.AnyLiveTarget, "multiple fresh saves are ambiguous, not an auto-tag target");
     }
 
     [TestMethod]
     public void Resolve_PlayerOpen_FreshWriteElsewhere_PlayerWins()
     {
-        // A clip is playing AND another was just saved in the background — the played clip is the
+        // A clip is playing AND another was just saved in the background, the played clip is the
         // subject; the background save must not displace it or even appear alongside the high winner.
         string watched = Touch("watched.mp4");
         Touch("autosaved.mp4"); // fresh, but nobody is watching it
@@ -453,7 +453,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_NoPlayer_SingleFreshWrite_FallbackDisabled_ReturnsEmpty()
     {
-        // include_access_fallback:false means "only open-player candidates" — recent-write is a
+        // include_access_fallback:false means "only open-player candidates", recent-write is a
         // no-player signal, so it is gated too. (Default is true, so gaming mode works out of the box.)
         Touch("clip.mp4");
 
@@ -466,7 +466,7 @@ public class WatchingResolverTests
     public void Resolve_ForeignPlayer_SingleFreshSave_SurvivesSuppression()
     {
         // #1 (P0): a player is open on a file OUTSIDE the library AND one clip was just saved into
-        // the library. The foreign lock and an in-library save are independent — the fresh save must
+        // the library. The foreign lock and an in-library save are independent, the fresh save must
         // surface as the high-confidence gaming target, not be suppressed to zero candidates.
         string saved = Touch("saved.mp4"); // fresh creation time → a recent_write candidate
 
@@ -484,7 +484,7 @@ public class WatchingResolverTests
     [TestMethod]
     public void Resolve_ForeignPlayer_MultipleFreshSaves_StaySuppressed()
     {
-        // Several fresh saves at once is NOT Policy A — ambiguous, so the foreign-player suppression
+        // Several fresh saves at once is NOT Policy A, ambiguous, so the foreign-player suppression
         // still applies and nothing surfaces (the model must not auto-pick among them).
         Touch("one.mp4");
         Touch("two.mp4");
@@ -503,7 +503,7 @@ public class WatchingResolverTests
     {
         // A clip whose fresh creation time would normally make it a gaming-mode live target
         // must be excluded when the ledger records that ClipMeta itself wrote it (i.e. a
-        // tag-write bumped the write time but ClipMeta stamped it — not a user game-save).
+        // tag-write bumped the write time but ClipMeta stamped it, not a user game-save).
         string clip = Path.Combine(_tempDir, "fresh.mp4");
         File.WriteAllBytes(clip, new byte[] { 0, 1, 2 });   // fresh creation time
 

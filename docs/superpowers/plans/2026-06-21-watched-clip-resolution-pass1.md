@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Resolve "which library clip is a media player showing right now" into a ranked, confidence-scored candidate list, exposed via an MCP tool and a CLI command — without ever touching the existing write path.
+**Goal:** Resolve "which library clip is a media player showing right now" into a ranked, confidence-scored candidate list, exposed via an MCP tool and a CLI command, without ever touching the existing write path.
 
-**Architecture:** A new Core concern `clipmeta.core/Watching/` runs a pluggable set of `IWatchSignal` providers (window-title + access-time in pass 1) over a once-enumerated library, aggregates their evidence per clip, and scores confidence by corroboration. A lock probe enriches candidates as a tiebreaker. The only un-CI-able dependency — reading live process window titles — sits behind `IProcessWindowSource`, faked in tests. A separate, single-site hardening stops ClipMeta's own reads from polluting the access-time signal.
+**Architecture:** A new Core concern `clipmeta.core/Watching/` runs a pluggable set of `IWatchSignal` providers (window-title + access-time in pass 1) over a once-enumerated library, aggregates their evidence per clip, and scores confidence by corroboration. A lock probe enriches candidates as a tiebreaker. The only un-CI-able dependency, reading live process window titles, sits behind `IProcessWindowSource`, faked in tests. A separate, single-site hardening stops ClipMeta's own reads from polluting the access-time signal.
 
 **Tech Stack:** C# / .NET 10, `clipmeta.core` (zero NuGet), MSTest. `System.Diagnostics.Process` (Windows-guarded), `System.Text.RegularExpressions` source-generated regex.
 
@@ -12,37 +12,37 @@
 
 - **.NET 10**, solution `peckworks-clipmeta.slnx`.
 - **Zero external NuGet packages** in production projects (`clipmeta.core`, `clipmetascribe`, `clipmetamcp`). BCL/SDK only. MSTest is the test-project-only exception.
-- **CLIs/MCP are thin shells** — all resolution logic lives in `clipmeta.core`. `Program.cs` / tool handlers parse arguments and call Core.
-- **Open for extension** — a new player or detection method is a new `IWatchSignal` / `IProcessWindowSource`, never an edit to the resolver.
-- **No fabricated paths** — every returned path MUST come from clips actually enumerated under the library root. A window title selects among enumerated clips; it never constructs a path.
-- **Cross-platform build** — `clipmeta.core` and all tests MUST build and pass on clip-less CI (Linux). Windows-only APIs guarded by `OperatingSystem.IsWindows()` + `[SupportedOSPlatform("windows")]`; CA1416 must stay clean.
+- **CLIs/MCP are thin shells**, all resolution logic lives in `clipmeta.core`. `Program.cs` / tool handlers parse arguments and call Core.
+- **Open for extension**, a new player or detection method is a new `IWatchSignal` / `IProcessWindowSource`, never an edit to the resolver.
+- **No fabricated paths**, every returned path MUST come from clips actually enumerated under the library root. A window title selects among enumerated clips; it never constructs a path.
+- **Cross-platform build**, `clipmeta.core` and all tests MUST build and pass on clip-less CI (Linux). Windows-only APIs guarded by `OperatingSystem.IsWindows()` + `[SupportedOSPlatform("windows")]`; CA1416 must stay clean.
 - **Build gate:** `dotnet build --nologo -v q` → 0 warnings, 0 errors. **Test gate:** `dotnet test --nologo --no-build -v q` → all pass.
 - XML doc comments on all public types/methods; named constants, no magic numbers.
 
 ## File Structure (namespace `ClipMetaCore.Watching` unless noted)
 
-> **Note (refinement of the spec's file tree):** the two new interfaces (`IProcessWindowSource`, `IWatchSignal`) live in `Watching/` rather than `Abstractions/`. They are watching-specific contracts (unlike the cross-cutting `IMediaParser`), and `IWatchSignal` depends on `WatchContext` which lives in `Watching/` — co-locating them keeps the concern cohesive and avoids `Abstractions/` depending on `Watching/`.
+> **Note (refinement of the spec's file tree):** the two new interfaces (`IProcessWindowSource`, `IWatchSignal`) live in `Watching/` rather than `Abstractions/`. They are watching-specific contracts (unlike the cross-cutting `IMediaParser`), and `IWatchSignal` depends on `WatchContext` which lives in `Watching/`, co-locating them keeps the concern cohesive and avoids `Abstractions/` depending on `Watching/`.
 
-- `clipmeta.core/Mp4/AccessTimeGuard.cs` — capture/restore `LastAccessTimeUtc`, best-effort (Mp4 namespace).
-- `clipmeta.core/Mp4/Mp4Parser.cs` — **modify** `ParseFile` to wrap the open in the guard.
-- `clipmeta.core/Watching/ProcessWindow.cs` — `(ProcessName, WindowTitle)` record struct.
-- `clipmeta.core/Watching/IProcessWindowSource.cs` — the one fakeable seam.
-- `clipmeta.core/Watching/EmptyProcessWindowSource.cs` — non-Windows default.
-- `clipmeta.core/Watching/WindowsProcessWindowSource.cs` — Windows implementation.
-- `clipmeta.core/Watching/ProcessWindowSource.cs` — `ForCurrentPlatform()` factory.
-- `clipmeta.core/Watching/MediaPlayers.cs` — extensible known-player name list.
-- `clipmeta.core/Watching/PlayerTitleParser.cs` — pure title → `.mp4` reference.
-- `clipmeta.core/Watching/LibraryClip.cs` — enumerated clip record.
-- `clipmeta.core/Watching/SignalHit.cs` — one piece of evidence.
-- `clipmeta.core/Watching/IWatchSignal.cs` — one confidence signal.
-- `clipmeta.core/Watching/WatchContext.cs` — shared inputs + `Build`.
-- `clipmeta.core/Watching/PlayerTitleSignal.cs` — pass-1 signal.
-- `clipmeta.core/Watching/AccessTimeSignal.cs` — pass-1 signal.
-- `clipmeta.core/Watching/WatchingCandidate.cs` — one result row.
-- `clipmeta.core/Watching/WatchingResolver.cs` — aggregate + score + rank.
-- `clipmetamcp/Tools/ReadTools.cs` — **modify** to register `library_watching`.
-- `clipmetascribe/Commands/WatchingCommand.cs` — `--watching` command.
-- `clipmetascribe/Program.cs` — **modify** to wire `--watching` / `--limit` / `--no-access-fallback`.
+- `clipmeta.core/Mp4/AccessTimeGuard.cs`, capture/restore `LastAccessTimeUtc`, best-effort (Mp4 namespace).
+- `clipmeta.core/Mp4/Mp4Parser.cs`, **modify** `ParseFile` to wrap the open in the guard.
+- `clipmeta.core/Watching/ProcessWindow.cs`, `(ProcessName, WindowTitle)` record struct.
+- `clipmeta.core/Watching/IProcessWindowSource.cs`, the one fakeable seam.
+- `clipmeta.core/Watching/EmptyProcessWindowSource.cs`, non-Windows default.
+- `clipmeta.core/Watching/WindowsProcessWindowSource.cs`, Windows implementation.
+- `clipmeta.core/Watching/ProcessWindowSource.cs`, `ForCurrentPlatform()` factory.
+- `clipmeta.core/Watching/MediaPlayers.cs`, extensible known-player name list.
+- `clipmeta.core/Watching/PlayerTitleParser.cs`, pure title → `.mp4` reference.
+- `clipmeta.core/Watching/LibraryClip.cs`, enumerated clip record.
+- `clipmeta.core/Watching/SignalHit.cs`, one piece of evidence.
+- `clipmeta.core/Watching/IWatchSignal.cs`, one confidence signal.
+- `clipmeta.core/Watching/WatchContext.cs`, shared inputs + `Build`.
+- `clipmeta.core/Watching/PlayerTitleSignal.cs`, pass-1 signal.
+- `clipmeta.core/Watching/AccessTimeSignal.cs`, pass-1 signal.
+- `clipmeta.core/Watching/WatchingCandidate.cs`, one result row.
+- `clipmeta.core/Watching/WatchingResolver.cs`, aggregate + score + rank.
+- `clipmetamcp/Tools/ReadTools.cs`, **modify** to register `library_watching`.
+- `clipmetascribe/Commands/WatchingCommand.cs`, `--watching` command.
+- `clipmetascribe/Program.cs`, **modify** to wire `--watching` / `--limit` / `--no-access-fallback`.
 - Tests: `clipmetascribe.Tests/{AccessTimeGuardTests,PlayerTitleParserTests,ProcessWindowSourceTests,WatchContextTests,WatchSignalsTests,WatchingResolverTests,WatchingCommandTests}.cs`, `clipmetascribe.Tests/Helpers/FakeProcessWindowSource.cs`, `clipmetamcp.Tests/LibraryWatchingToolTests.cs`.
 
 ---
@@ -118,7 +118,7 @@ public class AccessTimeGuardTests
     {
         if (!TestClipsLocator.PristineClipsPresent())
         {
-            Assert.Inconclusive("No test clips in testclips/pristine — skipped (e.g. CI).");
+            Assert.Inconclusive("No test clips in testclips/pristine, skipped (e.g. CI).");
             return;
         }
 
@@ -140,7 +140,7 @@ public class AccessTimeGuardTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~AccessTimeGuardTests" --nologo`
-Expected: FAIL — `AccessTimeGuard` does not exist (compile error).
+Expected: FAIL, `AccessTimeGuard` does not exist (compile error).
 
 - [ ] **Step 3: Create `AccessTimeGuard`**
 
@@ -153,7 +153,7 @@ namespace ClipMetaCore.Mp4;
 /// Captures a file's <see cref="File.GetLastAccessTimeUtc(string)"/> on construction and restores
 /// it on <see cref="Dispose"/>, best-effort. ClipMeta's own reads would otherwise bump the access
 /// time and pollute the watched-clip access-time signal. Restoring is itself a metadata write that
-/// can fail (file locked by a player, read-only, removed); such failures are swallowed — preserving
+/// can fail (file locked by a player, read-only, removed); such failures are swallowed, preserving
 /// the signal must never break a read.
 /// </summary>
 public readonly struct AccessTimeGuard : IDisposable
@@ -295,7 +295,7 @@ public class PlayerTitleParserTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~PlayerTitleParserTests" --nologo`
-Expected: FAIL — `PlayerTitleParser` does not exist.
+Expected: FAIL, `PlayerTitleParser` does not exist.
 
 - [ ] **Step 3: Create `PlayerTitleParser`**
 
@@ -426,7 +426,7 @@ public class ProcessWindowSourceTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~ProcessWindowSourceTests" --nologo`
-Expected: FAIL — types do not exist.
+Expected: FAIL, types do not exist.
 
 - [ ] **Step 3: Create the seam types**
 
@@ -454,7 +454,7 @@ public interface IProcessWindowSource
     /// <summary>
     /// Returns one <see cref="ProcessWindow"/> per running process whose name matches one of
     /// <paramref name="processNames"/> (case-insensitive) and has a non-empty main-window title.
-    /// Implementations MUST NOT throw for a single inaccessible or exited process — skip and
+    /// Implementations MUST NOT throw for a single inaccessible or exited process, skip and
     /// continue.
     /// </summary>
     IReadOnlyList<ProcessWindow> GetPlayerWindows(IReadOnlyCollection<string> processNames);
@@ -467,7 +467,7 @@ Create `clipmeta.core/Watching/EmptyProcessWindowSource.cs`:
 namespace ClipMetaCore.Watching;
 
 /// <summary>
-/// A source that reports no players — the default on non-Windows platforms and anywhere a real
+/// A source that reports no players, the default on non-Windows platforms and anywhere a real
 /// source is not wired. Resolution then relies on the access-time signal alone.
 /// </summary>
 public sealed class EmptyProcessWindowSource : IProcessWindowSource
@@ -517,7 +517,7 @@ public sealed class WindowsProcessWindowSource : IProcessWindowSource
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
-                // Process exited mid-enumeration, or its window is inaccessible — skip it.
+                // Process exited mid-enumeration, or its window is inaccessible, skip it.
             }
             finally
             {
@@ -559,7 +559,7 @@ public static class MediaPlayers
     /// <summary>
     /// Process names (without the <c>.exe</c> suffix, as <see cref="System.Diagnostics.Process.ProcessName"/>
     /// reports them) of recognized players. Matched case-insensitively. <b>Append here to support a
-    /// new player</b> — no other code changes are required.
+    /// new player</b>, no other code changes are required.
     /// </summary>
     public static IReadOnlyList<string> KnownProcessNames { get; } = new[]
     {
@@ -607,7 +607,7 @@ using ClipMetaCore.Watching;
 
 namespace ClipMetaScribe.Tests.Helpers;
 
-/// <summary>Returns a fixed set of player windows, ignoring the name filter — for resolver tests.</summary>
+/// <summary>Returns a fixed set of player windows, ignoring the name filter, for resolver tests.</summary>
 internal sealed class FakeProcessWindowSource : IProcessWindowSource
 {
     private readonly IReadOnlyList<ProcessWindow> _windows;
@@ -696,7 +696,7 @@ public class WatchContextTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchContextTests" --nologo`
-Expected: FAIL — types do not exist.
+Expected: FAIL, types do not exist.
 
 - [ ] **Step 3: Create the model types**
 
@@ -721,7 +721,7 @@ namespace ClipMetaCore.Watching;
 /// One signal's evidence that a particular clip is the one being watched. Several signals may emit
 /// a hit for the same clip; the resolver groups hits by path and scores confidence by corroboration.
 /// </summary>
-/// <param name="ClipPath">Path of an enumerated library clip — never a fabricated path.</param>
+/// <param name="ClipPath">Path of an enumerated library clip, never a fabricated path.</param>
 /// <param name="Source">The emitting signal's name (also used as the candidate source).</param>
 /// <param name="Player">Process name when the evidence came from a player; otherwise null.</param>
 /// <param name="Ambiguous">True when this signal alone could not disambiguate the clip.</param>
@@ -735,7 +735,7 @@ namespace ClipMetaCore.Watching;
 
 /// <summary>
 /// One pluggable confidence signal. Adding a new player or detection method means adding a new
-/// implementation and registering it — never editing the resolver.
+/// implementation and registering it, never editing the resolver.
 /// </summary>
 public interface IWatchSignal
 {
@@ -744,7 +744,7 @@ public interface IWatchSignal
 
     /// <summary>
     /// Emits zero or more evidence hits for the current moment. MUST only reference clips present
-    /// in <see cref="WatchContext.LibraryClips"/> — a signal selects among already-enumerated clips,
+    /// in <see cref="WatchContext.LibraryClips"/>, a signal selects among already-enumerated clips,
     /// it never constructs a path. MUST NOT throw for ordinary failures (player closed, file gone,
     /// source unreadable): emit nothing instead.
     /// </summary>
@@ -960,7 +960,7 @@ public class WatchSignalsTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchSignalsTests" --nologo`
-Expected: FAIL — signal types do not exist.
+Expected: FAIL, signal types do not exist.
 
 - [ ] **Step 3: Create the signals**
 
@@ -1221,7 +1221,7 @@ public class WatchingResolverTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchingResolverTests" --nologo`
-Expected: FAIL — resolver types do not exist.
+Expected: FAIL, resolver types do not exist.
 
 - [ ] **Step 3: Create `WatchingCandidate`**
 
@@ -1338,7 +1338,7 @@ public sealed class WatchingResolver
         }
 
         // Rank (high first, then most-recent access) and cap BEFORE probing, so the lock probe only
-        // opens the handful of files we actually return — never the whole library on a fallback pass.
+        // opens the handful of files we actually return, never the whole library on a fallback pass.
         List<WatchingCandidate> ranked = candidates
             .OrderByDescending(c => c.Confidence == HighConfidence)
             .ThenByDescending(c => c.LastAccessTimeUtc)
@@ -1483,7 +1483,7 @@ public class LibraryWatchingToolTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test clipmetamcp.Tests --filter "FullyQualifiedName~LibraryWatchingToolTests" --nologo`
-Expected: FAIL — `library_watching` is not registered (the harness returns an error/unknown-tool result, so the shape assertions fail).
+Expected: FAIL, `library_watching` is not registered (the harness returns an error/unknown-tool result, so the shape assertions fail).
 
 - [ ] **Step 3: Add the using, schema constants, registration, and handler**
 
@@ -1510,11 +1510,11 @@ Register the tool at the end of `RegisterAll` (after the `library_search_index` 
             "library_watching",
             "Resolves 'the clip I'm watching / just watched' by inspecting open media players. " +
             "Returns ranked candidates, best first. A 'player_title' candidate resolved to a library " +
-            "path with confidence 'high' is the file an open player is showing — prefer it and you " +
+            "path with confidence 'high' is the file an open player is showing, prefer it and you " +
             "may tag it. If only 'access_time' candidates exist, or confidence is 'low' (multiple " +
             "players open, or an ambiguous file name), confirm with the user before tagging. To tag, " +
             "call the write tool with the chosen 'path'. Note: a clip cannot be written while a " +
-            "player still holds it open ('inUse' true) — it frees when the player advances or closes. " +
+            "player still holds it open ('inUse' true), it frees when the player advances or closes. " +
             "Optional 'limit' (default " + DefaultWatchingLimit + ") and 'include_access_fallback' " +
             "(default true). Requires a configured clips library.",
             WatchingSchema(),
@@ -1586,7 +1586,7 @@ Add the handler next to the other handlers:
 - [ ] **Step 4: Run tests to verify they pass (incl. the stdout-purity suite that now auto-covers the new tool)**
 
 Run: `dotnet build --nologo -v q && dotnet test clipmetamcp.Tests --filter "FullyQualifiedName~LibraryWatchingToolTests|FullyQualifiedName~StdoutPurityTests" --nologo`
-Expected: PASS — including `StdoutPurityTests`, which drives `library_watching` via its `ExampleArguments` and asserts zero stdout bytes + no tool error.
+Expected: PASS, including `StdoutPurityTests`, which drives `library_watching` via its `ExampleArguments` and asserts zero stdout bytes + no tool error.
 
 - [ ] **Step 5: Commit**
 
@@ -1664,7 +1664,7 @@ public class WatchingCommandTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test --filter "FullyQualifiedName~WatchingCommandTests" --nologo`
-Expected: FAIL — `WatchingCommand` does not exist.
+Expected: FAIL, `WatchingCommand` does not exist.
 
 - [ ] **Step 3: Create `WatchingCommand`**
 
@@ -1703,7 +1703,7 @@ internal static class WatchingCommand
         foreach (WatchingCandidate c in candidates)
         {
             string via = c.Player is null ? "" : $" via {c.Player}";
-            string locked = c.InUse ? "  [in use — close/advance the player before tagging]" : "";
+            string locked = c.InUse ? "  [in use, close/advance the player before tagging]" : "";
             output.WriteLine($"  [{c.Confidence}] {c.Path}");
             output.WriteLine($"        source={c.Source}{via}  {c.SecondsSinceAccess:F0}s since access{locked}");
         }
@@ -1790,7 +1790,7 @@ Run: `dotnet build --nologo -v q`
 Expected: 0 warnings, 0 errors, all projects.
 
 Run: `dotnet test --nologo --no-build -v q`
-Expected: all pass (this includes the multi-minute `clipmetascribe.Tests` integration suite — use a long timeout). Record the new per-project test totals printed by the runner; you will need them for the CLAUDE.md edit.
+Expected: all pass (this includes the multi-minute `clipmetascribe.Tests` integration suite, use a long timeout). Record the new per-project test totals printed by the runner; you will need them for the CLAUDE.md edit.
 
 - [ ] **Step 2: Update `CLAUDE.md`**
 
@@ -1807,22 +1807,22 @@ Add a one-line note under the scribe and MCP rows that `--watching` (scribe) and
 Add a dated section capturing the design findings (so the parser/writer guardrails travel with the code):
 
 ```markdown
-## 2026-06-21 — Watched-clip resolution
+## 2026-06-21, Watched-clip resolution
 
 - **Writing to a clip a player still holds open fails.** `File.Replace` deletes-and-swaps the
   target; that throws a sharing violation unless every open handle used `FILE_SHARE_DELETE`, which
   MPC-HC/VLC do not. A clip is writable only after the player advances ("next") or closes. The
   watched-clip resolver surfaces `inUse` so callers warn before attempting a write. **TODO when
   dogfooding:** confirm per player whether the lock releases on *stop*, on *next*, or only on
-  *close* — this sets the deferred-tag queue's drain timing (pass 2).
+  *close*, this sets the deferred-tag queue's drain timing (pass 2).
 - **ClipMeta's own reads bump last-access time.** That pollutes the access-time resolution signal.
   Fixed at the single parse choke point (`Mp4Parser.ParseFile`) with `AccessTimeGuard`
-  (capture-then-restore, best-effort — restoring is itself a write that can lose to a lock).
+  (capture-then-restore, best-effort, restoring is itself a write that can lose to a lock).
 - **Window titles only *select*, never *construct*.** A resolver candidate must come from a clip
   enumerated under the library root; a title naming a path outside the library matches nothing and
-  is dropped. This is the containment guarantee — do not "resolve" a title path by trusting it.
+  is dropped. This is the containment guarantee, do not "resolve" a title path by trusting it.
 - **Player title formats:** MPC-HC emits the full path; VLC emits `name.mp4 - VLC media player`
-  (bare name). A VLC title with no `.mp4` is an embedded metadata title — expected, yields no player
+  (bare name). A VLC title with no `.mp4` is an embedded metadata title, expected, yields no player
   candidate. The recognized-player list lives in `MediaPlayers.KnownProcessNames` (extensible).
 ```
 
@@ -1848,4 +1848,4 @@ git commit -m "docs: document watched-clip resolution (CLAUDE.md, PITFALLS, READ
 
 **Type consistency:** `WatchingCandidate` fields match between Task 6, Task 7 (JSON keys), and Task 8 (printing). `PlayerTitleSignal.SourceName` / `AccessTimeSignal.SourceName` / `WatchingResolver.HighConfidence`/`LowConfidence` are defined once and reused across tasks 5-8. `WatchContext.Build` / `WatchingResolver.Resolve` / `WatchingResolver.CreateDefault` signatures are identical wherever referenced. `IProcessWindowSource.GetPlayerWindows` signature matches across the real source, empty source, fake, and `WatchContext.Build`.
 
-**Note on test runs:** `--filter` keeps the TDD loop fast; the final `dotnet test` (Task 9) runs the whole suite including the multi-minute scribe integration tests — budget a long timeout, it is not a hang.
+**Note on test runs:** `--filter` keeps the TDD loop fast; the final `dotnet test` (Task 9) runs the whole suite including the multi-minute scribe integration tests, budget a long timeout, it is not a hang.

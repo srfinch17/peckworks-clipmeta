@@ -19,13 +19,13 @@ public sealed record ReviewFlag(string Type, IReadOnlyList<string> Clips, double
     /// <summary>Stable clips played between the last bind and this one were never tagged.</summary>
     public const string TypeSequenceSkip = "sequenceSkip";
 
-    /// <summary>More than one player is active — too ambiguous to bind a clip safely.</summary>
+    /// <summary>More than one player is active, too ambiguous to bind a clip safely.</summary>
     public const string TypeMultiplePlayersActive = "multiplePlayersActive";
 
     /// <summary>
     /// A <c>spoken_at</c> timestamp was supplied but matched no recorded segment (it aged out of
     /// history, or fell in a gap when no player was open), so the binding is the heuristic's best
-    /// guess rather than an exact hit — confirm before tagging.
+    /// guess rather than an exact hit, confirm before tagging.
     /// </summary>
     public const string TypeTimestampUnmatched = "timestampUnmatched";
 }

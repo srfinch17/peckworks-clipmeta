@@ -48,7 +48,7 @@ internal static class IndexSearchCommand
             string relative = Path.GetRelativePath(directory, entry.FilePath);
             string marker = ClipMetaIndex.CheckEntry(entry) switch
             {
-                StaleReason.Missing => "  [missing — file no longer exists]",
+                StaleReason.Missing => "  [missing, file no longer exists]",
                 StaleReason.Modified => "  [changed since index]",
                 _ => "",
             };

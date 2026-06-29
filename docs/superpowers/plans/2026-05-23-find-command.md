@@ -53,7 +53,7 @@ Throws on malformed files. ClipMetaFinder must catch and skip (continue to next 
 
 **AtomName reminder**: `ClipMetaSchema.AtomName("game")` returns `"com.peckworkslab.clipmeta:game"`. Pass this as the key to `MetadataMutation.SetFields`.
 
-**No scratch-file tracking needed** in ClipMetaFinderTests — the entire `_tempDir` is deleted in `TestCleanup`.
+**No scratch-file tracking needed** in ClipMetaFinderTests, the entire `_tempDir` is deleted in `TestCleanup`.
 
 #### Step-by-step
 
@@ -133,7 +133,7 @@ public class ClipMetaFinderTests
         string clip = PrepareClipWithFields("clip.mp4",
             new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
 
-        // Field name searched as uppercase — should still match
+        // Field name searched as uppercase, should still match
         var results = ClipMetaFinder.Find(_tempDir, "GAME", "Team Fortress 2").ToList();
 
         CollectionAssert.Contains(results, clip);
@@ -145,7 +145,7 @@ public class ClipMetaFinderTests
         string clip = PrepareClipWithFields("clip.mp4",
             new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
 
-        // Value searched lowercase — substring match, case-insensitive
+        // Value searched lowercase, substring match, case-insensitive
         var results = ClipMetaFinder.Find(_tempDir, "game", "team fortress").ToList();
 
         CollectionAssert.Contains(results, clip);
@@ -200,7 +200,7 @@ public class ClipMetaFinderTests
             [ClipMetaSchema.AtomName("notes")] = "team effort",
         });
 
-        // "team" matches both fields — clip should appear exactly once
+        // "team" matches both fields, clip should appear exactly once
         var results = ClipMetaFinder.Find(_tempDir, "game", "team").ToList();
 
         Assert.AreEqual(1, results.Count(r => r == clip));
@@ -253,7 +253,7 @@ cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
 dotnet build clipmetascribe.Tests 2>&1 | tail -5
 ```
 
-Expected: compile error — `ClipMetaFinder` does not exist.
+Expected: compile error, `ClipMetaFinder` does not exist.
 
 - [ ] **Step 3: Implement ClipMetaFinder**
 
@@ -322,8 +322,8 @@ Expected: all previously passing tests still pass (was 183; now 183 + 9 = 192).
 - [ ] **Step 6: Self-review ClipMetaFinder**
 
 Read `clipmeta.core/Read/ClipMetaFinder.cs`. Check:
-- `catch { continue; }` is present — malformed files are skipped
-- `break` after `yield return` — no file yielded twice
+- `catch { continue; }` is present, malformed files are skipped
+- `break` after `yield return`, no file yielded twice
 - Both `SearchOption.AllDirectories` and `SearchOption.TopDirectoryOnly` are used correctly
 - `StringComparison.OrdinalIgnoreCase` used in both field name and value comparisons
 - XML doc comments on the public type and method
@@ -397,7 +397,7 @@ Use `Path.GetRelativePath(directory, match)` to produce display paths.
 
 **Namespaces for FindCommandTests**: `ClipMetaCore.Logging`, `ClipMetaCore.Schema`, `ClipMetaCore.Write`, `ClipMetaScribe.Commands`, `ClipMetaScribe.Tests.Helpers`
 
-**Test pattern**: Use `TestInitialize`/`TestCleanup` with `_tempDir` (same as ClipMetaFinderTests). No shared scratch dir — temp dir is wiped entirely in cleanup.
+**Test pattern**: Use `TestInitialize`/`TestCleanup` with `_tempDir` (same as ClipMetaFinderTests). No shared scratch dir, temp dir is wiped entirely in cleanup.
 
 #### Step-by-step
 
@@ -546,7 +546,7 @@ public class FindCommandTests
 dotnet build clipmetascribe.Tests 2>&1 | tail -5
 ```
 
-Expected: compile error — `FindCommand` does not exist.
+Expected: compile error, `FindCommand` does not exist.
 
 - [ ] **Step 3: Implement FindCommand**
 
@@ -605,7 +605,7 @@ internal static class FindCommand
     }
 ```
 
-**4b. Add `--find` check in Main** — insert this block BETWEEN the `filePath` extraction and the `File.Exists` check:
+**4b. Add `--find` check in Main**, insert this block BETWEEN the `filePath` extraction and the `File.Exists` check:
 
 Find this exact sequence in Program.cs:
 ```csharp
@@ -635,7 +635,7 @@ Insert between them (after the `filePath =` line, before the `if (filePath == nu
 
 ```
 
-**4c. Update PrintUsage** — in the raw string literal, add to the Usage section:
+**4c. Update PrintUsage**, in the raw string literal, add to the Usage section:
 ```
   clipmetascribe "C:\clips\" --find game "Team Fortress 2"
 ```

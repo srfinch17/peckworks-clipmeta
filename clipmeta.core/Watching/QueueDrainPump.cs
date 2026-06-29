@@ -5,7 +5,7 @@ namespace ClipMetaCore.Watching;
 /// <summary>
 /// Background driver that makes the deferred-tag queue zero-touch: while the queue holds entries
 /// whose clips are still locked, it polls their lock state and drains each one the moment its lock
-/// clears — so the LAST clip of a session lands with no explicit flush when the player closes. It
+/// clears, so the LAST clip of a session lands with no explicit flush when the player closes. It
 /// idles (zero CPU) on an event when the queue is empty, woken by each enqueue.
 /// <para>
 /// Why a poll and not a FileSystemWatcher / process-exit hook: a player RELEASING its file handle
@@ -46,7 +46,7 @@ public sealed class QueueDrainPump : IDisposable
     /// <param name="pollInterval">How long to wait between drains while a queued clip stays locked.</param>
     /// <param name="journal">
     /// Optional journal that receives a <see cref="DrainedTag"/> for each clip the background loop
-    /// auto-flushes. Synchronous callers must pass <see langword="null"/> — only the pump feeds the
+    /// auto-flushes. Synchronous callers must pass <see langword="null"/>, only the pump feeds the
     /// journal, so results are reported exactly once when the next foreground tool call checks it.
     /// </param>
     public QueueDrainPump(
@@ -72,7 +72,7 @@ public sealed class QueueDrainPump : IDisposable
         _thread.Start();
     }
 
-    /// <summary>Signals that the queue may have work — call after every enqueue.</summary>
+    /// <summary>Signals that the queue may have work, call after every enqueue.</summary>
     public void Wake()
     {
         if (!_disposed)
@@ -106,7 +106,7 @@ public sealed class QueueDrainPump : IDisposable
                 }
 
                 if (report.StillQueued.Count == 0)
-                    break; // nothing left locked — go idle until the next wake
+                    break; // nothing left locked, go idle until the next wake
 
                 if (_cts.Token.WaitHandle.WaitOne(_pollInterval))
                     return; // cancelled during the wait
