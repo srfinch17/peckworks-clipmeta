@@ -2,6 +2,8 @@
 
 **🌐 Project site: https://srfinch17.github.io/peckworks-clipmeta/** — what it is, how voice-tagging works, and the full gaming-vs-review decision trees.
 
+**⬇ Download (Windows 10/11, 64-bit): [latest release](https://github.com/srfinch17/peckworks-clipmeta/releases/latest)** — `clipmeta.mcpb` for one-click install into Claude Desktop, plus optional command-line tools. Self-contained; no .NET install needed.
+
 A suite of C# tools for reading and writing metadata **inside** MP4 files, so tags travel with the file. Zero external dependencies in production code — pure .NET BCL only.
 
 Custom fields live in the `com.peckworkslab.clipmeta` reverse-domain namespace inside standard MP4 `----` freeform atoms. Well-known fields: `game`, `players`, `tags`, `timecode`, `rating`, `notes` — plus arbitrary custom names. Multi-value fields are pipe-delimited.
@@ -44,14 +46,14 @@ An MCP (Model Context Protocol) server exposing the clipmeta tools to MCP hosts 
 
 #### Installing in Claude Desktop
 
-1. Build the bundle (or grab a built one): `tools/pack-mcpb.ps1` → `dist/clipmeta.mcpb` and `dist/clipmeta-unpacked/`.
+1. **Download `clipmeta.mcpb`** from the [latest release](https://github.com/srfinch17/peckworks-clipmeta/releases/latest). (Developers can build it instead with `tools/pack-mcpb.ps1` → `dist/clipmeta.mcpb` and `dist/clipmeta-unpacked/`.)
 2. In Claude Desktop: **Settings → Extensions → Advanced settings** → under *Extension Developer*, click **Install Extension…** and pick `clipmeta.mcpb`.
 3. When prompted, pick your **clips folder** — this becomes the sandbox. (You can change it later on the extension's settings card.)
 4. Open a new conversation and ask Claude about your clips.
 
 Known wrinkles:
 - **Microsoft Store build of Claude Desktop:** the packed `.mcpb` install silently does nothing (upstream bug — details in `docs/PITFALLS.md`). Use **Install Unpacked Extension** and select the `dist/clipmeta-unpacked/` folder instead. Updating later = reinstall over the top, same button.
-- **SmartScreen:** the executable is not code-signed (fine for personal use; signing is planned before any public distribution). If Windows warns, it's "More info → Run anyway".
+- **SmartScreen:** the executable is not code-signed, so Windows may warn "unknown publisher" on first run — "More info → Run anyway". (Real code signing needs a paid certificate.)
 
 #### If something misbehaves
 
