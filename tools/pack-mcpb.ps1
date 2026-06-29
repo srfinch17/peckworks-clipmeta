@@ -58,19 +58,27 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
 $exePath = Join-Path $publishDir 'clipmetamcp.exe'
 if (-not (Test-Path $exePath)) { throw "expected publish output not found: $exePath" }
 
-# ── 1b. Version gate: manifest and exe must agree ────────────────────────────────────
-# The server advertises its assembly InformationalVersion (set in clipmetamcp.csproj) in the
-# MCP initialize result; the manifest version is what Claude Desktop displays for the bundle.
-# Shipping a bundle where they disagree means the UI and the protocol report different
-# versions — fail the pack instead. (ProductVersion may carry a '+<commit>' suffix; the
-# user-facing version is the part before it, matching McpSession.ReadAssemblyVersion.)
-$manifest   = Get-Content (Join-Path $PSScriptRoot 'mcpb-manifest.json') -Raw | ConvertFrom-Json
+# ── 1b. Stamp the manifest from the canonical VERSION, then gate manifest vs exe ─────
+# VERSION (repo root) is the single source; Directory.Build.props stamps it into every assembly,
+# and we stamp it into the bundle manifest here so the manifest can never drift from the product.
+# The gate below is the backstop: the exe's ProductVersion (its InformationalVersion, also from
+# VERSION) must equal the manifest version, or the UI and the protocol would report different
+# versions. (ProductVersion may carry a '+<commit>' suffix; the user-facing version is the part
+# before it, matching ClipMetaCore.ClipMetaVersion / McpSession.ServerVersion.)
+$manifestPath = Join-Path $PSScriptRoot 'mcpb-manifest.json'
+$version      = (Get-Content (Join-Path $repoRoot 'VERSION') -Raw).Trim()
+# Targeted text edit (not a JSON round-trip) so the hand-formatted manifest keeps its layout.
+# Matches the standalone "version" key only — "manifest_version" has a non-quote char before it.
+$manifestText = (Get-Content $manifestPath -Raw) -replace '("version"\s*:\s*")[^"]*(")', "`${1}$version`${2}"
+Set-Content -Path $manifestPath -Value $manifestText -NoNewline
+
+$manifest   = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $exeVersion = ((Get-Item $exePath).VersionInfo.ProductVersion -split '\+')[0]
 if (-not $exeVersion) { throw "could not read ProductVersion from $exePath" }
 if ($exeVersion -ne $manifest.version) {
     throw ("version mismatch: tools/mcpb-manifest.json says '{0}' but clipmetamcp.exe says '{1}'. " +
-           "Update <InformationalVersion> in clipmetamcp/clipmetamcp.csproj and the manifest together." `
-           -f $manifest.version, $exeVersion)
+           "Both derive from the repo-root VERSION file — rebuild so the exe picks up VERSION, " +
+           "or run tools/bump-version.ps1 to change it." -f $manifest.version, $exeVersion)
 }
 
 # ── 2. Stage the bundle layout: manifest.json + server/clipmetamcp.exe ──────────────

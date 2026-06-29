@@ -34,9 +34,10 @@ public sealed class McpSession
 
     /// <summary>
     /// Server version advertised in the initialize result. Single-sourced from the assembly's
-    /// InformationalVersion (set once in clipmetamcp.csproj) so the exe metadata, the initialize
-    /// result, and the bundle manifest can never disagree — pack-mcpb.ps1 fails the build if the
-    /// manifest version doesn't match the published exe.
+    /// InformationalVersion, which Directory.Build.props stamps from the repo-root VERSION file, so
+    /// the exe metadata, the initialize result, and the bundle manifest can never disagree —
+    /// pack-mcpb.ps1 stamps the manifest from VERSION and fails the build if it doesn't match the
+    /// published exe.
     /// </summary>
     public static readonly string ServerVersion = ReadAssemblyVersion();
 
