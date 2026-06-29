@@ -1,5 +1,7 @@
 # peckworks-clipmeta
 
+**🌐 Project site: https://srfinch17.github.io/peckworks-clipmeta/** — what it is, how voice-tagging works, and the full gaming-vs-review decision trees.
+
 A suite of C# tools for reading and writing metadata **inside** MP4 files, so tags travel with the file. Zero external dependencies in production code — pure .NET BCL only.
 
 Custom fields live in the `com.peckworkslab.clipmeta` reverse-domain namespace inside standard MP4 `----` freeform atoms. Well-known fields: `game`, `players`, `tags`, `timecode`, `rating`, `notes` — plus arbitrary custom names. Multi-value fields are pipe-delimited.
