@@ -1,0 +1,74 @@
+name: Release
+
+# Builds the three downloadable assets (clipmeta.mcpb, the unpacked fallback zip, and the
+# self-contained CLI zip) and publishes a GitHub Release whenever a version tag (vX.Y.Z) is pushed.
+#
+# A manual "Run workflow" (workflow_dispatch) builds the SAME assets and uploads them to the run for
+# inspection, WITHOUT publishing a release: a safe way to test the build before cutting a real tag.
+#
+# Windows runner is load-bearing: the assets are self-contained win-x64 single-file binaries and
+# tools/pack-mcpb.ps1 is PowerShell; the product is Windows-only (see CLAUDE.md "Versioning").
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the Release and upload assets
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # VERSION (repo root) is the single canonical version, stamped into every assembly. A tag whose
+      # number disagrees with VERSION would publish binaries that self-report a different version, so
+      # fail fast. Enforced on tag pushes only (a dispatch test run has no version tag).
+      - name: Verify the tag matches VERSION
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $tag = '${{ github.ref_name }}' -replace '^v', ''
+          if ($version -ne $tag) {
+            throw "tag '$tag' does not match VERSION '$version'. Run tools/bump-version.ps1 and re-tag."
+          }
+          Write-Host "OK: tag $tag matches VERSION $version"
+
+      - name: Build release assets
+        shell: pwsh
+        run: ./tools/build-release-artifacts.ps1
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ github.ref_name }}' `
+            dist/clipmeta.mcpb `
+            dist/clipmeta-unpacked.zip `
+            dist/clipmeta-cli-win-x64.zip `
+            --title "ClipMeta ${{ github.ref_name }}" `
+            --notes-file .github/release-notes.md `
+            --latest
+
+      - name: Upload assets to the run (test runs only, no release)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipmeta-release-assets
+          path: |
+            dist/clipmeta.mcpb
+            dist/clipmeta-unpacked.zip
+            dist/clipmeta-cli-win-x64.zip
+          if-no-files-found: error
