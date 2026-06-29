@@ -1,0 +1,19 @@
+<Project>
+  <!--
+    Product-scoped version certainty. The repo-root VERSION file is the SINGLE canonical
+    source: every ClipMeta assembly (core, view, scribe, mcp + tests) is stamped from it at
+    build time, so the CLIs' version-flag output and the MCP server's serverInfo.version can
+    never disagree. To change the version, run tools/bump-version.ps1 (which rewrites VERSION
+    and re-stamps the .mcpb manifest); never hand-edit a version in a csproj.
+
+    A version bump is not LIVE in an installed artifact until that artifact is rebuilt,
+    repacked, and reinstalled. See CLAUDE.md "Versioning".
+  -->
+  <PropertyGroup>
+    <ClipMetaVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</ClipMetaVersion>
+    <Version>$(ClipMetaVersion)</Version>
+    <AssemblyVersion>$(ClipMetaVersion)</AssemblyVersion>
+    <FileVersion>$(ClipMetaVersion)</FileVersion>
+    <InformationalVersion>$(ClipMetaVersion)</InformationalVersion>
+  </PropertyGroup>
+</Project>

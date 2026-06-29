@@ -15,7 +15,7 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 | `clipmeta.core` | `ClipMetaCore` | All business logic: MP4 parse/read/write, schema, search/index, logging. Zero NuGet deps. |
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
 | `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (10 commands, incl. `--copy-from` and `--flush-queue`; write ops also batch over a directory). References Core. |
-| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. **v1.6.0** (pass-7). |
+| `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. Product version **1.0.0** (first public release; latest feature work is pass-7 — see Versioning). |
 | `clipmetaview.Tests` | — | MSTest, 101 tests. |
 | `clipmetascribe.Tests` | — | MSTest, 494 tests (incl. real-clip integration and byte-level media-integrity tests). |
 | `clipmetamcp.Tests` | — | MSTest, 132 tests (protocol shape, tool behavior, sandbox escapes, stdout purity). |
@@ -76,6 +76,22 @@ dotnet test   --nologo --no-build -v q
 - **New machine?** If restore fails with `NU1100`, the machine likely has no NuGet source. Run:
   `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`
 - **Changed an MCP tool registration or a CLI command surface? Run the FULL relevant test project, not a `--filter`.** Surface-wide assertions live OUTSIDE your diff — e.g. `clipmetamcp.Tests` `ToolsList_ContainsTheFullToolSurface` asserts the exact tool set and registration order, so adding a tool without updating it passes a filtered run and fails only on the full suite. (It bit us registering `library_watching`.)
+
+---
+
+## Versioning (product-scoped, one canonical source)
+
+The repo-root **`VERSION`** file is the single source of truth for the whole product (SemVer). Nothing else is authoritative — everything is stamped *from* it:
+
+- **Assemblies:** `Directory.Build.props` reads `VERSION` into `<Version>`/`<InformationalVersion>` for **every** project. Never put a `<Version>`/`<AssemblyVersion>` in a csproj — it would shadow the canonical source.
+- **Self-reports (no hardcoded version literals anywhere):** all three binaries answer `--version` by reading their stamped assembly value via `ClipMetaCore.ClipMetaVersion.Current`; the MCP server also advertises it in `serverInfo.version` (`McpSession.ServerVersion`).
+- **The `.mcpb` bundle manifest** (`tools/mcpb-manifest.json`) is stamped from `VERSION` by `bump-version.ps1` and re-stamped + gated against the published exe by `pack-mcpb.ps1` (a mismatch fails the pack).
+
+Tools (`tools/`):
+- `bump-version.ps1 <major|minor|patch|set X.Y.Z>` — the **deliberate** bump: rewrites `VERSION`, re-stamps the manifest. Run it when shipping, not on every commit.
+- `check-version.ps1` — drift check: probes each artifact's real self-report and prints OK/DRIFT per artifact. `-NoBuild` to skip the build.
+
+**The rule that trips people up:** a bump is **not live in a built/installed artifact until that artifact is rebuilt, repacked, and reinstalled.** Editing `VERSION` makes the repo say the new number instantly, but a running binary / the `.mcpb` installed in Claude Desktop still reports the old one until its own deploy step runs. `check-version.ps1` sees the *repo-built* exe, not what Desktop is running — the installed bundle is verified by reinstalling. (Reset to **1.0.0** for the first public release; pass-N remains the stable feature id, and 1.0.0 supersedes the internal 1.0–1.6 bundle versions.)
 
 ---
 

@@ -24,7 +24,7 @@ internal static class Program
 
         if (ContainsFlag(args, "--version"))
         {
-            Console.WriteLine("clipmetascribe 1.0.0 (ClipMetaCore 1.0.0)");
+            Console.WriteLine($"clipmetascribe {ClipMetaCore.ClipMetaVersion.Current}");
             return 0;
         }
 

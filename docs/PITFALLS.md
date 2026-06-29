@@ -8,6 +8,37 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-06-29 — A forged NTFS creation-time is `recent_write` working AS DESIGNED, not an "mtime" bug
+**Symptom:** A v1 dogfood deliberately bumped an already-tagged clip's timestamps to now
+(PowerShell: `$i.LastWriteTime/$i.CreationTime/$i.LastAccessTime = Get-Date`) and the clip
+re-surfaced as a high-confidence `recent_write`. The in-session narration (and a first-draft
+handoff doc) called this an **"mtime-inversion bug"** and filed a deferred "mtime fix."
+**Cause / reality:** `RecentWriteSignal` reads **only `CreationTimeUtc`** — there is no
+write-time path to invert. The bump set `CreationTime` too, so the file genuinely read
+"created now" and the signal *correctly* classified it as a fresh save. It is indistinguishable
+from a real fresh clip by design. The `SelfActionLedger` did not mask it because (a) `File.Replace`
+preserves the destination's original creation time, so tagging never made _6 look fresh, and
+(b) the ledger's ~5-min self-write window had expired and it guards ClipMeta's OWN actions, not
+a user's external `touch`.
+**Disposition:** WORKS AS INTENDED. No code change. The "deferred mtime fix" was a phantom —
+it targeted a code path that does not exist. (See the foundational `2026-06-26 — recent_write
+must key on CREATION time` entry below for why creation-time is the right key.)
+**Lesson:** Before recording a dogfood symptom as a bug, reconcile the *suspected mechanism*
+against the code. "mtime bumped → re-surfaced" is impossible here; only a creation-time forge
+explains it, and that is the design behaving correctly. A manual timestamp forge is not a
+normal-path trigger — don't add a guard or a fix for it.
+
+## 2026-06-29 — A `--` in an MSBuild XML comment breaks every build (version-certainty setup)
+**Symptom:** Adding `Directory.Build.props` with a comment that documented the CLIs' `--version`
+flag failed all seven projects at evaluation: `MSB4024 ... An XML comment cannot contain '--'`.
+**Cause:** XML forbids `--` inside a comment, and MSBuild imports `Directory.Build.props` before
+anything compiles, so the malformed comment takes the whole build down (not one project). The
+literal `--version` / any `--flag` in the comment is the trap.
+**Fix:** Reworded the comment to avoid `--` (e.g. "version-flag output"). When documenting CLI
+flags inside a `.props`/`.csproj` comment, never write a bare double-dash.
+**Lesson:** prose that's safe in a `.cs` `//` comment can be a hard build error in an MSBuild XML
+comment — `--`, unescaped `<`/`&`, etc. Build the file, don't eyeball it.
+
 ## 2026-06-28 — Review-mode resolver: diagnose live, bind from history (pass-7)
 
 `WatchingResolver.ResolveReview` must answer two questions from two time-bases. "Is a foreign player

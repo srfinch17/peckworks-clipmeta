@@ -24,6 +24,12 @@ internal static class Program
         if (args.Length == 1 && args[0].Equals("--selftest", StringComparison.OrdinalIgnoreCase))
             return SelfTest.Run();
 
+        if (args[0].Equals("--version", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"clipmetamcp {McpSession.ServerVersion}");
+            return 0;
+        }
+
         if (args[0].Equals("--install", StringComparison.OrdinalIgnoreCase))
         {
             if (!TryGetFlagValue(args, "--library-root", out string? libraryRoot) ||
@@ -43,6 +49,7 @@ internal static class Program
 
         Console.Error.WriteLine("Usage: clipmetamcp                                     serve MCP over stdio (spawned by an MCP host)");
         Console.Error.WriteLine("       clipmetamcp --selftest                          spawn self and verify the MCP handshake");
+        Console.Error.WriteLine("       clipmetamcp --version                           print the version and exit");
         Console.Error.WriteLine("       clipmetamcp --install [--library-root <folder>] add this server to claude_desktop_config.json");
         Console.Error.WriteLine("                             [--config <path>]         (manual fallback when bundle install isn't available)");
         Console.Error.WriteLine("       clipmetamcp --uninstall [--config <path>]       remove this server from the config again");
