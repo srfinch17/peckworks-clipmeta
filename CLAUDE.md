@@ -56,6 +56,7 @@ A self-contained GitHub Pages info/landing page lives at `docs/index.html` (buil
 - **Big-endian everywhere** for MP4 IO, go through `BigEndianReader`/`BigEndianWriter`, never raw `BinaryReader.ReadInt32()` in parse/write code.
 - **Never load `mdat` into memory**; stream-copy. The source file is **never opened for writing**, mutations go to a temp file, verified by re-parse, then `File.Replace`.
 - XML doc comments on all public types/methods. Named constants, no magic numbers.
+- **No em-dashes.** Do not use the em-dash character (Unicode U+2014, the long dash) anywhere: docs, code comments, string literals, README, the landing page, commit messages, or release notes. Use commas, colons, periods, or parentheses (and "to" for ranges). Search the working tree for U+2014 and remove every hit before committing or publishing. Keep cleanup commit messages neutral.
 - `BoxNode` keeps its name until a second media format actually earns a generic abstraction.
 - **Testable surfaces.** A thin shell that builds its own dependency internally (e.g. `WatchingCommand` / the MCP handler calling `ProcessWindowSource.ForCurrentPlatform()`) takes a *trailing optional* injectable that defaults to the real impl, so rendering/output can be tested with a fake without changing production wiring.
 
