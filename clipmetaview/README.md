@@ -37,7 +37,7 @@ tf2testclip1.mp4  (69.5 MB)
             ├── hdlr  Handler  [...]
             └── ilst  Metadata Items  [...]
                 ├── ©nam  Title  "My Video"  ← [EDITABLE]
-                ├── ©ART  Artist  "Scott Finley"  ← [EDITABLE]
+                ├── ©ART  Artist  "Alex Rivers"  ← [EDITABLE]
                 ├── ©alb  Album  "Clips 2024"  ← [EDITABLE]
                 └── covr  Cover Art  "[JPEG image, 14532 bytes]"  ← [EDITABLE]
 

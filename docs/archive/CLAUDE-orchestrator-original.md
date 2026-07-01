@@ -200,7 +200,7 @@ myvideo.mp4  (14.2 MB)
 │           ├── hdlr  Handler  [45 bytes]
 │           └── ilst  Metadata Items  [900 bytes]
 │               ├── ©nam  Title  "My Vacation 2024"  ← [EDITABLE]
-│               ├── ©ART  Artist  "Scott Finley"  ← [EDITABLE]
+│               ├── ©ART  Artist  "Alex Rivers"  ← [EDITABLE]
 │               └── desc  Description  ""  ← [EDITABLE]
 └── mdat  Media Data  [12398012 bytes @ 0xB4AF]  (raw media, not expanded)
 
