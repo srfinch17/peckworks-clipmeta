@@ -325,7 +325,7 @@ public class StatsCommandTests
 - [ ] **Step 2: Run tests to verify they fail (StatsCommand doesn't exist yet)**
 
 ```
-cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
+cd C:\path\to\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "StatsCommandTests" --no-build 2>&1 | head -20
 ```
 

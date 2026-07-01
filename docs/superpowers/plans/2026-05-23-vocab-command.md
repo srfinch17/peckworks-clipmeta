@@ -6,7 +6,7 @@
 
 **Architecture:** `ClipMetaVocab.Enumerate` (in `clipmeta.core/Read/`) scans the directory, reads fields via `ClipMetaReader.GetFields`, and returns a `VocabResult` record containing a value→count dictionary and a total clip count. Pipe-separated fields (tags, players, timecode, defined in `ClipMetaSchema.PipeFields`) are split on `|` so each pipe-item is counted individually. `VocabCommand` in `clipmetascribe/Commands/` formats and prints the result. Program.cs wires `--vocab` before the `File.Exists` check (same pattern as `--find`), using the existing `GetFlag` helper to read the single field argument.
 
-**Tech Stack:** C# / .NET, MSTest 4, no external packages. Solution root: `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`.
+**Tech Stack:** C# / .NET, MSTest 4, no external packages. Solution root: `C:\path\to\peckworks-clipmeta`.
 
 ---
 
@@ -224,7 +224,7 @@ public class ClipMetaVocabTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```
-cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
+cd C:\path\to\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "ClipMetaVocabTests" --verbosity minimal
 ```
 

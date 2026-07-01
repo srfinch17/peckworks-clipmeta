@@ -12,7 +12,7 @@
 
 ## Codebase Context
 
-**Solution root:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`
+**Solution root:** `C:\path\to\peckworks-clipmeta`
 
 No `.sln` file. Run tests with:
 ```

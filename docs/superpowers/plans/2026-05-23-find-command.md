@@ -249,7 +249,7 @@ public class ClipMetaFinderTests
 - [ ] **Step 2: Run tests to verify they fail (ClipMetaFinder doesn't exist yet)**
 
 ```
-cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
+cd C:\path\to\peckworks-clipmeta
 dotnet build clipmetascribe.Tests 2>&1 | tail -5
 ```
 

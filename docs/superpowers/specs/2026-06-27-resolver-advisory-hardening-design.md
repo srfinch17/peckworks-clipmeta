@@ -10,7 +10,7 @@
 ## 0. Reconciliation, what the dogfood log got right, wrong, and by-design
 
 This spec follows the standing discipline: a dogfood transcript is a **symptom log**, not a
-diagnosis. Every finding in the v1.4.0 dogfood (`C:\Users\srfin\Videos\ClipmetaTesting`, 41 clips)
+diagnosis. Every finding in the v1.4.0 dogfood (`C:\path\to\ClipmetaTesting`, 41 clips)
 was reconciled against the real code **before** scoping. The verdicts:
 
 | Log finding | Verdict | Evidence |
