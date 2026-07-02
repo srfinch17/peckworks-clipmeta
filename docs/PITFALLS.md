@@ -8,6 +8,40 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Known limitation: a hard process kill mid-write can orphan a `<file>.<guid>.tmp` sibling
+**Symptom:** if the process is killed hard (power loss, `kill -9`, task-manager "End task") between
+the write engine creating its `<clip>.<guid>.tmp` temp file and the terminal `File.Replace` swap,
+the temp file is never cleaned up and is left sitting next to the clip permanently.
+**Why it's a known limitation, not a bug:** it's harmless, the temp file never collides with
+anything (the GUID makes every one unique) and the original clip is never touched until the swap
+succeeds, so no data is at risk. It's just clutter. There is no sweeper that finds and deletes
+stale `*.tmp` siblings on startup or on demand.
+**Workaround:** manually delete `<clip-directory>\*.<guid-shaped>.tmp` files after a hard kill;
+they are always safe to remove (a live write in progress uses a fresh GUID each time, so a
+leftover from a *previous* crash is never the one an in-flight write is using).
+**Decision:** the owner prefers documenting this over building a sweeper, a background scan for
+orphaned temp files adds machinery for a cosmetic, self-evident problem (a stray `.tmp` file is
+obvious when you see it) that a hard kill mid-write is rare enough not to justify.
+
+## 2026-07-01, Known limitation: `ClipBackup.MakeBackupPath` is second-resolution with no collision disambiguator
+**Symptom:** the timestamped backup naming convention (`clip.mp4.bak-yyyyMMdd-HHmmss`) has
+second-resolution, not sub-second. Two backups of the same clip taken within the same wall-clock
+second produce the identical backup filename, and the second write's `File.Replace` silently
+overwrites the first backup, the earlier backup is gone with no warning.
+**Where:** `clipmeta.core/Write/ClipBackup.cs`, `MakeBackupPath`. Pre-existing, shared by both the
+CLI (`clipmetascribe --backup`) and the MCP write tools (`WriteTools.cs`), since both delegate to
+the same Core method.
+**Why it's a known limitation, not a bug:** the window is narrow, it only bites two full
+metadata-write-plus-backup cycles issued back-to-back inside the same second, which is not how a
+human drives either tool interactively. (The MCP server's single-flight write lock already
+serializes writes, so this is a CLI-scripting-loop scenario, not a normal-use one.)
+**Workaround:** a caller issuing rapid, scripted, repeated `--backup` writes against the same clip
+should serialize them with a delay of at least 1 second between writes to guarantee distinct
+backup timestamps.
+**Decision:** documented rather than fixed, the owner prefers documenting narrow, low-probability
+edges over adding disambiguation machinery (e.g. a sub-second stamp or a collision-retry suffix)
+for a case this rare.
+
 ## 2026-07-01, Index format silently mis-split a field name containing a space (task B7)
 **Symptom (nemesis-demonstrated):** `--set "kill count" 5` stores fine in the MP4, but
 `--index-search "kill count" 5` found nothing, while `--index-search kill "count 5"` found it.
@@ -658,6 +692,8 @@ observed behavior here when measured.
   on the actual app version before they reach user-facing docs. We verified the *manifest
   schema* against live docs but never the *install gesture*. (Phase-4 `--install` exists
   precisely because the bundle flow could change under us; same reasoning applies to docs.)
+
+### 2026-06-12, MCP library sandbox containment checked the lexical path, not the OS-canonical one (fixed)
 - **Symptom:** The MCP library sandbox checked `resolvedPath.StartsWith(root)` after
   `Path.GetFullPath`, and an adversarial probe **escaped it**: a directory junction inside the
   library pointing outside it passes the lexical check while `FileStream` happily follows the
@@ -786,12 +822,12 @@ These are the things that **corrupt files silently** if missed. Each should have
 | 4 | `hdlr` missing when creating `meta` from scratch | QuickTime/Final Cut **reject** a `meta` box with no `hdlr` (handler_type `mdir`). Scenario-3 test uses a file with no existing udta/meta/ilst. |
 | 5 | Foreign `ilst` atoms corrupted on rewrite | Copy all non-`com.peckworkslab.clipmeta` atoms (iTunes `©nam` etc., third-party `----`) byte-for-byte, in order, before appending ours. Test verifies `©nam` unchanged. |
 | 6 | `stco` adjusted when `mdat` precedes `moov` | Only adjust offsets when `mdat` starts **after** the end of `moov`. mdat-first files must be left unchanged. |
-| 7 | `co64` / `stco` value exceeds 32-bit boundary undetected | For 32-bit `stco`, fail if `offset + delta > UInt32.MaxValue`; warn under 10% headroom (file approaching 4 GB should already use `co64`). |
+| 7 | `co64` / `stco` value exceeds 32-bit boundary undetected | For 32-bit `stco`, fail if `offset + delta > UInt32.MaxValue`. (Designed, not implemented: a "warn under 10% headroom" advisory was spec'd but the shipping behavior is only the hard refusal, see `WriteAdjustedStco`.) |
 | 8 | Temp file left behind on exception | On any failure, delete the temp file and rethrow with context; the source is never opened for writing. Test asserts no temp file remains after a forced exception. |
 
 ### Other write-engine invariants
 - **The Golden Rule:** the source file is never opened for writing. All mutations → temp file → re-parse to verify → `File.Replace` (atomic same-filesystem swap).
 - **Big-endian everywhere.** Every multi-byte MP4 integer is big-endian; always use `BigEndianReader`/`BigEndianWriter`.
 - **The `©` prefix is byte `0xA9`.** Read FourCCs with `Encoding.Latin1`, not ASCII, or it mangles. Compare against `"©nam"` etc.
-- **`free` padding:** on first clipmeta write, append a 512-byte `free` box after `ilst` so future re-tags don't shift `mdat` (avoids stco/co64 churn). Exceeding the padding triggers a full rewrite.
+- **`free` padding (designed, not implemented):** the write-engine design called for appending a 512-byte `free` box after `ilst` on first clipmeta write, so future re-tags wouldn't shift `mdat` and avoid stco/co64 churn. The shipping writer does not do this, it strips `free` boxes from `ilst` and rewrites (`Mp4Writer.cs`, the `child.Type == "free"` skip). Revisit if re-tag churn becomes a problem.
 - **`--set field ""` deletes** the atom, empty and absent are not distinguished.
