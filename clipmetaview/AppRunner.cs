@@ -1,4 +1,5 @@
 using ClipMetaCore.Mp4;
+using ClipMetaCore.Read;
 using ClipMetaCore.Rendering;
 
 namespace ClipMetaView;
@@ -19,11 +20,22 @@ public static class AppRunner
     public const int ExitParseError = 2;
 
     /// <summary>
-    /// Validates arguments, parses the MP4 file, renders the box tree, and returns an exit code.
+    /// Validates arguments, parses the MP4 file, renders the box tree (or its JSON/definitions
+    /// equivalent), and returns an exit code.
     /// </summary>
-    /// <param name="args">Command-line arguments passed to the process.</param>
+    /// <param name="args">
+    /// Command-line arguments passed to the process. Grammar:
+    /// <list type="bullet">
+    /// <item><c>&lt;path.mp4&gt;</c>, ASCII tree + summary (the default, unchanged).</item>
+    /// <item><c>&lt;path.mp4&gt; --json</c> or <c>--json &lt;path.mp4&gt;</c>, box-tree JSON. The flag
+    /// position does not change the output. <c>--json</c> requires a path.</item>
+    /// <item><c>--definitions</c>, box-definitions JSON. Needs no path; extra args are ignored.</item>
+    /// <item><c>--json</c> and <c>--definitions</c> together, or any unknown <c>--flag</c>, is
+    /// <see cref="ExitBadArgs"/>.</item>
+    /// </list>
+    /// </param>
     /// <param name="writer">
-    /// Destination for tree output. When <c>null</c>, defaults to <see cref="Console.Out"/>.
+    /// Destination for tree/JSON output. When <c>null</c>, defaults to <see cref="Console.Out"/>.
     /// Tests pass a <see cref="StringWriter"/> here to avoid global console state.
     /// </param>
     /// <returns>
@@ -31,33 +43,76 @@ public static class AppRunner
     /// </returns>
     public static Task<int> RunAsync(string[] args, TextWriter? writer = null)
     {
-        if (args.Length == 0)
+        writer ??= Console.Out;
+
+        bool wantJson = false;
+        bool wantDefinitions = false;
+        string? path = null;
+
+        foreach (string arg in args)
         {
-            Console.Error.WriteLine("Usage: clipmetaview <path-to-file.mp4>");
+            switch (arg)
+            {
+                case "--json": wantJson = true; break;
+                case "--definitions": wantDefinitions = true; break;
+                default:
+                    if (arg.StartsWith("--", StringComparison.Ordinal))
+                    {
+                        Console.Error.WriteLine($"Error: Unknown option: {arg}");
+                        return Task.FromResult(ExitBadArgs);
+                    }
+                    path ??= arg;
+                    break;
+            }
+        }
+
+        if (wantJson && wantDefinitions)
+        {
+            Console.Error.WriteLine("Error: --json and --definitions cannot be combined.");
+            return Task.FromResult(ExitBadArgs);
+        }
+
+        // --definitions: clip-independent, needs no path.
+        if (wantDefinitions)
+        {
+            writer.WriteLine(BoxTreeJson.DefinitionsToJson(BoxDefinitions.AllDefinitions()));
+            return Task.FromResult(ExitSuccess);
+        }
+
+        if (path is null)
+        {
+            Console.Error.WriteLine("Usage: clipmetaview <path-to-file.mp4> [--json]");
+            Console.Error.WriteLine("       clipmetaview --definitions");
             Console.Error.WriteLine("  Displays the internal box/atom structure of an MP4 file.");
-            Console.Error.WriteLine("  Editable metadata fields are highlighted.");
             return Task.FromResult(ExitBadArgs);
         }
 
-        string filePath = args[0];
-
-        if (!File.Exists(filePath))
+        if (!File.Exists(path))
         {
-            Console.Error.WriteLine($"Error: File not found: {filePath}");
+            Console.Error.WriteLine($"Error: File not found: {path}");
             return Task.FromResult(ExitBadArgs);
         }
 
-        if (!Path.GetExtension(filePath).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+        if (!Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
         {
-            Console.Error.WriteLine($"Error: Only .mp4 files are supported. Got: {filePath}");
+            Console.Error.WriteLine($"Error: Only .mp4 files are supported. Got: {path}");
             return Task.FromResult(ExitBadArgs);
         }
 
         try
         {
-            var root = Mp4Parser.ParseFile(filePath);
-            TreeRenderer.Render(root, filePath, writer);
-            TreeRenderer.RenderSummary(root, writer);
+            var root = Mp4Parser.ParseFile(path);
+
+            if (wantJson)
+            {
+                long fileSize = new FileInfo(path).Length;
+                writer.WriteLine(BoxTreeJson.ToJson(BoxTreeMapper.Map(root, path, fileSize)));
+            }
+            else
+            {
+                TreeRenderer.Render(root, path, writer);
+                TreeRenderer.RenderSummary(root, writer);
+            }
             return Task.FromResult(ExitSuccess);
         }
         catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or IOException)
