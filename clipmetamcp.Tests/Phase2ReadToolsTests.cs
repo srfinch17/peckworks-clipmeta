@@ -466,4 +466,166 @@ public class Phase2ReadToolsTests
             Directory.Delete(empty, recursive: true);
         }
     }
+
+    // ── bad file mixed in (v1.0.1 hardening, task B1) ────────────────────────────────────
+    //
+    // The nemesis review's demonstrated failure ("bricks all four MCP library tools"): a file
+    // declaring an extended-size header whose 8-byte size field is truncated at EOF made
+    // BigEndianReader hand a short array to BitConverter, which threw a raw ArgumentException
+    // outside every Core scanner's catch list. McpSession's top-level catch turns that into an
+    // isError:true tool failure rather than a process crash, but the tool call still fails
+    // instead of gracefully skipping the one bad file and returning the good results. These
+    // tools all call straight into the same Core scanners as the CLI. Doesn't need the pristine
+    // corpus, so it runs unconditionally.
+
+    [TestMethod]
+    public void TruncatedExtendedSizeHeaderFileMixedIn_AllDirectoryTools_SkipItInsteadOfErroring()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "clipmeta-p2-trunc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        byte[] truncatedExtendedSizeHeader =
+        {
+            0x00, 0x00, 0x00, 0x01,                   // size = 1 (extended)
+            0x6D, 0x64, 0x61, 0x74,                   // 'mdat'
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // extended-size field, 7 of 8 bytes
+        };
+        File.WriteAllBytes(Path.Combine(dir, "truncated.mp4"), truncatedExtendedSizeHeader);
+        try
+        {
+            var responses = McpHarness.Run(dir,
+                McpHarness.InitializeRequest,
+                McpHarness.ToolCall(2, "library_list", new JsonObject()),
+                McpHarness.ToolCall(3, "library_find", new JsonObject { ["field"] = "game", ["value"] = "x" }),
+                McpHarness.ToolCall(4, "library_vocab", new JsonObject { ["field"] = "tags" }),
+                McpHarness.ToolCall(5, "library_export", new JsonObject()),
+                McpHarness.ToolCall(6, "library_search_index", new JsonObject { ["rebuild"] = true }));
+
+            foreach (JsonObject response in responses.Skip(1).Cast<JsonObject>())
+            {
+                var result = (JsonObject)response["result"]!;
+                Assert.IsNull(result["isError"],
+                    $"response {response["id"]} errored on a truncated file: " +
+                    result["content"]?[0]?["text"]?.GetValue<string>());
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── locked file mixed in (v1.0.1 hardening, task B1) ────────────────────────────────
+    //
+    // A file locked by another process (still being written) throws IOException when the scan
+    // tries to open it, already caught before this fix, kept here as a companion regression
+    // guard alongside the truncated-file case above.
+
+    [TestMethod]
+    public void LockedFileMixedIn_AllDirectoryTools_SkipItInsteadOfErroring()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "clipmeta-p2-locked-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string locked = Path.Combine(dir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        try
+        {
+            using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            var responses = McpHarness.Run(dir,
+                McpHarness.InitializeRequest,
+                McpHarness.ToolCall(2, "library_list", new JsonObject()),
+                McpHarness.ToolCall(3, "library_find", new JsonObject { ["field"] = "game", ["value"] = "x" }),
+                McpHarness.ToolCall(4, "library_vocab", new JsonObject { ["field"] = "tags" }),
+                McpHarness.ToolCall(5, "library_export", new JsonObject()),
+                McpHarness.ToolCall(6, "library_search_index", new JsonObject { ["rebuild"] = true }));
+
+            foreach (JsonObject response in responses.Skip(1).Cast<JsonObject>())
+            {
+                var result = (JsonObject)response["result"]!;
+                Assert.IsNull(result["isError"],
+                    $"response {response["id"]} errored on a locked file: " +
+                    result["content"]?[0]?["text"]?.GetValue<string>());
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── skipped files are NAMED in scan responses (v1.0.1 hardening, task B1) ────────────
+    //
+    // Skipping a bad file must not be silent: the caller (the model, and through it the user)
+    // needs to know WHICH clip the scan could not read, or the answer looks complete when it
+    // is not. Each library scan tool surfaces an additive "skipped" array (path + error),
+    // present ONLY when at least one file was skipped, so unchanged-scenario response shapes
+    // stay byte-identical.
+
+    [TestMethod]
+    public void ScanTools_LockedFileMixedIn_ResponseNamesTheSkippedPath()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "clipmeta-p2-skipnames-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string locked = Path.Combine(dir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        try
+        {
+            using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            var responses = McpHarness.Run(dir,
+                McpHarness.InitializeRequest,
+                McpHarness.ToolCall(2, "library_find", new JsonObject { ["field"] = "game", ["value"] = "x" }),
+                McpHarness.ToolCall(3, "library_vocab", new JsonObject { ["field"] = "tags" }),
+                McpHarness.ToolCall(4, "library_export", new JsonObject()),
+                McpHarness.ToolCall(5, "library_search_index", new JsonObject { ["rebuild"] = true }));
+
+            foreach (JsonObject response in responses.Skip(1).Cast<JsonObject>())
+            {
+                var result = (JsonObject)response["result"]!;
+                Assert.IsNull(result["isError"],
+                    $"response {response["id"]} errored on a locked file: " +
+                    result["content"]?[0]?["text"]?.GetValue<string>());
+
+                JsonArray? skipped = Structured(result)["skipped"]?.AsArray();
+                Assert.IsNotNull(skipped,
+                    $"response {response["id"]} must carry a 'skipped' array naming the unreadable file");
+                Assert.IsTrue(
+                    skipped.Any(e => e!["path"]!.GetValue<string>() == locked),
+                    $"response {response["id"]}'s skipped array must name {locked}");
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void ScanTools_NoBadFiles_ResponseOmitsSkippedField()
+    {
+        // The additive field must not change the shape of a clean scan, absent, not empty.
+        string dir = Path.Combine(Path.GetTempPath(), "clipmeta-p2-noskip-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var responses = McpHarness.Run(dir,
+                McpHarness.InitializeRequest,
+                McpHarness.ToolCall(2, "library_find", new JsonObject { ["field"] = "game", ["value"] = "x" }),
+                McpHarness.ToolCall(3, "library_vocab", new JsonObject { ["field"] = "tags" }),
+                McpHarness.ToolCall(4, "library_export", new JsonObject()),
+                McpHarness.ToolCall(5, "library_search_index", new JsonObject { ["rebuild"] = true }));
+
+            foreach (JsonObject response in responses.Skip(1).Cast<JsonObject>())
+            {
+                var result = (JsonObject)response["result"]!;
+                Assert.IsNull(result["isError"]);
+                Assert.IsNull(Structured(result)["skipped"],
+                    $"response {response["id"]} must omit 'skipped' when nothing was skipped");
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

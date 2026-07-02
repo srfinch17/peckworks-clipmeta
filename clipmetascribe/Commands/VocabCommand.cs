@@ -18,7 +18,10 @@ internal static class VocabCommand
         output ??= Console.Out;
         output.WriteLine($"Scanning {directory} for field: {field}");
 
-        var result = ClipMetaVocab.Enumerate(directory, field);
+        // A locked or unparseable clip must not abort the scan; name it so the user knows to
+        // re-run once it frees up, rather than the scan silently going quiet about it.
+        var result = ClipMetaVocab.Enumerate(directory, field,
+            onFileSkipped: (path, ex) => output.WriteLine($"SKIPPED {path}: {ex.Message}"));
 
         if (result.Counts.Count == 0)
         {

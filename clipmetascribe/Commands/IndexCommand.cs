@@ -16,7 +16,10 @@ internal static class IndexCommand
     {
         output ??= Console.Out;
 
-        var data = ClipMetaIndex.Build(directory);
+        // A locked or unparseable clip must not abort the scan (one bad file must not brick the
+        // library index); name it so the user knows to re-run once it frees up.
+        var data = ClipMetaIndex.Build(directory,
+            onFileSkipped: (path, ex) => output.WriteLine($"SKIPPED {path}: {ex.Message}"));
         string indexPath = Path.Combine(directory, ClipMetaIndex.IndexFileName);
         ClipMetaIndex.WriteToFile(data, indexPath);
 

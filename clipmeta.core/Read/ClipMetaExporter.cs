@@ -16,20 +16,29 @@ public static class ClipMetaExporter
     /// <summary>
     /// Reads clipmeta fields from each path in <paramref name="filePaths"/> and returns one
     /// <see cref="ExportRecord"/> per successfully parsed file.
-    /// The internal schema field is excluded. Malformed or unreadable files are silently skipped.
+    /// The internal schema field is excluded. Malformed or unreadable files are skipped, not
+    /// thrown, so one bad clip never aborts the export.
     /// </summary>
     /// <param name="filePaths">File paths to read. May be empty.</param>
+    /// <param name="onFileSkipped">
+    /// Optional callback invoked with the file's path and the exception that caused it to be
+    /// skipped (locked, unreadable, or unparseable). Lets a caller report which file was
+    /// skipped instead of the export going silent about it. Defaults to no-op.
+    /// </param>
     /// <returns>One record per file that was parsed successfully, in input order.</returns>
-    public static IReadOnlyList<ExportRecord> GetRecords(IEnumerable<string> filePaths)
+    public static IReadOnlyList<ExportRecord> GetRecords(
+        IEnumerable<string> filePaths, Action<string, Exception>? onFileSkipped = null)
     {
         var records = new List<ExportRecord>();
         foreach (string path in filePaths)
         {
             BoxNode root;
             try { root = Mp4Parser.ParseFile(path); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (InvalidDataException) { continue; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                onFileSkipped?.Invoke(path, ex);
+                continue;
+            }
 
             records.Add(new ExportRecord(path, ClipMetaReader.GetUserFields(root)));
         }

@@ -400,23 +400,51 @@ public static class ReadTools
         };
     }
 
+    /// <summary>
+    /// Collects (path, error) pairs for files a library scan skipped, and appends them to a
+    /// response as an additive <c>skipped</c> array, ONLY when at least one file was skipped,
+    /// so unchanged-scenario response shapes stay byte-identical. Skipping must not be silent:
+    /// the caller needs to know which clip a scan could not read, or the answer looks complete
+    /// when it is not (v1.0.1 hardening, task B1).
+    /// </summary>
+    private sealed class SkippedFiles
+    {
+        private readonly List<(string Path, Exception Error)> _entries = new();
+
+        /// <summary>The callback to hand to a Core scanner's <c>onFileSkipped</c> parameter.</summary>
+        public void Record(string path, Exception error) => _entries.Add((path, error));
+
+        /// <summary>Appends the <c>skipped</c> array to <paramref name="response"/> when non-empty.</summary>
+        public void AppendTo(JsonObject response)
+        {
+            if (_entries.Count == 0) return;
+            var skipped = new JsonArray();
+            foreach ((string path, Exception error) in _entries)
+                skipped.Add(new JsonObject { ["path"] = path, ["error"] = error.Message });
+            response["skipped"] = skipped;
+        }
+    }
+
     private static JsonObject FindInLibrary(JsonObject? args, LibrarySandbox sandbox)
     {
         string root = sandbox.RequireRoot();
         string field = GetRequiredString(args, "field");
         string value = GetRequiredString(args, "value");
 
+        var skipped = new SkippedFiles();
         var paths = new JsonArray();
-        foreach (string path in ClipMetaFinder.Find(root, field, value))
+        foreach (string path in ClipMetaFinder.Find(root, field, value, onFileSkipped: skipped.Record))
             paths.Add(path);
 
-        return new JsonObject
+        var response = new JsonObject
         {
             ["field"] = field,
             ["value"] = value,
             ["matchCount"] = paths.Count,
             ["paths"] = paths,
         };
+        skipped.AppendTo(response);
+        return response;
     }
 
     private static JsonObject VocabForLibrary(JsonObject? args, LibrarySandbox sandbox)
@@ -424,7 +452,8 @@ public static class ReadTools
         string root = sandbox.RequireRoot();
         string field = GetRequiredString(args, "field");
 
-        VocabResult vocab = ClipMetaVocab.Enumerate(root, field);
+        var skipped = new SkippedFiles();
+        VocabResult vocab = ClipMetaVocab.Enumerate(root, field, onFileSkipped: skipped.Record);
 
         // Most-used first, then alphabetical, the order a human (or model) summarizing
         // "what tags do I use?" actually wants. Dictionary order would be arbitrary.
@@ -436,13 +465,15 @@ public static class ReadTools
             values[pair.Key] = pair.Value;
         }
 
-        return new JsonObject
+        var response = new JsonObject
         {
             ["field"] = field,
             ["clipsWithField"] = vocab.ClipsWithField,
             ["distinctValues"] = values.Count,
             ["values"] = values,
         };
+        skipped.AppendTo(response);
+        return response;
     }
 
     /// <summary>
@@ -457,7 +488,8 @@ public static class ReadTools
             throw new ToolException($"Unknown format '{format}'. Use 'json' or 'csv'.");
 
         IEnumerable<string> paths = Directory.EnumerateFiles(directory, "*.mp4", SearchOption.AllDirectories);
-        IReadOnlyList<ExportRecord> records = ClipMetaExporter.GetRecords(paths);
+        var skipped = new SkippedFiles();
+        IReadOnlyList<ExportRecord> records = ClipMetaExporter.GetRecords(paths, onFileSkipped: skipped.Record);
         foreach (ExportRecord record in records)
             ledger?.MarkRead(record.FilePath);
 
@@ -466,12 +498,14 @@ public static class ReadTools
             // Core's writer, byte-identical to clipmetascribe --export --format csv.
             using var csv = new StringWriter();
             ClipMetaExporter.WriteCsv(records, csv);
-            return new JsonObject
+            var csvResponse = new JsonObject
             {
                 ["format"] = "csv",
                 ["clipCount"] = records.Count,
                 ["csv"] = csv.ToString(),
             };
+            skipped.AppendTo(csvResponse);
+            return csvResponse;
         }
 
         var jsonRecords = new JsonArray();
@@ -482,12 +516,14 @@ public static class ReadTools
                 fields.TryAdd(f, v); // duplicate atoms: first wins, as in clip_get_metadata
             jsonRecords.Add(new JsonObject { ["file"] = record.FilePath, ["fields"] = fields });
         }
-        return new JsonObject
+        var jsonResponse = new JsonObject
         {
             ["format"] = "json",
             ["clipCount"] = records.Count,
             ["records"] = jsonRecords,
         };
+        skipped.AppendTo(jsonResponse);
+        return jsonResponse;
     }
 
     private static JsonObject SearchIndex(JsonObject? args, LibrarySandbox sandbox)
@@ -498,6 +534,7 @@ public static class ReadTools
 
         IndexData data;
         bool rebuilt;
+        var skipped = new SkippedFiles();
         if (!rebuildRequested && File.Exists(indexPath))
         {
             try
@@ -509,13 +546,13 @@ public static class ReadTools
             {
                 // A corrupt or unreadable index self-heals with a rescan instead of wedging
                 // the tool, the index is a cache, never the source of truth.
-                data = RebuildIndex(root, indexPath);
+                data = RebuildIndex(root, indexPath, skipped);
                 rebuilt = true;
             }
         }
         else
         {
-            data = RebuildIndex(root, indexPath);
+            data = RebuildIndex(root, indexPath, skipped);
             rebuilt = true;
         }
 
@@ -529,6 +566,7 @@ public static class ReadTools
             // stat call per file, no parsing, and makes the decision mechanical.
             ["staleClipCount"] = CountStaleClips(root, data),
         };
+        skipped.AppendTo(result);
 
         string? field = GetOptionalString(args, "field");
         if (field is null)
@@ -701,10 +739,14 @@ public static class ReadTools
         return response;
     }
 
-    /// <summary>Scans the library and persists the fresh index into the library root.</summary>
-    private static IndexData RebuildIndex(string root, string indexPath)
+    /// <summary>
+    /// Scans the library and persists the fresh index into the library root. Files the scan
+    /// skipped (locked, unreadable, or unparseable) are recorded in <paramref name="skipped"/>
+    /// so the caller can name them in its response instead of silently omitting them.
+    /// </summary>
+    private static IndexData RebuildIndex(string root, string indexPath, SkippedFiles skipped)
     {
-        IndexData data = ClipMetaIndex.Build(root);
+        IndexData data = ClipMetaIndex.Build(root, onFileSkipped: skipped.Record);
         ClipMetaIndex.WriteToFile(data, indexPath);
         return data;
     }

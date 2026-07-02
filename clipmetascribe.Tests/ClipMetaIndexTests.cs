@@ -82,6 +82,40 @@ public class ClipMetaIndexTests
         Assert.AreEqual(_tempDir, data.Directory);
     }
 
+    // ── Unreadable file mixed in (v1.0.1 hardening, task B1) ────────────────
+    //
+    // A locked file (still being written by another process) throws IOException when the
+    // scanner opens it. Before this fix that was silently swallowed with no record of which
+    // file was skipped. The scan must complete, index the good clip, and report the skip.
+
+    [TestMethod]
+    public void Build_LockedFileMixedIn_IndexesGoodFile()
+    {
+        PrepareClip("good.mp4", "game", "TF2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var data = ClipMetaIndex.Build(_tempDir);
+
+        Assert.AreEqual(1, data.Entries.Count);
+        Assert.AreEqual("good.mp4", Path.GetFileName(data.Entries[0].FilePath));
+    }
+
+    [TestMethod]
+    public void Build_LockedFileMixedIn_ReportsSkippedPath()
+    {
+        PrepareClip("good.mp4", "game", "TF2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var skipped = new List<string>();
+        ClipMetaIndex.Build(_tempDir, onFileSkipped: (path, _) => skipped.Add(path));
+
+        CollectionAssert.Contains(skipped, locked);
+    }
+
     [TestMethod]
     public void WriteRead_RoundTrips_Directory()
     {

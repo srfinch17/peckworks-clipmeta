@@ -167,6 +167,57 @@ public class ClipMetaFinderTests
         CollectionAssert.Contains(results, dest);
     }
 
+    // ── Unreadable file mixed in (v1.0.1 hardening, task B1) ────────────────
+    //
+    // Mp4Parser is deliberately lenient about a truncated box header (see
+    // Mp4ParserTruncatedFileTests): it parses to an empty tree rather than throwing, so it
+    // never reaches this scanner's catch blocks. What DOES reach them is a file that is locked
+    // by another process (e.g. still being written) when the scan tries to open it, IOException
+    // from the FileStream open. Before this fix that IOException was silently swallowed with no
+    // record of which file was skipped, "one truncated clip must not brick the library" also
+    // means the scan must complete AND say what it skipped.
+
+    [TestMethod]
+    public void Find_LockedFileMixedIn_StillFindsGoodMatch()
+    {
+        string clip = PrepareClipWithFields("good.mp4",
+            new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
+        string locked = MakeLockedFile("locked.mp4");
+        using var handle = OpenExclusive(locked);
+
+        var results = ClipMetaFinder.Find(_tempDir, "game", "Team Fortress 2").ToList();
+
+        CollectionAssert.Contains(results, clip);
+    }
+
+    [TestMethod]
+    public void Find_LockedFileMixedIn_ReportsSkippedPath()
+    {
+        PrepareClipWithFields("good.mp4",
+            new() { [ClipMetaSchema.AtomName("game")] = "Team Fortress 2" });
+        string locked = MakeLockedFile("locked.mp4");
+        using var handle = OpenExclusive(locked);
+
+        var skipped = new List<string>();
+        ClipMetaFinder.Find(_tempDir, "game", "Team Fortress 2",
+            onFileSkipped: (path, _) => skipped.Add(path)).ToList();
+
+        CollectionAssert.Contains(skipped, locked);
+    }
+
+    private string MakeLockedFile(string fileName)
+    {
+        string path = Path.Combine(_tempDir, fileName);
+        File.WriteAllBytes(path, new byte[] { 0, 0, 0, 0 });
+        return path;
+    }
+
+    /// <summary>Opens <paramref name="path"/> with an exclusive lock so a concurrent scanner's
+    /// own open (<see cref="FileShare.Read"/>) fails with an <see cref="IOException"/> sharing
+    /// violation, simulating a clip still being written to by another process.</summary>
+    private static FileStream OpenExclusive(string path) =>
+        new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
     [TestMethod]
     public void Find_RecursiveFalse_DoesNotFindInSubdirectory()
     {

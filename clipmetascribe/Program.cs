@@ -236,7 +236,11 @@ internal static class Program
                     fileWriter = new StreamWriter(outputPath, append: false, System.Text.Encoding.UTF8);
                     exportOutput = fileWriter;
                 }
-                var records = ClipMetaExporter.GetRecords(exportPaths);
+                // A locked or unparseable clip must not abort the export; name it on stderr
+                // (never into exportOutput, that stream is structured JSON/CSV).
+                var records = ClipMetaExporter.GetRecords(exportPaths,
+                    onFileSkipped: (path, ex) =>
+                        Console.Error.WriteLine($"SKIPPED {path}: {ex.Message}"));
                 return ExportCommand.Run(records, exportFormat, exportOutput);
             }
             catch (IOException ex)

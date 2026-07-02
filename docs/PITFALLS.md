@@ -8,6 +8,44 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, `BinaryReader.ReadBytes` does not throw at EOF, it returns a short array (task B1)
+**Symptom:** A nemesis review truncated a file mid-header (a box declaring an extended size,
+`size == 1`, whose 8-byte extended-size field is cut off at EOF) and the whole directory scan
+died with a raw, uncaught `System.ArgumentException: The array starting from the specified
+index is not long enough...`, naming no file, outside every scanner's catch list
+(`ClipMetaFinder`/`ClipMetaIndex`/`ClipMetaVocab`/`ClipMetaExporter` all caught `IOException`,
+`UnauthorizedAccessException`, and `InvalidDataException`, none of which `ArgumentException` is).
+**Cause:** `BigEndianReader.ReadUInt16/32/64`/`ReadFourCC` called `BinaryReader.ReadBytes(n)`
+directly and fed the result straight to `BitConverter`. `ReadBytes` is documented to return
+fewer bytes than requested at end-of-stream instead of throwing, so a truncated file handed
+`BitConverter` a short array, which throws `ArgumentException`, a type nothing downstream
+expected or caught.
+**Fix:** `BigEndianReader` now routes every fixed-width read through a private `ReadExactly`
+helper that throws `EndOfStreamException` on a short read. `EndOfStreamException` derives from
+`IOException`, so it is caught by scanners' pre-existing `catch (IOException)` even without any
+further change, and `Mp4Parser.Parse`'s outer `catch (EndOfStreamException) -> InvalidDataException`
+still fires for the (rare) case where the short read happens outside `ParseBoxes`' own lenient
+header-read catch.
+**Non-obvious wrinkle, do NOT "fix" this without re-reading first:** for the *specific*
+demonstrated construction (extended-size field truncated), the failure is inside
+`Mp4Parser.ParseBoxes`' box-header read, which is wrapped in its own
+`catch (EndOfStreamException) { break; }` (the deliberate "a damaged file should still be
+viewable up to the damage" leniency). That catch swallows it and returns whatever was already
+parsed (empty, if this is the first box), it does **not** rethrow, so `Mp4Parser.ParseFile`
+does **not** throw `InvalidDataException` for this exact file shape, it succeeds with an
+empty/partial tree. This is intentional and load-bearing: `clipmetamcp.Tests/LibrarySandboxTests.cs`
+(`GetMetadata_ThroughJunctionPointingInsideLibrary_StillWorks` et al.) and
+`clipmetamcp.Tests/Phase2ReadToolsTests.cs`'s shared 8-byte `noise.mp4` fixture both explicitly
+assert that a too-short/garbage `.mp4` parses successfully to an empty tree. A guard like
+"throw if a non-empty file parses to zero top-level boxes" looks like the obvious next
+hardening step and will break both of those (and contradicts the parser's own documented
+leniency comment). Verified empirically before and after the fix, see
+`clipmetascribe.Tests/Mp4ParserTruncatedFileTests.cs`.
+**Lesson:** `BinaryReader.ReadBytes(int)` silently short-reads at EOF, it never throws. Any
+fixed-width binary parsing code must check the returned length itself. Before adding a stricter
+EOF guard to the parser, grep for existing tests asserting the current lenient behavior, several
+already encode "too-short-to-parse is not an error" as a contract, not an oversight.
+
 ## 2026-06-29, A forged NTFS creation-time is `recent_write` working AS DESIGNED, not an "mtime" bug
 **Symptom:** A v1 dogfood deliberately bumped an already-tagged clip's timestamps to now
 (PowerShell: `$i.LastWriteTime/$i.CreationTime/$i.LastAccessTime = Get-Date`) and the clip

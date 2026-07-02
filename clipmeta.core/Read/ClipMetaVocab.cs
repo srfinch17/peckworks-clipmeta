@@ -17,13 +17,21 @@ public static class ClipMetaVocab
     /// Scans .mp4 files in <paramref name="directory"/> and returns distinct values for
     /// <paramref name="field"/> with per-value clip counts.
     /// Pipe-separated fields (tags, players, timecode) are split on '|'; each item is counted
-    /// individually. Malformed or unreadable files are silently skipped.
+    /// individually. Malformed or unreadable files are skipped, not thrown, so one bad clip
+    /// never aborts the scan.
     /// </summary>
     /// <param name="directory">Directory to search.</param>
     /// <param name="field">Bare field name (e.g. "tags"), matched case-insensitively.</param>
     /// <param name="recursive">When true, searches subdirectories. Default: true.</param>
+    /// <param name="onFileSkipped">
+    /// Optional callback invoked with the file's path and the exception that caused it to be
+    /// skipped (locked, unreadable, or unparseable). Lets a caller report which file was
+    /// skipped instead of the scan going silent about it. Defaults to no-op.
+    /// </param>
     /// <returns>A <see cref="VocabResult"/> with value counts and total clips with the field.</returns>
-    public static VocabResult Enumerate(string directory, string field, bool recursive = true)
+    public static VocabResult Enumerate(
+        string directory, string field, bool recursive = true,
+        Action<string, Exception>? onFileSkipped = null)
     {
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int clipsWithField = 0;
@@ -34,9 +42,11 @@ public static class ClipMetaVocab
         {
             BoxNode root;
             try { root = Mp4Parser.ParseFile(path); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (InvalidDataException) { continue; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                onFileSkipped?.Invoke(path, ex);
+                continue;
+            }
 
             bool clipHasField = false;
             foreach (var (f, v) in ClipMetaReader.GetFields(root))
