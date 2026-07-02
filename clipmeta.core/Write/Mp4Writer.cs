@@ -161,6 +161,13 @@ public sealed class Mp4Writer : IMediaWriter
                 VerifyParseAccountsForWholeFile(root, filePath);
                 logger.LogVerbose($"PARSE {CountBoxes(root)} boxes");
 
+                // SAFETY GATE: ISO 14496-12 legally permits a meta box directly under moov (or a
+                // udta under a trak), but this writer only edits the canonical
+                // moov.udta.meta.ilst. The reader walks EVERY ilst anywhere, so a set/clear/
+                // clear-all against the canonical copy while a non-canonical duplicate survives
+                // would silently diverge. Refuse rather than risk that.
+                DetectNonCanonicalMetadata(root, filePath);
+
                 // Fold appends into sets: read the current value, merge, and treat the result
                 // as a plain set from here on.
                 foreach (var (key, appendValue) in mutation.AppendFields.ToList())
@@ -1019,6 +1026,67 @@ public sealed class Mp4Writer : IMediaWriter
             throw new UnsupportedFormatException(
                 $"'{Path.GetFileName(filePath)}' uses fragmented MP4 format (contains moof boxes). " +
                 $"Write is not supported for fragmented files.");
+    }
+
+    // ── Non-canonical metadata detection ───────────────────────────────────────
+
+    /// <summary>
+    /// Refuses to write when a <c>com.peckworkslab.clipmeta</c> freeform atom (a node whose
+    /// <see cref="BoxNode.EditableKey"/> is domain-qualified, see <see cref="ClipMetaSchema.AtomName"/>)
+    /// exists anywhere outside the canonical <c>moov.udta.meta.ilst</c> location this writer
+    /// edits (see <see cref="FindIlst"/>). ISO 14496-12 legally permits a <c>meta</c> box
+    /// directly under <c>moov</c>, or a <c>udta</c> under a <c>trak</c>, so a clipmeta atom can
+    /// legally exist there too, this writer only ever edits the canonical copy. Scoped to OUR
+    /// domain: a foreign <c>meta</c>/<c>ilst</c> (e.g. camera GPS/make/model metadata in Apple's
+    /// <c>mdta</c>/keys format) is untouched, legitimate, and must not trip this guard.
+    /// </summary>
+    /// <exception cref="UnsupportedFormatException">
+    /// When a non-canonical clipmeta atom is found.
+    /// </exception>
+    private static void DetectNonCanonicalMetadata(BoxNode root, string filePath)
+    {
+        string domainPrefix = ClipMetaSchema.Domain + ":";
+        BoxNode? canonical = FindIlst(root);
+        var withinCanonical = new HashSet<BoxNode>();
+        if (canonical != null) CollectSubtree(canonical, withinCanonical);
+
+        BoxNode? offender = FindNode(root, n =>
+            !withinCanonical.Contains(n) &&
+            n.EditableKey?.StartsWith(domainPrefix, StringComparison.Ordinal) == true);
+        if (offender != null)
+            throw new UnsupportedFormatException(
+                $"'{Path.GetFileName(filePath)}' has metadata found at a non-canonical location " +
+                $"({DescribeLocation(root, offender)}); clipmeta only edits moov.udta.meta.ilst " +
+                $"and will not risk a divergent write, file refused.");
+    }
+
+    private static void CollectSubtree(BoxNode node, HashSet<BoxNode> set)
+    {
+        set.Add(node);
+        foreach (var child in node.Children) CollectSubtree(child, set);
+    }
+
+    /// <summary>
+    /// Dot-joined box-type path from just below the file root down to the containing
+    /// <c>ilst</c> (trimmed there, the leaf atom itself isn't useful in the message), or down
+    /// to <paramref name="target"/> if it has no <c>ilst</c> ancestor.
+    /// </summary>
+    private static string DescribeLocation(BoxNode root, BoxNode target)
+    {
+        var chain = new List<string>();
+        if (!BuildChain(root, target, chain)) return target.Type;
+        int ilstIndex = chain.IndexOf("ilst");
+        if (ilstIndex >= 0) chain.RemoveRange(ilstIndex, chain.Count - ilstIndex);
+        return chain.Count > 0 ? string.Join('.', chain) : target.Type;
+    }
+
+    private static bool BuildChain(BoxNode node, BoxNode target, List<string> chain)
+    {
+        if (node.Type != "root") chain.Add(node.Type);
+        if (node == target) return true;
+        if (node.Children.Any(c => BuildChain(c, target, chain))) return true;
+        if (node.Type != "root") chain.RemoveAt(chain.Count - 1);
+        return false;
     }
 
     // ── mdat position detection ────────────────────────────────────────────────

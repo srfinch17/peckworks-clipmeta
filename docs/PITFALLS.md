@@ -8,6 +8,30 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Non-canonical-metadata refusal must be scoped to clipmeta's OWN domain (task B2)
+**Symptom (during implementation, caught before merge):** A first-draft gate that refused any
+write when an `ilst` box or ANY node with a set `EditableKey` existed outside canonical
+`moov.udta.meta.ilst` broke 108 of ~510 scribe tests, including every test that used a real
+pristine clip (`2022-02-01 21.50.02.mp4`, `Team Fortress 2 ...DVR.mp4`) and several synthetic
+fixtures built with `MinimalMp4Builder.BuildMp4WithStco`.
+**Cause:** `BoxNode.EditableKey` is set on **every** item inside **any** `ilst`, not just ours:
+iTunes tags (`©nam` etc.) get their FourCC as the key, and `----` freeform atoms get
+`"<domain>:<field>"` for **whatever domain the atom claims**, foreign or ours. A real clip's
+moov-level Apple `mdta`/keys `meta` (GPS/make/model data, a legitimate sibling of `udta`, see
+the 2026-06-15 entry below) is full of such nodes. Flagging "any `ilst`" or "any `EditableKey`"
+outside canonical treated that entirely-legitimate, already-preserved foreign metadata as a
+refusal trigger, exactly backwards, the writer is SUPPOSED to leave it untouched and unrelated.
+**Fix:** Scope the check to nodes whose `EditableKey` starts with `ClipMetaSchema.Domain + ":"`
+(the same prefix `ClipMetaReader` uses), and drop the bare `Type == "ilst"` check entirely, a
+non-canonical `ilst` with zero clipmeta atoms inside it is none of this writer's business.
+**Lesson:** when a plan/brief describes a search as "any X" as a first-pass mental model, verify
+it against what the field actually PUTS in that shape before implementing literally, a codebase
+with documented multi-format-coexistence behavior (see 2026-06-15 below) will have real fixtures
+that are legal specifically BECAUSE they mix formats; a same-shape guard has to distinguish "our
+data extended somewhere else" from "someone else's data living where it always has." The existing
+`Write_ForeignAtoms_Preserved` DynamicData test (over every pristine clip) is exactly the canary
+that caught this, a diff that only ran the new hostile-fixture tests would have shipped it green.
+
 ## 2026-07-01, `BinaryReader.ReadBytes` does not throw at EOF, it returns a short array (task B1)
 **Symptom:** A nemesis review truncated a file mid-header (a box declaring an extended size,
 `size == 1`, whose 8-byte extended-size field is cut off at EOF) and the whole directory scan

@@ -381,6 +381,58 @@ internal static class MinimalMp4Builder
     }
 
     /// <summary>
+    /// Assembles a minimal MP4 whose metadata lives at the ISO 14496-12 legal but
+    /// non-canonical <c>moov.meta.ilst</c> location (a <c>meta</c> box directly under
+    /// <c>moov</c>, with no <c>udta</c> wrapper) instead of clipmeta's canonical
+    /// <c>moov.udta.meta.ilst</c>. Mirrors <see cref="BuildMp4WithStco"/>'s minimal structural
+    /// style; the chunk offset value is a placeholder, this fixture only proves write refusal,
+    /// it is never actually rewritten.
+    /// </summary>
+    public static MemoryStream BuildMp4WithNonCanonicalMoovMetaIlst(
+        uint chunkOffset, string domain, string fieldName, string value)
+    {
+        byte[] freeform = FreeformAtom(domain, fieldName, value);
+        byte[] ilst = IlstBox(freeform);
+        byte[] meta = MetaBox(ilst);   // moov-level meta: deliberately NOT wrapped in udta
+        byte[] stco = StcoBox(chunkOffset);
+        byte[] trak = TrakBox(stco);
+        byte[] mvhd = FullBox("mvhd", 0, 0, new byte[96]);
+        byte[] moov = Box("moov", mvhd.Concat(trak).Concat(meta).ToArray());
+        byte[] mdat = MdatBox();
+
+        var ms = new MemoryStream();
+        ms.Write(moov);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>
+    /// Assembles a minimal MP4 whose metadata lives at the ISO 14496-12 legal but
+    /// non-canonical <c>trak.udta.meta.ilst</c> location (a <c>udta</c> box directly under a
+    /// <c>trak</c>, sibling of <c>mdia</c>) instead of clipmeta's canonical
+    /// <c>moov.udta.meta.ilst</c>. Proves the refusal gate also catches this second ISO-legal
+    /// non-canonical location, not just a moov-level <c>meta</c>.
+    /// </summary>
+    public static MemoryStream BuildMp4WithNonCanonicalTrakUdtaMetaIlst(
+        uint chunkOffset, string domain, string fieldName, string value)
+    {
+        byte[] freeform = FreeformAtom(domain, fieldName, value);
+        byte[] trakUdta = UdtaBox(MetaBox(IlstBox(freeform)));
+        byte[] mdia = Box("mdia", Box("minf", StblBox(StcoBox(chunkOffset))));
+        byte[] trak = Box("trak", mdia.Concat(trakUdta).ToArray());
+        byte[] mvhd = FullBox("mvhd", 0, 0, new byte[96]);
+        byte[] moov = Box("moov", mvhd.Concat(trak).ToArray());
+        byte[] mdat = MdatBox();
+
+        var ms = new MemoryStream();
+        ms.Write(moov);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>
     /// Saves a byte stream to a temp file, returns the file path.
     /// Caller is responsible for deleting the file.
     /// </summary>
