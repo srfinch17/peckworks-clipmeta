@@ -128,7 +128,20 @@ public sealed class Mp4Writer : IMediaWriter
                     ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy), ClipMetaSchema.ProvenanceValue);
         }
 
-        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with, 
+        // Cross-process serialization: hold the named per-file lock for the ENTIRE pipeline,
+        // parse through File.Replace. Without it, two clipmeta processes (Claude Desktop's MCP
+        // server, Claude Code's, a clipmetascribe batch) can both parse the same original and
+        // both swap; neither output is torn, but the second swap is built from a parse that
+        // predates the first writer's commit, so the first writer's fields are silently
+        // discarded. Serializing the whole pipeline makes the second writer parse the FIRST
+        // writer's output instead. Lock ordering: a queue drain holds the QUEUE lock and takes
+        // this per-FILE lock nested inside; nothing takes the queue lock while holding a file
+        // lock, so the ordering is globally consistent (see CrossProcessLock). A timeout throws
+        // CrossProcessLockTimeoutException, an IOException, which every caller already treats
+        // as a fail-safe "could not write this time".
+        using CrossProcessLock writeLock = CrossProcessLock.Acquire(filePath);
+
+        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with,
         // and FileMode.Create-overwrite, a file the user actually owns, or with a second write
         // running against the same clip at the same time.
         string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
@@ -261,10 +274,16 @@ public sealed class Mp4Writer : IMediaWriter
             }
             // The deny-writers handle must be released BEFORE File.Replace: ReplaceFile needs
             // write/delete access to the destination, which our own open would block. This
-            // re-opens a microscopic window where another process could grab the file between
-            // the close and the swap, but by now the temp file is fully written and verified,
-            // so the worst case is the swap failing with an IOException (original untouched),
-            // never a torn output.
+            // re-opens a window where another process could touch the file between the close
+            // and the swap. Be precise about the worst case: the output is never TORN (the temp
+            // is fully written and verified), but if another WRITER committed a change to the
+            // destination inside this window, our swap, built from a parse that predates that
+            // commit, would silently DISCARD the other writer's fields (a stale-based write),
+            // not merely fail with an IOException. Among clipmeta processes that cannot happen:
+            // the per-file CrossProcessLock held around this whole pipeline keeps any other
+            // clipmeta writer out until the swap lands. A foreign program that rewrites the clip
+            // in this window can still lose its change to ours; that residual risk is inherent
+            // to rewrite-and-swap and is not closed by any lock only our processes honor.
             //
             // Retry the swap briefly on a transient sharing violation. By this point the temp is
             // fully written and verified, so retrying the atomic swap weakens no guarantee, it

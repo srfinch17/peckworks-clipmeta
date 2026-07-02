@@ -8,6 +8,48 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, In-process "single-flight" was an overclaim; the product is multi-process (task B4)
+**Symptom (found by nemesis review):** every write-serialization primitive was per-process (the MCP
+`WriteGate` was a `SemaphoreSlim`, its comment claiming the `File.Replace` race was "retired
+permanently"), but deployment runs SEVERAL processes at once: an MCP server per host app (Claude
+Desktop AND Claude Code) plus `clipmetascribe` batch/`--flush-queue`. Two demonstrated losses:
+(1) `TagQueue.Drain` holds its queue snapshot in memory across multi-second MP4 writes, then saves
+the survivors, a concurrent `Enqueue` from another process lands between load and save and is
+silently overwritten (a spoken tag vanishes); (2) two writers snapshot the same clip, both rebuild
+and swap, and the loser's committed fields are silently discarded. Note the second failure's exact
+shape: the output is never TORN (each temp is verified before its swap), the worst case of the
+unserialized swap window is a STALE-BASED write, subtler and easier to overclaim away than
+corruption.
+**Fix:** `CrossProcessLock` (Core, `Write/`): a named OS `Mutex`, name = `Local\PeckworksClipMeta-`
++ SHA-256 of the canonicalized (full, upper-invariant) path, so mutex-name length/character limits
+are never hit and every spelling of a path maps to one lock. `Mp4Writer.WriteMetadata` holds the
+per-FILE lock across parse→temp→verify→Replace; `TagQueue.Enqueue`/`Drain`/`Save` hold the QUEUE
+lock across load→mutate→save; the MCP `WriteGate` delegates to it (per-resource, disposable), so
+MCP tools, the drain pump, and the CLI all contend on the same OS object.
+**Gotchas that shaped the design, read before touching:**
+- **Thread affinity:** a `Mutex` must be released by the acquiring thread. Legal here because every
+  wrapped span is fully synchronous (no `await` anywhere in Core, the MCP handlers, or the pump
+  loop). Never hold a `CrossProcessLock` across an `await`.
+- **Reentrancy is load-bearing:** an OS mutex is recursive on its owning thread; `TagQueue.Save`
+  takes the queue lock and is also called from `Enqueue`/`Drain` which already hold it, and
+  `WriteGate.Acquire(clip)` in a tool nests over `Mp4Writer`'s own acquire of the same clip.
+- **Lock ordering (deadlock freedom):** QUEUE lock first, then per-FILE locks nested inside (only
+  `TagQueue.Drain` ever holds both). Nothing may acquire the queue lock while holding a file lock,
+  `Mp4Writer` must stay queue-ignorant.
+- **Timeout type:** `CrossProcessLockTimeoutException` derives from `IOException` ON PURPOSE, so
+  the writer's documented "full throw surface" (2026-06-21 entry below) is unchanged and every
+  existing fail-safe catch (drain keeps the entry queued, MCP maps to a tool error, the watching
+  drain degrades to "nothing drained", batch counts a per-file failure) covers it with zero new
+  catch clauses.
+- **`AbandonedMutexException` = acquired:** a holder that dies mid-write abandons the mutex; the
+  next waiter gets the exception WITH ownership. Treat it as success, every guarded resource is
+  temp-then-atomic-swap, so a crashed holder leaves nothing torn. Verified with a real killed
+  process.
+- **`Local\` not `Global\`:** session-local scope covers the whole real deployment (all cooperating
+  writers run in the user's interactive session) without cross-session ACL friction.
+**Residual risk, stated honestly:** a FOREIGN program rewriting a clip between our handle close and
+`File.Replace` can still lose its change to ours; no lock only our processes honor can close that.
+
 ## 2026-07-01, Post-write verification checked atom EXISTENCE, never the VALUE (task B3)
 **Symptom (found by nemesis review, not by a real failure yet):** `VerifyWrite`'s own doc comment
 said "every field this mutation stored must read back," but the loop only asserted

@@ -114,8 +114,11 @@ internal static class Program
 
             // Zero-touch flush: a background pump drains the queue as locks clear, so the last clip
             // of a session lands when its player closes without an explicit library_flush_queue.
-            // Only meaningful with a configured library; drains run under the same WriteGate as every
-            // other write, so the pump can never race a direct write at File.Replace.
+            // Only meaningful with a configured library; drains run under the cross-process
+            // WriteGate keyed on the queue file (each write additionally takes the per-clip lock
+            // inside Mp4Writer), so the pump can never race a foreground drain, ANOTHER process's
+            // drain or enqueue, or a direct write at File.Replace. A gate timeout surfaces as an
+            // IOException, which the pump's loop already catches, logs, and retries on next wake.
             QueueDrainPump? pump = null;
             if (sandbox.Root is { } libraryRoot)
             {
@@ -123,9 +126,8 @@ internal static class Program
                     libraryRoot, new Mp4Writer(), logger, LockProbe.IsInUse,
                     runExclusive: action =>
                     {
-                        WriteGate.Enter();
-                        try { action(); }
-                        finally { WriteGate.Exit(); }
+                        using IDisposable gate = WriteGate.Acquire(TagQueue.QueuePath(libraryRoot));
+                        action();
                     },
                     pollInterval: TimeSpan.FromSeconds(3),
                     journal: drainJournal);

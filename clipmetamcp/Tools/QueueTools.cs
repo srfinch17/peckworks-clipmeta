@@ -11,8 +11,10 @@ namespace ClipMetaMcp.Tools;
 /// Registers the deferred-tag queue tools. A clip that is playing is locked against our write, so
 /// these persist a CONFIRMED tag and drain the queue as locks clear. The queue never resolves or
 /// guesses, the caller passes an already-resolved path (from library_watching, confirmed with the
-/// user when confidence was low). Every drain runs under the shared <see cref="WriteGate"/> so it
-/// can never race a direct write at <c>File.Replace</c>.
+/// user when confidence was low). Every drain runs under the cross-process <see cref="WriteGate"/>
+/// keyed on the queue file (and each write inside it under the per-clip lock), so a drain can
+/// never race another process's enqueue/drain on the queue, nor a direct write at
+/// <c>File.Replace</c>.
 /// </summary>
 public static class QueueTools
 {
@@ -218,18 +220,15 @@ public static class QueueTools
         return arr;
     }
 
-    /// <summary>Drains the queue under the shared write single-flight, with the real probe/engine.</summary>
+    /// <summary>
+    /// Drains the queue under the shared cross-process gate (keyed on the queue file, so drains
+    /// from other clipmeta processes serialize too), with the real probe/engine. The gate is
+    /// reentrant with the lock <see cref="TagQueue.Drain"/> takes internally.
+    /// </summary>
     private static DrainReport DrainUnderGate(string root)
     {
-        WriteGate.Enter();
-        try
-        {
-            return TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
-        }
-        finally
-        {
-            WriteGate.Exit();
-        }
+        using IDisposable gate = WriteGate.Acquire(TagQueue.QueuePath(root));
+        return TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
     }
 
     private static JsonObject DrainJson(DrainReport drain) => new()

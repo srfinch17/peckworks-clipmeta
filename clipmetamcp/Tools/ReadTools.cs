@@ -608,18 +608,16 @@ public static class ReadTools
         // failure here (e.g. the queue file is momentarily locked) must NOT fail a watched-clip
         // READ, so degrade to "nothing drained" and let resolution proceed; the next call retries.
         DrainReport drained;
-        WriteGate.Enter();
         try
         {
+            // Gate keyed on the queue file; a lock timeout (another process mid-drain) surfaces
+            // as an IOException and lands in the same degrade-to-nothing-drained path below.
+            using IDisposable gate = WriteGate.Acquire(TagQueue.QueuePath(root));
             drained = TagQueue.Drain(root, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             drained = new DrainReport(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
-        }
-        finally
-        {
-            WriteGate.Exit();
         }
 
         int limit = Math.Clamp(GetOptionalInt(args, "limit", DefaultWatchingLimit), 1, MaxWatchingLimit);
