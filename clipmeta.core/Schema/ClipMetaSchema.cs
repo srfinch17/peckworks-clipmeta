@@ -1,3 +1,5 @@
+using ClipMetaCore.Mp4;
+
 namespace ClipMetaCore.Schema;
 
 /// <summary>Constants for the com.peckworkslab.clipmeta metadata schema.</summary>
@@ -5,6 +7,9 @@ public static class ClipMetaSchema
 {
     /// <summary>Reverse-domain namespace written into every ---- freeform atom.</summary>
     public const string Domain = "com.peckworkslab.clipmeta";
+
+    /// <summary>The domain namespace followed by the field separator: "com.peckworkslab.clipmeta:".</summary>
+    public const string DomainFieldPrefix = Domain + ":";
 
     /// <summary>Schema version field. Written on every write to enable future migrations.</summary>
     public const string Schema = "schema";
@@ -69,4 +74,19 @@ public static class ClipMetaSchema
 
     /// <summary>Returns the full atom name for a field: "com.peckworkslab.clipmeta:fieldname".</summary>
     public static string AtomName(string field) => $"{Domain}:{field}";
+
+    /// <summary>
+    /// True when <paramref name="node"/> is a freeform ("----") atom whose key is in the
+    /// clipmeta domain namespace. This is the INTRINSIC clipmeta-atom test only: it carries no
+    /// location scoping and no display-value requirement, so it is safe to share with the box-tree
+    /// mapper without altering the reader's or the write gate's own (deliberately different) checks.
+    /// </summary>
+    /// <param name="node">The parsed box node to test.</param>
+    public static bool IsClipmetaFreeformAtom(BoxNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return node.Type == "----"
+            && node.EditableKey is not null
+            && node.EditableKey.StartsWith(DomainFieldPrefix, StringComparison.Ordinal);
+    }
 }
