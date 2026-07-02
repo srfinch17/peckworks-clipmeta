@@ -8,6 +8,12 @@
 
       - clipmetascribe / clipmetaview / clipmetamcp : each binary's `--version` output
       - bundle manifest                             : tools/mcpb-manifest.json "version"
+      - landing page (download button)               : docs/index.html "Download vX.Y.Z (Windows)"
+      - landing page (footer marker)                 : docs/index.html "clipmeta info page . vX.Y ."
+
+    The landing page checks are a source re-read, not a self-report (a static page has none to give),
+    but they use the same tightly anchored patterns tools/bump-version.ps1 writes, so a hand-edit that
+    drifts from VERSION, or a page restructure that silently strands the old text, both surface here.
 
     Exits non-zero if anything drifts. By default it builds first so the binaries report their
     freshly-stamped version; pass -NoBuild to probe the existing build output instead.
@@ -36,11 +42,11 @@ if (-not $NoBuild) {
 $buildArgs = if ($NoBuild) { @('--no-build') } else { @() }
 $anyDrift = $false
 
-function Show([string]$label, [string]$reported) {
-    if ($reported -eq $script:expected) {
+function Show([string]$label, [string]$reported, [string]$expectedValue = $script:expected) {
+    if ($reported -eq $expectedValue) {
         Write-Host ("  OK     {0,-22} {1}" -f $label, $reported)
     } else {
-        Write-Host ("  DRIFT  {0,-22} {1}  (expected {2})" -f $label, $reported, $script:expected)
+        Write-Host ("  DRIFT  {0,-22} {1}  (expected {2})" -f $label, $reported, $expectedValue)
         $script:anyDrift = $true
     }
 }
@@ -59,6 +65,24 @@ Show 'clipmetamcp (--version)'    (Get-CliVersion 'clipmetamcp')
 
 $manifestVersion = (Get-Content (Join-Path $PSScriptRoot 'mcpb-manifest.json') -Raw | ConvertFrom-Json).version
 Show 'bundle manifest' $manifestVersion
+
+# Same anchors tools/bump-version.ps1 writes, kept in sync manually since a page re-stamp is a
+# separate script from this read-only check.
+$indexHtmlText = Get-Content (Join-Path $repoRoot 'docs/index.html') -Raw
+
+function Get-IndexHtmlDownloadVersion([string]$text) {
+    $m = [regex]::Match($text, 'Download v(\d+\.\d+\.\d+) \(Windows\)')
+    if ($m.Success) { return $m.Groups[1].Value } else { return '(anchor not found)' }
+}
+
+function Get-IndexHtmlMetaLineVersion([string]$text) {
+    $m = [regex]::Match($text, 'clipmeta info page · v(\d+\.\d+) ·')
+    if ($m.Success) { return $m.Groups[1].Value } else { return '(anchor not found)' }
+}
+
+$expectedMajorMinor = ($expected -split '\.')[0, 1] -join '.'
+Show 'landing page (download)' (Get-IndexHtmlDownloadVersion $indexHtmlText)
+Show 'landing page (footer)'   (Get-IndexHtmlMetaLineVersion $indexHtmlText) $expectedMajorMinor
 
 Write-Host ""
 if ($anyDrift) {
