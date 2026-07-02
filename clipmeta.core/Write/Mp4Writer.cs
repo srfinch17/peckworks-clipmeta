@@ -1173,7 +1173,10 @@ public sealed class Mp4Writer : IMediaWriter
     /// </summary>
     /// <param name="root">Parse tree of the temp file.</param>
     /// <param name="originalRoot">Parse tree of the original source file, for comparison.</param>
-    private static void VerifyWrite(BoxNode root, BoxNode originalRoot, MetadataMutation mutation, string originalPath)
+    /// <remarks>Internal (rather than private) so it can be unit-tested directly against
+    /// hand-built <see cref="BoxNode"/> trees, the same pattern <see cref="RetryOnTransientLock"/>
+    /// uses.</remarks>
+    internal static void VerifyWrite(BoxNode root, BoxNode originalRoot, MetadataMutation mutation, string originalPath)
     {
         if (!root.Children.Any(c => c.Type == "moov"))
             throw new InvalidDataException(
@@ -1188,29 +1191,73 @@ public sealed class Mp4Writer : IMediaWriter
                 $"Verification failed: original has {mdatBefore} mdat box(es) but written file " +
                 $"has {mdatAfter} for '{originalPath}'.");
 
-        // Every field this mutation stored must read back from the temp file.
+        // Every field this mutation stored must read back, with the SAME value, from the
+        // canonical moov.udta.meta.ilst location this writer edits. Locating the node by a
+        // whole-tree search (as before) only proves SOME atom with a matching key exists
+        // somewhere, a value-corrupting bug in FreeformAtomWriter or Normalizer, or a stale
+        // atom sitting outside the canonical path, would verify clean. DetectNonCanonicalMetadata
+        // already refuses any pre-existing non-canonical clipmeta atom before the write runs, so
+        // this is defense in depth, not the primary guard.
+        BoxNode? ilst = FindIlst(root);
         foreach (var (key, value) in mutation.SetFields)
         {
             if (string.IsNullOrEmpty(value)) continue;
-            var node = FindEditableNode(root, key);
+            var node = ilst?.Children.FirstOrDefault(c => c.EditableKey == key);
             if (node == null)
                 throw new InvalidDataException(
-                    $"Verification failed: atom '{key}' not found after write of '{originalPath}'.");
+                    $"Verification failed: atom '{key}' not found under moov.udta.meta.ilst " +
+                    $"after write of '{originalPath}'.");
+            string actual = UnquoteDisplayValue(node.DisplayValue ?? string.Empty);
+            if (!string.Equals(actual, value, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Verification failed: atom '{key}' read back '{actual}' but expected " +
+                    $"'{value}' after write of '{originalPath}'.");
         }
 
-        // --clear-all must leave no clipmeta atoms behind (other than fields this same
-        // mutation explicitly set, which the public API permits even alongside ClearAll).
-        if (mutation.ClearAll)
+        string domainPrefix = ClipMetaSchema.Domain + ":";
+
+        // --clear-all must leave no clipmeta atoms behind under the canonical ilst (other than
+        // fields this same mutation explicitly set, which the public API permits even alongside
+        // ClearAll). Scoped to the canonical path for the same reason as the loop above.
+        if (mutation.ClearAll && ilst != null)
         {
-            var leftover = FindNode(root, n =>
+            var leftover = ilst.Children.FirstOrDefault(n =>
                 n.EditableKey is { } k &&
-                k.StartsWith(ClipMetaSchema.Domain + ":", StringComparison.Ordinal) &&
+                k.StartsWith(domainPrefix, StringComparison.Ordinal) &&
                 !mutation.SetFields.ContainsKey(k));
             if (leftover != null)
                 throw new InvalidDataException(
                     $"Verification failed: clear-all left atom '{leftover.EditableKey}' behind " +
                     $"in '{originalPath}'.");
         }
+
+        // A field this mutation explicitly deleted must not still read back from the canonical
+        // ilst either, an existence-only check has no way to catch a delete that silently failed.
+        if (ilst != null)
+        {
+            foreach (string key in mutation.DeleteFields)
+            {
+                if (mutation.SetFields.ContainsKey(key)) continue; // a later set wins over a delete
+                var leftover = ilst.Children.FirstOrDefault(c => c.EditableKey == key);
+                if (leftover != null)
+                    throw new InvalidDataException(
+                        $"Verification failed: deleted field '{key}' is still present " +
+                        $"in '{originalPath}'.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Strips the parser's UTF-8 text quoting (<c>"value"</c>) from a metadata item's display
+    /// value, leaving non-text display values (e.g. <c>[JPEG image, ...]</c>) unchanged. Every
+    /// value clipmeta itself writes is UTF-8 text (see <see cref="FreeformAtomWriter"/>), so this
+    /// mirrors the same unquoting <see cref="ClipMetaCore.Read.ClipMetaReader"/> applies on read.
+    /// </summary>
+    private static string UnquoteDisplayValue(string displayValue)
+    {
+        if (displayValue.Length >= 2 && displayValue[0] == '"' && displayValue[^1] == '"')
+            return displayValue[1..^1];
+        return displayValue;
     }
 
     // ── Tree search helpers ───────────────────────────────────────────────────

@@ -8,6 +8,31 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Post-write verification checked atom EXISTENCE, never the VALUE (task B3)
+**Symptom (found by nemesis review, not by a real failure yet):** `VerifyWrite`'s own doc comment
+said "every field this mutation stored must read back," but the loop only asserted
+`FindEditableNode(root, key) != null`, a whole-tree search for ANY node whose `EditableKey`
+matched. It never compared the read-back value against what was actually written, and it never
+constrained the search to the canonical `moov.udta.meta.ilst` this writer edits. Task B2's own
+finding proved the second half concretely: before B2's gate existed, a stale atom sitting outside
+the canonical path with a matching key would satisfy this "verification" even though the canonical
+copy was never updated.
+**Cause:** existence-only checks and whole-tree searches are each individually weaker than they
+look. A value-corrupting bug in `FreeformAtomWriter` (wrong bytes) or `Normalizer` (wrong
+canonicalization) would still leave an atom at the right key, so `!= null` verified clean over
+corrupted data; searching the whole tree instead of scoping to `FindIlst` meant a match anywhere,
+including a location this writer never even intends to touch, counted as proof of a correct write.
+**Fix:** `VerifyWrite` now resolves `FindIlst(root)` once, looks up each `SetFields` key only
+among that node's direct children, and compares the parsed, unquoted `DisplayValue` against the
+normalized value the mutation actually stored, mismatch throws with expected-vs-actual in the
+message. The `ClearAll` leftover check and a new explicit `DeleteFields` check got the same
+canonical-path scoping, so a field that silently failed to delete is now caught too (previously
+not checked by `VerifyWrite` at all).
+**Lesson:** a verification step's own doc comment ("every field must read back") is a spec, treat
+a matching implementation gap as a real bug even when nothing has visibly broken yet, a check that
+only proves "a key like this exists somewhere" is not the same claim as "the value we wrote is
+correct at the place we wrote it," and the difference is exactly where a corruption bug hides.
+
 ## 2026-07-01, Non-canonical-metadata refusal must be scoped to clipmeta's OWN domain (task B2)
 **Symptom (during implementation, caught before merge):** A first-draft gate that refused any
 write when an `ilst` box or ANY node with a set `EditableKey` existed outside canonical
