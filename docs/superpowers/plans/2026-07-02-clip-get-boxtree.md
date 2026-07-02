@@ -1165,7 +1165,7 @@ Expected: all suites pass (foreground, long timeout; `clipmetascribe.Tests` take
 
 - [ ] **Step 2: Em-dash sweep**
 
-Run: `git grep -n $'—'`
+Run: `git grep -nP '\x{2014}'` (the em-dash codepoint, U+2014)
 Expected: no matches in anything this branch added. Remove any hit.
 
 - [ ] **Step 3: Record the pitfall**
