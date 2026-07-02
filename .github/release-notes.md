@@ -2,12 +2,12 @@ Tag your game clips by voice, the moment they happen. clipmeta writes searchable
 
 ## What's new in v1.0.1
 
-This is a hardening and correctness release. No new features, safety and reliability fixes for edge cases found while dogfooding v1.0.0.
+This is a hardening and correctness release. No new features, safety and reliability fixes for edge cases found during real-world use of v1.0.0.
 
-- **Safer with truncated or damaged files.** A cut-off or corrupted MP4 is now cleanly refused instead of causing confusing errors. When scanning a folder, bad files are skipped and named in the output so you know what was left out.
+- **Safer with truncated or damaged files.** A cut-off or damaged MP4 no longer causes confusing errors or a crashed library scan: writes are cleanly refused, and scanning a folder skips the bad file and names it in the output so you know what was left out. Reading a single file stays deliberately lenient.
 - **Won't create duplicate, conflicting tags.** If a file already carries clipmeta metadata in an unexpected location, writes are now refused rather than silently adding a second, divergent copy of your tags.
 - **Stronger write verification.** After every write, clipmeta now reads back and checks the actual tag values (not just that something is present), and confirms fields you deleted are really gone.
-- **Safe to use from multiple tools at once.** Writes are now serialized across the CLI, the Claude Desktop extension, and the tag queue, so running more than one at the same time can no longer corrupt a file.
+- **Won't silently lose a tag when multiple tools write at once.** Writes are now serialized across the CLI, the Claude Desktop MCP server, a Claude Code-hosted MCP server, and the tag queue, so a tag written by one process can no longer be silently lost when another rewrites the same clip.
 - **Clear message for unfinished recordings.** MP4s with no finalized structure (for example a recording that was still writing when a player crashed) now get a plain "can't be tagged yet" message instead of an internal error.
 - **Fixed a CLI backup bug.** `--backup` now uses the same timestamped naming as the rest of the tool, so making a second backup no longer overwrites the first, and CLI backups now show up correctly in backup management tools.
 - **Fixed search for multi-word field names.** Field names containing spaces now round-trip correctly through the search index, so a cached search agrees with a live lookup again.
