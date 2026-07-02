@@ -123,4 +123,25 @@ public class ProgramArgumentTests
         var mutation = Build(File, "--SET", "game", "TF2");
         Assert.AreEqual("TF2", mutation.SetFields[ClipMetaSchema.AtomName("game")]);
     }
+
+    // ── Backup naming convention ───────────────────────────────────────────────
+
+    [TestMethod]
+    public void BuildMutation_BackupTrue_UsesCentralizedTimestampedNamingConvention()
+    {
+        // The centralized convention (ClipMetaCore.Write.ClipBackup.MakeBackupPath) is
+        // "<clip>.bak-yyyyMMdd-HHmmss", not a bare "<clip>.bak" literal. A literal ".bak" is
+        // silently clobbered by the next backup (File.Replace) and is invisible to
+        // library_list_backups / clip_restore_backup / clip_prune_backups, which only recognize
+        // the timestamped form.
+        var mutation = Program.BuildMutation(
+            new[] { "--set", "game", "TF2" }, File, dryRun: false, backup: true);
+
+        Assert.IsNotNull(mutation.BackupPath, "backup:true must produce a backup path");
+        Assert.IsTrue(
+            ClipMetaCore.Write.ClipBackup.TryGetClipForBackup(mutation.BackupPath!, out string? clip),
+            $"backup path '{mutation.BackupPath}' does not match the centralized " +
+            ".bak-<timestamp> convention");
+        Assert.AreEqual(File, clip);
+    }
 }
