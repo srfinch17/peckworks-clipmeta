@@ -48,6 +48,10 @@ Persistent project memory lives in the Claude memory store (indexed in `MEMORY.m
 ### Public landing page (`docs/index.html`), LIVE
 A self-contained GitHub Pages info/landing page lives at `docs/index.html` (build record + decisions in `docs/BUILD-LOG.md`) and is published at https://srfinch17.github.io/peckworks-clipmeta/ (GitHub Pages serving `main` /docs, with `docs/.nojekyll` so it's served verbatim instead of through Jekyll/README). Attribution is "Peckworks Lab" (no personal-name placeholder). It still has two "screenshot coming soon" placeholders pending real screenshots. Treat it as a curated artifact, don't clobber or regenerate it casually.
 
+### Roadmap, designed but not yet built
+Reconnaissance specs capture a future feature's groundwork so its eventual build starts from a short confirmation brainstorm, not a fresh exploration. Each is marked "reconnaissance only, not approved"; run `superpowers:brainstorming` before building.
+- **Media-technical facts** (duration, codec, resolution, frame rate, audio, bitrate): `docs/superpowers/specs/2026-07-02-media-technical-facts-recon.md`. Recon finding: the parser ALREADY decodes most of these into display strings, so the work is mostly structured re-exposure + per-track correlation, not new decoding (Tier 1), plus bitrate and codec profile/level as genuinely-new work (Tier 2).
+
 ---
 
 ## Code conventions (non-negotiable)
