@@ -1,6 +1,6 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ClipMetaCore;
 using ClipMetaCore.Abstractions;
 using ClipMetaMcp.Tools;
 
@@ -35,24 +35,11 @@ public sealed class McpSession
     /// <summary>
     /// Server version advertised in the initialize result. Single-sourced from the assembly's
     /// InformationalVersion, which Directory.Build.props stamps from the repo-root VERSION file, so
-    /// the exe metadata, the initialize result, and the bundle manifest can never disagree, 
+    /// the exe metadata, the initialize result, and the bundle manifest can never disagree,
     /// pack-mcpb.ps1 stamps the manifest from VERSION and fails the build if it doesn't match the
     /// published exe.
     /// </summary>
-    public static readonly string ServerVersion = ReadAssemblyVersion();
-
-    private static string ReadAssemblyVersion()
-    {
-        string? version = typeof(McpSession).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (string.IsNullOrEmpty(version))
-            return "0.0.0"; // unreachable in practice: the csproj always sets InformationalVersion
-
-        // SDK builds may append "+<commit>" source-revision metadata; that suffix is not part of
-        // the user-facing version and would never match the manifest.
-        int metadataStart = version.IndexOf('+');
-        return metadataStart >= 0 ? version[..metadataStart] : version;
-    }
+    public static readonly string ServerVersion = ClipMetaVersion.Current;
 
     private readonly TextReader _input;
     private readonly TextWriter _output;

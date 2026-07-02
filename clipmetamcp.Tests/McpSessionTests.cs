@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using ClipMetaCore;
 using ClipMetaMcp.Protocol;
 using ClipMetaMcp.Tests.Helpers;
 
@@ -63,6 +64,15 @@ public class McpSessionTests
 
         Assert.AreEqual(McpSession.ServerName,
             responses[0]["result"]?["serverInfo"]?["name"]?.GetValue<string>());
+    }
+
+    [TestMethod]
+    public void Initialize_AdvertisesServerVersion()
+    {
+        var responses = McpHarness.Run(null, McpHarness.InitializeRequest);
+
+        Assert.AreEqual(ClipMetaVersion.Current,
+            responses[0]["result"]?["serverInfo"]?["version"]?.GetValue<string>());
     }
 
     [TestMethod]
