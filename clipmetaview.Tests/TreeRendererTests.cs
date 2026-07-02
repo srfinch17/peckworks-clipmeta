@@ -121,7 +121,8 @@ public class TreeRendererTests
         string output = CaptureRender(root);
 
         Assert.IsTrue(output.Contains("LEGEND"), $"Expected legend section in:\n{output}");
-        Assert.IsTrue(output.Contains("clipmetaedit"), $"Expected clipmetaedit mention in legend:\n{output}");
+        Assert.IsTrue(output.Contains("clipmetascribe"), $"Expected clipmetascribe mention in legend:\n{output}");
+        Assert.IsFalse(output.Contains("coming soon"), $"Expected no 'coming soon' claim in legend (the editor shipped):\n{output}");
     }
 
     [TestMethod]

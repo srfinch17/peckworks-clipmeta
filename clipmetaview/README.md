@@ -5,7 +5,7 @@ Part of the **peckworks-clipmeta** suite.
 ## What it does
 
 Displays the internal box/atom structure of an MP4 file as a human-readable tree.
-Editable metadata fields are clearly marked so you know exactly what `clipmetaedit` (coming soon) can change.
+Editable metadata fields are clearly marked so you know exactly what `clipmetascribe` can change.
 
 ## Usage
 
@@ -42,7 +42,7 @@ tf2testclip1.mp4  (69.5 MB)
                 └── covr  Cover Art  "[JPEG image, 14532 bytes]"  ← [EDITABLE]
 
 Legend:
-  ← [EDITABLE]  This field can be added, updated, or deleted with clipmetaedit (coming soon)
+  ← [EDITABLE]  This field can be added, updated, or deleted with clipmetascribe
 ```
 
 ## Exit Codes
@@ -59,10 +59,10 @@ Legend:
 - Reads only box headers; never loads media data (`mdat`) into memory
 - Big-endian byte order handled throughout via `BigEndianReader`
 - All file I/O through `FileStream` with seeking, constant memory use regardless of file size
-- Designed as the foundation for `clipmetaedit` (add/update/delete metadata)
+- Designed as the foundation for `clipmetascribe` (add/update/delete metadata)
 - `BoxNode.FileOffset` and `BoxNode.Size` are accurate so the editor can seek directly to any box
 
-## MP4 Metadata You Can Edit (coming in clipmetaedit)
+## MP4 Metadata You Can Edit (with clipmetascribe)
 
 | Key    | Friendly Name | Type    |
 |--------|--------------|---------|
