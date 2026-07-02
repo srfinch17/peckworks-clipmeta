@@ -1,5 +1,9 @@
 # CLAUDE.md, clipmetaview Orchestration Instructions
 
+> **HISTORICAL, superseded.** This describes an early design (.NET 8, orchestrator roles,
+> "clipmetaedit") that does not match the shipped project. Kept for provenance only. For
+> current facts, see the repo-root `CLAUDE.md`, the code, and `docs/superpowers/`.
+
 ## Project Overview
 
 You are building **clipmetaview**, a C# command-line application that reads an `.mp4` file and displays its internal box/atom structure as a human-readable tree. This is the first deliverable in the **peckworks-clipmeta** suite.
