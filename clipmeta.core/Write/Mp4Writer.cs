@@ -128,7 +128,20 @@ public sealed class Mp4Writer : IMediaWriter
                     ClipMetaSchema.AtomName(ClipMetaSchema.TaggedBy), ClipMetaSchema.ProvenanceValue);
         }
 
-        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with, 
+        // Cross-process serialization: hold the named per-file lock for the ENTIRE pipeline,
+        // parse through File.Replace. Without it, two clipmeta processes (Claude Desktop's MCP
+        // server, Claude Code's, a clipmetascribe batch) can both parse the same original and
+        // both swap; neither output is torn, but the second swap is built from a parse that
+        // predates the first writer's commit, so the first writer's fields are silently
+        // discarded. Serializing the whole pipeline makes the second writer parse the FIRST
+        // writer's output instead. Lock ordering: a queue drain holds the QUEUE lock and takes
+        // this per-FILE lock nested inside; nothing takes the queue lock while holding a file
+        // lock, so the ordering is globally consistent (see CrossProcessLock). A timeout throws
+        // CrossProcessLockTimeoutException, an IOException, which every caller already treats
+        // as a fail-safe "could not write this time".
+        using CrossProcessLock writeLock = CrossProcessLock.Acquire(filePath);
+
+        // The temp file gets a unique name (clip.mp4.<guid>.tmp) so it can never collide with,
         // and FileMode.Create-overwrite, a file the user actually owns, or with a second write
         // running against the same clip at the same time.
         string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
@@ -152,6 +165,7 @@ public sealed class Mp4Writer : IMediaWriter
             {
                 var root = Mp4Parser.Parse(src);
                 DetectFragmented(root, filePath);
+                DetectMissingMoov(root, filePath);
 
                 // SAFETY GATE: the parser is deliberately lenient (the tree viewer should open
                 // damaged files), but the WRITER must be strict. It rebuilds the output from the
@@ -160,6 +174,13 @@ public sealed class Mp4Writer : IMediaWriter
                 // cause the entire mdat, all the video, to be dropped silently. Refuse instead.
                 VerifyParseAccountsForWholeFile(root, filePath);
                 logger.LogVerbose($"PARSE {CountBoxes(root)} boxes");
+
+                // SAFETY GATE: ISO 14496-12 legally permits a meta box directly under moov (or a
+                // udta under a trak), but this writer only edits the canonical
+                // moov.udta.meta.ilst. The reader walks EVERY ilst anywhere, so a set/clear/
+                // clear-all against the canonical copy while a non-canonical duplicate survives
+                // would silently diverge. Refuse rather than risk that.
+                DetectNonCanonicalMetadata(root, filePath);
 
                 // Fold appends into sets: read the current value, merge, and treat the result
                 // as a plain set from here on.
@@ -254,10 +275,16 @@ public sealed class Mp4Writer : IMediaWriter
             }
             // The deny-writers handle must be released BEFORE File.Replace: ReplaceFile needs
             // write/delete access to the destination, which our own open would block. This
-            // re-opens a microscopic window where another process could grab the file between
-            // the close and the swap, but by now the temp file is fully written and verified,
-            // so the worst case is the swap failing with an IOException (original untouched),
-            // never a torn output.
+            // re-opens a window where another process could touch the file between the close
+            // and the swap. Be precise about the worst case: the output is never TORN (the temp
+            // is fully written and verified), but if another WRITER committed a change to the
+            // destination inside this window, our swap, built from a parse that predates that
+            // commit, would silently DISCARD the other writer's fields (a stale-based write),
+            // not merely fail with an IOException. Among clipmeta processes that cannot happen:
+            // the per-file CrossProcessLock held around this whole pipeline keeps any other
+            // clipmeta writer out until the swap lands. A foreign program that rewrites the clip
+            // in this window can still lose its change to ours; that residual risk is inherent
+            // to rewrite-and-swap and is not closed by any lock only our processes honor.
             //
             // Retry the swap briefly on a transient sharing violation. By this point the temp is
             // fully written and verified, so retrying the atomic swap weakens no guarantee, it
@@ -1021,6 +1048,99 @@ public sealed class Mp4Writer : IMediaWriter
                 $"Write is not supported for fragmented files.");
     }
 
+    // ── Missing moov detection ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Refuses to write when the parse tree has no top-level <c>moov</c> box. Without this gate
+    /// such a file falls through <see cref="DetermineScenario"/> as <c>Create</c>, never emits a
+    /// moov, and dies later at the internal temp-length check with a message that names neither
+    /// the file's real problem nor a plausible cause.
+    /// </summary>
+    /// <remarks>
+    /// Two real-world causes converge on the same empty check here: (1) a well-formed but
+    /// unfinalized recording, a capture tool that writes <c>ftyp</c> and <c>mdat</c> as it
+    /// records but only appends <c>moov</c> once recording stops normally, so a file saved from a
+    /// crash or forced stop is legitimately moov-less; (2) a malformed file where an earlier
+    /// to-EOF (<c>size=0</c>) box is not actually the last box in the file, see
+    /// <see cref="BigEndianReader.ReadBoxHeader"/>, which resolves size=0 unconditionally to
+    /// end-of-stream. Such a box silently swallows every byte after it, including a real moov
+    /// that is physically present, so the parse tree ends up moov-less even though the file is
+    /// larger than that one box. Both land here with the same refusal rather than the writer's
+    /// internal "temp file is X bytes but Y were expected" message, which names neither cause.
+    /// </remarks>
+    /// <exception cref="UnsupportedFormatException">When no top-level moov box is present.</exception>
+    private static void DetectMissingMoov(BoxNode root, string filePath)
+    {
+        if (!root.Children.Any(c => c.Type == "moov"))
+            throw new UnsupportedFormatException(
+                $"'{Path.GetFileName(filePath)}' has no moov box, this is not a complete/finalized " +
+                $"MP4. This can happen if the recording was truncated or interrupted before the " +
+                $"muxer finished (moov is typically written last), or if an earlier to-EOF " +
+                $"(size=0) box in the file is not actually last and has swallowed everything " +
+                $"after it, including moov. Write is not supported for a file with no moov box.");
+    }
+
+    // ── Non-canonical metadata detection ───────────────────────────────────────
+
+    /// <summary>
+    /// Refuses to write when a <c>com.peckworkslab.clipmeta</c> freeform atom (a node whose
+    /// <see cref="BoxNode.EditableKey"/> is domain-qualified, see <see cref="ClipMetaSchema.AtomName"/>)
+    /// exists anywhere outside the canonical <c>moov.udta.meta.ilst</c> location this writer
+    /// edits (see <see cref="FindIlst"/>). ISO 14496-12 legally permits a <c>meta</c> box
+    /// directly under <c>moov</c>, or a <c>udta</c> under a <c>trak</c>, so a clipmeta atom can
+    /// legally exist there too, this writer only ever edits the canonical copy. Scoped to OUR
+    /// domain: a foreign <c>meta</c>/<c>ilst</c> (e.g. camera GPS/make/model metadata in Apple's
+    /// <c>mdta</c>/keys format) is untouched, legitimate, and must not trip this guard.
+    /// </summary>
+    /// <exception cref="UnsupportedFormatException">
+    /// When a non-canonical clipmeta atom is found.
+    /// </exception>
+    private static void DetectNonCanonicalMetadata(BoxNode root, string filePath)
+    {
+        string domainPrefix = ClipMetaSchema.Domain + ":";
+        BoxNode? canonical = FindIlst(root);
+        var withinCanonical = new HashSet<BoxNode>();
+        if (canonical != null) CollectSubtree(canonical, withinCanonical);
+
+        BoxNode? offender = FindNode(root, n =>
+            !withinCanonical.Contains(n) &&
+            n.EditableKey?.StartsWith(domainPrefix, StringComparison.Ordinal) == true);
+        if (offender != null)
+            throw new UnsupportedFormatException(
+                $"'{Path.GetFileName(filePath)}' has metadata found at a non-canonical location " +
+                $"({DescribeLocation(root, offender)}); clipmeta only edits moov.udta.meta.ilst " +
+                $"and will not risk a divergent write, file refused.");
+    }
+
+    private static void CollectSubtree(BoxNode node, HashSet<BoxNode> set)
+    {
+        set.Add(node);
+        foreach (var child in node.Children) CollectSubtree(child, set);
+    }
+
+    /// <summary>
+    /// Dot-joined box-type path from just below the file root down to the containing
+    /// <c>ilst</c> (trimmed there, the leaf atom itself isn't useful in the message), or down
+    /// to <paramref name="target"/> if it has no <c>ilst</c> ancestor.
+    /// </summary>
+    private static string DescribeLocation(BoxNode root, BoxNode target)
+    {
+        var chain = new List<string>();
+        if (!BuildChain(root, target, chain)) return target.Type;
+        int ilstIndex = chain.IndexOf("ilst");
+        if (ilstIndex >= 0) chain.RemoveRange(ilstIndex, chain.Count - ilstIndex);
+        return chain.Count > 0 ? string.Join('.', chain) : target.Type;
+    }
+
+    private static bool BuildChain(BoxNode node, BoxNode target, List<string> chain)
+    {
+        if (node.Type != "root") chain.Add(node.Type);
+        if (node == target) return true;
+        if (node.Children.Any(c => BuildChain(c, target, chain))) return true;
+        if (node.Type != "root") chain.RemoveAt(chain.Count - 1);
+        return false;
+    }
+
     // ── mdat position detection ────────────────────────────────────────────────
 
     private static long GetMoovEndOffset(BoxNode root)
@@ -1105,7 +1225,10 @@ public sealed class Mp4Writer : IMediaWriter
     /// </summary>
     /// <param name="root">Parse tree of the temp file.</param>
     /// <param name="originalRoot">Parse tree of the original source file, for comparison.</param>
-    private static void VerifyWrite(BoxNode root, BoxNode originalRoot, MetadataMutation mutation, string originalPath)
+    /// <remarks>Internal (rather than private) so it can be unit-tested directly against
+    /// hand-built <see cref="BoxNode"/> trees, the same pattern <see cref="RetryOnTransientLock"/>
+    /// uses.</remarks>
+    internal static void VerifyWrite(BoxNode root, BoxNode originalRoot, MetadataMutation mutation, string originalPath)
     {
         if (!root.Children.Any(c => c.Type == "moov"))
             throw new InvalidDataException(
@@ -1120,29 +1243,73 @@ public sealed class Mp4Writer : IMediaWriter
                 $"Verification failed: original has {mdatBefore} mdat box(es) but written file " +
                 $"has {mdatAfter} for '{originalPath}'.");
 
-        // Every field this mutation stored must read back from the temp file.
+        // Every field this mutation stored must read back, with the SAME value, from the
+        // canonical moov.udta.meta.ilst location this writer edits. Locating the node by a
+        // whole-tree search (as before) only proves SOME atom with a matching key exists
+        // somewhere, a value-corrupting bug in FreeformAtomWriter or Normalizer, or a stale
+        // atom sitting outside the canonical path, would verify clean. DetectNonCanonicalMetadata
+        // already refuses any pre-existing non-canonical clipmeta atom before the write runs, so
+        // this is defense in depth, not the primary guard.
+        BoxNode? ilst = FindIlst(root);
         foreach (var (key, value) in mutation.SetFields)
         {
             if (string.IsNullOrEmpty(value)) continue;
-            var node = FindEditableNode(root, key);
+            var node = ilst?.Children.FirstOrDefault(c => c.EditableKey == key);
             if (node == null)
                 throw new InvalidDataException(
-                    $"Verification failed: atom '{key}' not found after write of '{originalPath}'.");
+                    $"Verification failed: atom '{key}' not found under moov.udta.meta.ilst " +
+                    $"after write of '{originalPath}'.");
+            string actual = UnquoteDisplayValue(node.DisplayValue ?? string.Empty);
+            if (!string.Equals(actual, value, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Verification failed: atom '{key}' read back '{actual}' but expected " +
+                    $"'{value}' after write of '{originalPath}'.");
         }
 
-        // --clear-all must leave no clipmeta atoms behind (other than fields this same
-        // mutation explicitly set, which the public API permits even alongside ClearAll).
-        if (mutation.ClearAll)
+        string domainPrefix = ClipMetaSchema.Domain + ":";
+
+        // --clear-all must leave no clipmeta atoms behind under the canonical ilst (other than
+        // fields this same mutation explicitly set, which the public API permits even alongside
+        // ClearAll). Scoped to the canonical path for the same reason as the loop above.
+        if (mutation.ClearAll && ilst != null)
         {
-            var leftover = FindNode(root, n =>
+            var leftover = ilst.Children.FirstOrDefault(n =>
                 n.EditableKey is { } k &&
-                k.StartsWith(ClipMetaSchema.Domain + ":", StringComparison.Ordinal) &&
+                k.StartsWith(domainPrefix, StringComparison.Ordinal) &&
                 !mutation.SetFields.ContainsKey(k));
             if (leftover != null)
                 throw new InvalidDataException(
                     $"Verification failed: clear-all left atom '{leftover.EditableKey}' behind " +
                     $"in '{originalPath}'.");
         }
+
+        // A field this mutation explicitly deleted must not still read back from the canonical
+        // ilst either, an existence-only check has no way to catch a delete that silently failed.
+        if (ilst != null)
+        {
+            foreach (string key in mutation.DeleteFields)
+            {
+                if (mutation.SetFields.ContainsKey(key)) continue; // a later set wins over a delete
+                var leftover = ilst.Children.FirstOrDefault(c => c.EditableKey == key);
+                if (leftover != null)
+                    throw new InvalidDataException(
+                        $"Verification failed: deleted field '{key}' is still present " +
+                        $"in '{originalPath}'.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Strips the parser's UTF-8 text quoting (<c>"value"</c>) from a metadata item's display
+    /// value, leaving non-text display values (e.g. <c>[JPEG image, ...]</c>) unchanged. Every
+    /// value clipmeta itself writes is UTF-8 text (see <see cref="FreeformAtomWriter"/>), so this
+    /// mirrors the same unquoting <see cref="ClipMetaCore.Read.ClipMetaReader"/> applies on read.
+    /// </summary>
+    private static string UnquoteDisplayValue(string displayValue)
+    {
+        if (displayValue.Length >= 2 && displayValue[0] == '"' && displayValue[^1] == '"')
+            return displayValue[1..^1];
+        return displayValue;
     }
 
     // ── Tree search helpers ───────────────────────────────────────────────────

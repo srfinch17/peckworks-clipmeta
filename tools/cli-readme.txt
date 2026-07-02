@@ -11,10 +11,10 @@ Quick start (PowerShell or Command Prompt, from this folder):
 
   .\clipmetascribe.exe "clip.mp4" --list
   .\clipmetascribe.exe "clip.mp4" --set tags "airshot|headshot" --set rating 5 --backup
-  .\clipmetascribe.exe --find "game=Team Fortress 2 rating>=4"
+  .\clipmetascribe.exe "C:\clips\" --find game "Team Fortress 2"
   .\clipmetaview.exe "clip.mp4"
 
-Run either tool with --help for the full command list.
+Run either tool with no arguments to see the full command list.
 
 Tip: add this folder to your PATH to call the tools from any directory.
 

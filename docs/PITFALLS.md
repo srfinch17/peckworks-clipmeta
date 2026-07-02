@@ -8,6 +8,229 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Known limitation: a hard process kill mid-write can orphan a `<file>.<guid>.tmp` sibling
+**Symptom:** if the process is killed hard (power loss, `kill -9`, task-manager "End task") between
+the write engine creating its `<clip>.<guid>.tmp` temp file and the terminal `File.Replace` swap,
+the temp file is never cleaned up and is left sitting next to the clip permanently.
+**Why it's a known limitation, not a bug:** it's harmless, the temp file never collides with
+anything (the GUID makes every one unique) and the original clip is never touched until the swap
+succeeds, so no data is at risk. It's just clutter. There is no sweeper that finds and deletes
+stale `*.tmp` siblings on startup or on demand.
+**Workaround:** manually delete `<clip-directory>\*.<guid-shaped>.tmp` files after a hard kill;
+they are always safe to remove (a live write in progress uses a fresh GUID each time, so a
+leftover from a *previous* crash is never the one an in-flight write is using).
+**Decision:** the owner prefers documenting this over building a sweeper, a background scan for
+orphaned temp files adds machinery for a cosmetic, self-evident problem (a stray `.tmp` file is
+obvious when you see it) that a hard kill mid-write is rare enough not to justify.
+
+## 2026-07-01, Known limitation: `ClipBackup.MakeBackupPath` is second-resolution with no collision disambiguator
+**Symptom:** the timestamped backup naming convention (`clip.mp4.bak-yyyyMMdd-HHmmss`) has
+second-resolution, not sub-second. Two backups of the same clip taken within the same wall-clock
+second produce the identical backup filename, and the second write's `File.Replace` silently
+overwrites the first backup, the earlier backup is gone with no warning.
+**Where:** `clipmeta.core/Write/ClipBackup.cs`, `MakeBackupPath`. Pre-existing, shared by both the
+CLI (`clipmetascribe --backup`) and the MCP write tools (`WriteTools.cs`), since both delegate to
+the same Core method.
+**Why it's a known limitation, not a bug:** the window is narrow, it only bites two full
+metadata-write-plus-backup cycles issued back-to-back inside the same second, which is not how a
+human drives either tool interactively. (The MCP server's single-flight write lock already
+serializes writes, so this is a CLI-scripting-loop scenario, not a normal-use one.)
+**Workaround:** a caller issuing rapid, scripted, repeated `--backup` writes against the same clip
+should serialize them with a delay of at least 1 second between writes to guarantee distinct
+backup timestamps.
+**Decision:** documented rather than fixed, the owner prefers documenting narrow, low-probability
+edges over adding disambiguation machinery (e.g. a sub-second stamp or a collision-retry suffix)
+for a case this rare.
+
+## 2026-07-01, Index format silently mis-split a field name containing a space (task B7)
+**Symptom (nemesis-demonstrated):** `--set "kill count" 5` stores fine in the MP4, but
+`--index-search "kill count" 5` found nothing, while `--index-search kill "count 5"` found it.
+The cached index and a live `--find` silently answered the same question differently.
+**Cause:** `ClipMetaIndex.Write` emits each field as `field {Escape(field)} {Escape(value)}`,
+space-delimited, and `Escape` did not escape spaces. The reader recovers the field name by
+splitting the line's remainder at its **first** space, so a field name that itself contains a
+space donates that space to the split and the name silently shears in two (`"kill count"` read
+back as field `"kill"`, value `"count 5"`).
+**Fix:** extended `Escape`/`Unescape` to also encode literal spaces as `\s` (alongside the
+existing `\\`, `\r`, `\n`), so the only raw space left on a `field` line after escaping is the
+one intentional delimiter between the encoded name and the encoded value. Values were escaped
+too (not load-bearing for the split, since a value is read as "everything after the delimiter"
+and never re-split, but keeping the encoding symmetric). No format version bump: the on-disk
+`version 1` stamp is written but never read back or validated by `ClipMetaIndex.Read`, and
+staleness is judged per-entry against the live file (`CheckEntry`, size/mtime), not against the
+index's own format version, so there is no version-gated rebuild path to wire up. Back-compat is
+structural rather than version-gated: `Unescape` only transforms explicit two-character escape
+sequences, a literal (unescaped) space in a file written before this fix passes through
+unchanged, and a real backslash in old data was already doubled by `Escape` (`\` to `\\`) before
+this change, so a decoded lone backslash followed by `s`/`n`/`r` can only originate from a
+genuine new escape sequence, never from old data. Pinned with a hand-crafted (not
+round-tripped) raw index string in the pre-fix format to prove the reader alone, independent of
+the writer, still parses it identically.
+**Lesson:** a delimiter reused for two purposes (line-level `field name value` AND the
+name/value boundary within it) needs every payload that can contain that delimiter character
+escaped, not just the ones that broke first. Newlines and backslashes got escaped when the
+format was designed; the plain space, used as the delimiter itself, was the one character
+nobody thought to also treat as user-controlled payload.
+
+## 2026-07-01, Moov-less files fell through to a baffling internal error instead of a clean refusal (task B5)
+**Symptom (two convergent findings):** (a) correctness reviewer: a well-formed `ftyp`+`mdat` file
+with no `moov` (not fragmented) fell through `Mp4Writer.DetermineScenario` as `Create`, never
+emitted a moov, and died at the internal temp-length check with "temp file is X bytes but Y were
+expected", a message that names neither the real problem nor a plausible cause. (b) nemesis: a
+to-EOF (`size=0`) box that is NOT actually the last box in the file dies the exact same way, for a
+non-obvious reason: `BigEndianReader.ReadBoxHeader` resolves `size=0` **unconditionally** to
+"rest of the file" (`reader.BaseStream.Length - boxStart`), so `ParseBoxes` seeks straight to EOF
+after that box and never even looks at the bytes physically sitting after it. A real, well-formed
+`moov` placed after such a box is silently swallowed into the box's own opaque payload, it is
+never visited as a sibling box. Reads report "(no clipmeta metadata)" with false confidence
+(no error, just nothing found); writes die with the same internal message as scenario (a).
+**Fix:** `Mp4Writer.DetectMissingMoov`, a guard next to `DetectFragmented` in the pre-write
+pipeline: `if (!root.Children.Any(c => c.Type == "moov")) throw UnsupportedFormatException(...)`,
+with a message that names both real-world causes (truncated/unfinalized recording, and a
+non-last size=0 box). Covers both scenarios with one check since they produce the identical
+symptom, a moov-less parse tree.
+**Why no parser-side fix:** the size=0 resolution eats the offending bytes as part of the box's
+OWN payload, by the time parsing finishes there is nothing left unparsed to inspect, the "missing"
+moov bytes are indistinguishable from ordinary opaque media data at that point. Detecting them
+would require heuristically scanning binary mdat payload for byte sequences that merely resemble a
+box header, real media data can coincidentally contain such sequences, so this is a false-positive
+minefield, not a cheap add. Deliberately left as a known limitation: read behavior for this
+malformed shape stays lenient (false-confidence "no metadata" rather than an error), only the
+write path was hardened.
+**Lesson:** "the parser is lenient, the writer is strict" (see the 2026-06-10 entry below) is not
+one gate, it is a family of gates, every distinct way the parse tree can be silently incomplete
+needs its own explicit writer-side check. A missing moov and a truncated/clamped box are different
+failure shapes that both violate "the writer must never emit less than a complete file."
+
+## 2026-07-01, In-process "single-flight" was an overclaim; the product is multi-process (task B4)
+**Symptom (found by nemesis review):** every write-serialization primitive was per-process (the MCP
+`WriteGate` was a `SemaphoreSlim`, its comment claiming the `File.Replace` race was "retired
+permanently"), but deployment runs SEVERAL processes at once: an MCP server per host app (Claude
+Desktop AND Claude Code) plus `clipmetascribe` batch/`--flush-queue`. Two demonstrated losses:
+(1) `TagQueue.Drain` holds its queue snapshot in memory across multi-second MP4 writes, then saves
+the survivors, a concurrent `Enqueue` from another process lands between load and save and is
+silently overwritten (a spoken tag vanishes); (2) two writers snapshot the same clip, both rebuild
+and swap, and the loser's committed fields are silently discarded. Note the second failure's exact
+shape: the output is never TORN (each temp is verified before its swap), the worst case of the
+unserialized swap window is a STALE-BASED write, subtler and easier to overclaim away than
+corruption.
+**Fix:** `CrossProcessLock` (Core, `Write/`): a named OS `Mutex`, name = `Local\PeckworksClipMeta-`
++ SHA-256 of the canonicalized (full, upper-invariant) path, so mutex-name length/character limits
+are never hit and every spelling of a path maps to one lock. `Mp4Writer.WriteMetadata` holds the
+per-FILE lock across parse→temp→verify→Replace; `TagQueue.Enqueue`/`Drain`/`Save` hold the QUEUE
+lock across load→mutate→save; the MCP `WriteGate` delegates to it (per-resource, disposable), so
+MCP tools, the drain pump, and the CLI all contend on the same OS object.
+**Gotchas that shaped the design, read before touching:**
+- **Thread affinity:** a `Mutex` must be released by the acquiring thread. Legal here because every
+  wrapped span is fully synchronous (no `await` anywhere in Core, the MCP handlers, or the pump
+  loop). Never hold a `CrossProcessLock` across an `await`.
+- **Reentrancy is load-bearing:** an OS mutex is recursive on its owning thread; `TagQueue.Save`
+  takes the queue lock and is also called from `Enqueue`/`Drain` which already hold it, and
+  `WriteGate.Acquire(clip)` in a tool nests over `Mp4Writer`'s own acquire of the same clip.
+- **Lock ordering (deadlock freedom):** QUEUE lock first, then per-FILE locks nested inside (only
+  `TagQueue.Drain` ever holds both). Nothing may acquire the queue lock while holding a file lock,
+  `Mp4Writer` must stay queue-ignorant.
+- **Timeout type:** `CrossProcessLockTimeoutException` derives from `IOException` ON PURPOSE, so
+  the writer's documented "full throw surface" (2026-06-21 entry below) is unchanged and every
+  existing fail-safe catch (drain keeps the entry queued, MCP maps to a tool error, the watching
+  drain degrades to "nothing drained", batch counts a per-file failure) covers it with zero new
+  catch clauses.
+- **`AbandonedMutexException` = acquired:** a holder that dies mid-write abandons the mutex; the
+  next waiter gets the exception WITH ownership. Treat it as success, every guarded resource is
+  temp-then-atomic-swap, so a crashed holder leaves nothing torn. Verified with a real killed
+  process.
+- **`Local\` not `Global\`:** session-local scope covers the whole real deployment (all cooperating
+  writers run in the user's interactive session) without cross-session ACL friction.
+**Residual risk, stated honestly:** a FOREIGN program rewriting a clip between our handle close and
+`File.Replace` can still lose its change to ours; no lock only our processes honor can close that.
+
+## 2026-07-01, Post-write verification checked atom EXISTENCE, never the VALUE (task B3)
+**Symptom (found by nemesis review, not by a real failure yet):** `VerifyWrite`'s own doc comment
+said "every field this mutation stored must read back," but the loop only asserted
+`FindEditableNode(root, key) != null`, a whole-tree search for ANY node whose `EditableKey`
+matched. It never compared the read-back value against what was actually written, and it never
+constrained the search to the canonical `moov.udta.meta.ilst` this writer edits. Task B2's own
+finding proved the second half concretely: before B2's gate existed, a stale atom sitting outside
+the canonical path with a matching key would satisfy this "verification" even though the canonical
+copy was never updated.
+**Cause:** existence-only checks and whole-tree searches are each individually weaker than they
+look. A value-corrupting bug in `FreeformAtomWriter` (wrong bytes) or `Normalizer` (wrong
+canonicalization) would still leave an atom at the right key, so `!= null` verified clean over
+corrupted data; searching the whole tree instead of scoping to `FindIlst` meant a match anywhere,
+including a location this writer never even intends to touch, counted as proof of a correct write.
+**Fix:** `VerifyWrite` now resolves `FindIlst(root)` once, looks up each `SetFields` key only
+among that node's direct children, and compares the parsed, unquoted `DisplayValue` against the
+normalized value the mutation actually stored, mismatch throws with expected-vs-actual in the
+message. The `ClearAll` leftover check and a new explicit `DeleteFields` check got the same
+canonical-path scoping, so a field that silently failed to delete is now caught too (previously
+not checked by `VerifyWrite` at all).
+**Lesson:** a verification step's own doc comment ("every field must read back") is a spec, treat
+a matching implementation gap as a real bug even when nothing has visibly broken yet, a check that
+only proves "a key like this exists somewhere" is not the same claim as "the value we wrote is
+correct at the place we wrote it," and the difference is exactly where a corruption bug hides.
+
+## 2026-07-01, Non-canonical-metadata refusal must be scoped to clipmeta's OWN domain (task B2)
+**Symptom (during implementation, caught before merge):** A first-draft gate that refused any
+write when an `ilst` box or ANY node with a set `EditableKey` existed outside canonical
+`moov.udta.meta.ilst` broke 108 of ~510 scribe tests, including every test that used a real
+pristine clip (`2022-02-01 21.50.02.mp4`, `Team Fortress 2 ...DVR.mp4`) and several synthetic
+fixtures built with `MinimalMp4Builder.BuildMp4WithStco`.
+**Cause:** `BoxNode.EditableKey` is set on **every** item inside **any** `ilst`, not just ours:
+iTunes tags (`©nam` etc.) get their FourCC as the key, and `----` freeform atoms get
+`"<domain>:<field>"` for **whatever domain the atom claims**, foreign or ours. A real clip's
+moov-level Apple `mdta`/keys `meta` (GPS/make/model data, a legitimate sibling of `udta`, see
+the 2026-06-15 entry below) is full of such nodes. Flagging "any `ilst`" or "any `EditableKey`"
+outside canonical treated that entirely-legitimate, already-preserved foreign metadata as a
+refusal trigger, exactly backwards, the writer is SUPPOSED to leave it untouched and unrelated.
+**Fix:** Scope the check to nodes whose `EditableKey` starts with `ClipMetaSchema.Domain + ":"`
+(the same prefix `ClipMetaReader` uses), and drop the bare `Type == "ilst"` check entirely, a
+non-canonical `ilst` with zero clipmeta atoms inside it is none of this writer's business.
+**Lesson:** when a plan/brief describes a search as "any X" as a first-pass mental model, verify
+it against what the field actually PUTS in that shape before implementing literally, a codebase
+with documented multi-format-coexistence behavior (see 2026-06-15 below) will have real fixtures
+that are legal specifically BECAUSE they mix formats; a same-shape guard has to distinguish "our
+data extended somewhere else" from "someone else's data living where it always has." The existing
+`Write_ForeignAtoms_Preserved` DynamicData test (over every pristine clip) is exactly the canary
+that caught this, a diff that only ran the new hostile-fixture tests would have shipped it green.
+
+## 2026-07-01, `BinaryReader.ReadBytes` does not throw at EOF, it returns a short array (task B1)
+**Symptom:** A nemesis review truncated a file mid-header (a box declaring an extended size,
+`size == 1`, whose 8-byte extended-size field is cut off at EOF) and the whole directory scan
+died with a raw, uncaught `System.ArgumentException: The array starting from the specified
+index is not long enough...`, naming no file, outside every scanner's catch list
+(`ClipMetaFinder`/`ClipMetaIndex`/`ClipMetaVocab`/`ClipMetaExporter` all caught `IOException`,
+`UnauthorizedAccessException`, and `InvalidDataException`, none of which `ArgumentException` is).
+**Cause:** `BigEndianReader.ReadUInt16/32/64`/`ReadFourCC` called `BinaryReader.ReadBytes(n)`
+directly and fed the result straight to `BitConverter`. `ReadBytes` is documented to return
+fewer bytes than requested at end-of-stream instead of throwing, so a truncated file handed
+`BitConverter` a short array, which throws `ArgumentException`, a type nothing downstream
+expected or caught.
+**Fix:** `BigEndianReader` now routes every fixed-width read through a private `ReadExactly`
+helper that throws `EndOfStreamException` on a short read. `EndOfStreamException` derives from
+`IOException`, so it is caught by scanners' pre-existing `catch (IOException)` even without any
+further change, and `Mp4Parser.Parse`'s outer `catch (EndOfStreamException) -> InvalidDataException`
+still fires for the (rare) case where the short read happens outside `ParseBoxes`' own lenient
+header-read catch.
+**Non-obvious wrinkle, do NOT "fix" this without re-reading first:** for the *specific*
+demonstrated construction (extended-size field truncated), the failure is inside
+`Mp4Parser.ParseBoxes`' box-header read, which is wrapped in its own
+`catch (EndOfStreamException) { break; }` (the deliberate "a damaged file should still be
+viewable up to the damage" leniency). That catch swallows it and returns whatever was already
+parsed (empty, if this is the first box), it does **not** rethrow, so `Mp4Parser.ParseFile`
+does **not** throw `InvalidDataException` for this exact file shape, it succeeds with an
+empty/partial tree. This is intentional and load-bearing: `clipmetamcp.Tests/LibrarySandboxTests.cs`
+(`GetMetadata_ThroughJunctionPointingInsideLibrary_StillWorks` et al.) and
+`clipmetamcp.Tests/Phase2ReadToolsTests.cs`'s shared 8-byte `noise.mp4` fixture both explicitly
+assert that a too-short/garbage `.mp4` parses successfully to an empty tree. A guard like
+"throw if a non-empty file parses to zero top-level boxes" looks like the obvious next
+hardening step and will break both of those (and contradicts the parser's own documented
+leniency comment). Verified empirically before and after the fix, see
+`clipmetascribe.Tests/Mp4ParserTruncatedFileTests.cs`.
+**Lesson:** `BinaryReader.ReadBytes(int)` silently short-reads at EOF, it never throws. Any
+fixed-width binary parsing code must check the returned length itself. Before adding a stricter
+EOF guard to the parser, grep for existing tests asserting the current lenient behavior, several
+already encode "too-short-to-parse is not an error" as a contract, not an oversight.
+
 ## 2026-06-29, A forged NTFS creation-time is `recent_write` working AS DESIGNED, not an "mtime" bug
 **Symptom:** A v1 dogfood deliberately bumped an already-tagged clip's timestamps to now
 (PowerShell: `$i.LastWriteTime/$i.CreationTime/$i.LastAccessTime = Get-Date`) and the clip
@@ -469,6 +692,8 @@ observed behavior here when measured.
   on the actual app version before they reach user-facing docs. We verified the *manifest
   schema* against live docs but never the *install gesture*. (Phase-4 `--install` exists
   precisely because the bundle flow could change under us; same reasoning applies to docs.)
+
+### 2026-06-12, MCP library sandbox containment checked the lexical path, not the OS-canonical one (fixed)
 - **Symptom:** The MCP library sandbox checked `resolvedPath.StartsWith(root)` after
   `Path.GetFullPath`, and an adversarial probe **escaped it**: a directory junction inside the
   library pointing outside it passes the lexical check while `FileStream` happily follows the
@@ -597,12 +822,12 @@ These are the things that **corrupt files silently** if missed. Each should have
 | 4 | `hdlr` missing when creating `meta` from scratch | QuickTime/Final Cut **reject** a `meta` box with no `hdlr` (handler_type `mdir`). Scenario-3 test uses a file with no existing udta/meta/ilst. |
 | 5 | Foreign `ilst` atoms corrupted on rewrite | Copy all non-`com.peckworkslab.clipmeta` atoms (iTunes `©nam` etc., third-party `----`) byte-for-byte, in order, before appending ours. Test verifies `©nam` unchanged. |
 | 6 | `stco` adjusted when `mdat` precedes `moov` | Only adjust offsets when `mdat` starts **after** the end of `moov`. mdat-first files must be left unchanged. |
-| 7 | `co64` / `stco` value exceeds 32-bit boundary undetected | For 32-bit `stco`, fail if `offset + delta > UInt32.MaxValue`; warn under 10% headroom (file approaching 4 GB should already use `co64`). |
+| 7 | `co64` / `stco` value exceeds 32-bit boundary undetected | For 32-bit `stco`, fail if `offset + delta > UInt32.MaxValue`. (Designed, not implemented: a "warn under 10% headroom" advisory was spec'd but the shipping behavior is only the hard refusal, see `WriteAdjustedStco`.) |
 | 8 | Temp file left behind on exception | On any failure, delete the temp file and rethrow with context; the source is never opened for writing. Test asserts no temp file remains after a forced exception. |
 
 ### Other write-engine invariants
 - **The Golden Rule:** the source file is never opened for writing. All mutations → temp file → re-parse to verify → `File.Replace` (atomic same-filesystem swap).
 - **Big-endian everywhere.** Every multi-byte MP4 integer is big-endian; always use `BigEndianReader`/`BigEndianWriter`.
 - **The `©` prefix is byte `0xA9`.** Read FourCCs with `Encoding.Latin1`, not ASCII, or it mangles. Compare against `"©nam"` etc.
-- **`free` padding:** on first clipmeta write, append a 512-byte `free` box after `ilst` so future re-tags don't shift `mdat` (avoids stco/co64 churn). Exceeding the padding triggers a full rewrite.
+- **`free` padding (designed, not implemented):** the write-engine design called for appending a 512-byte `free` box after `ilst` on first clipmeta write, so future re-tags wouldn't shift `mdat` and avoid stco/co64 churn. The shipping writer does not do this, it strips `free` boxes from `ilst` and rewrites (`Mp4Writer.cs`, the `child.Type == "free"` skip). Revisit if re-tag churn becomes a problem.
 - **`--set field ""` deletes** the atom, empty and absent are not distinguished.

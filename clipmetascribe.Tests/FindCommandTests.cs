@@ -109,6 +109,36 @@ public class FindCommandTests
         Assert.AreEqual(0, exitCode);
     }
 
+    // ── Locked file mixed in (v1.0.1 hardening, task B1) ────────────────────
+
+    [TestMethod]
+    public void Run_LockedFileMixedIn_StillFindsGoodMatch()
+    {
+        PrepareClip("good.mp4", "game", "Team Fortress 2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using var writer = new StringWriter();
+
+        FindCommand.Run(_tempDir, "game", "Team Fortress 2", writer);
+
+        StringAssert.Contains(writer.ToString(), "1 match(es) found.");
+    }
+
+    [TestMethod]
+    public void Run_LockedFileMixedIn_ReportsSkippedPathInOutput()
+    {
+        PrepareClip("good.mp4", "game", "Team Fortress 2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using var writer = new StringWriter();
+
+        FindCommand.Run(_tempDir, "game", "Team Fortress 2", writer);
+
+        StringAssert.Contains(writer.ToString(), locked);
+    }
+
     [TestMethod]
     public void Run_DefaultOutput_UsesConsoleOut()
     {

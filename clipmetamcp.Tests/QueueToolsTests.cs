@@ -320,7 +320,7 @@ public class QueueToolsTests
         // wait, the long interval just documents that and guards against any future pump change.
         using var pump = new QueueDrainPump(
             _lib, new Mp4Writer(), NullLogger.Instance, LockProbe.IsInUse,
-            runExclusive: action => { WriteGate.Enter(); try { action(); } finally { WriteGate.Exit(); } },
+            runExclusive: action => { using IDisposable gate = WriteGate.Acquire(TagQueue.QueuePath(_lib)); action(); },
             pollInterval: TimeSpan.FromMinutes(1), journal: journal);
         pump.Start();
 

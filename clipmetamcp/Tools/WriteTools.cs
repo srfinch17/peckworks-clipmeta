@@ -21,8 +21,9 @@ namespace ClipMetaMcp.Tools;
 /// - <c>dry_run</c> reports what would change without touching the file.
 /// - <c>clip_clear_all</c> additionally requires the literal argument <c>confirm: true</c>.
 /// - Writes hard-require the configured library (<see cref="LibrarySandbox.ResolveWritePath"/>).
-/// - Single-flight: one write at a time process-wide (risk R8), two concurrent rewrites of
-///   the same file would race at <c>File.Replace</c>.
+/// - Serialized per clip ACROSS processes (risk R8) via <see cref="WriteGate"/>: two concurrent
+///   rewrites of the same file, from this server, another host app's server, or a CLI run,
+///   would otherwise race at <c>File.Replace</c> and the loser's fields would be discarded.
 /// </summary>
 public static class WriteTools
 {
@@ -479,11 +480,13 @@ public static class WriteTools
                 $"'{backupPath}' is not a clipmeta backup file (expected a name ending " +
                 ".mp4.bak-<timestamp>). Use library_list_backups to find valid backups.");
 
-        // The derived clip is a sibling of the (contained) backup, so it is contained too;
-        // single-flight with the write tools, restoring is a write.
-        WriteGate.Enter();
+        // The derived clip is a sibling of the (contained) backup, so it is contained too.
+        // Restoring is a write: take the clip's cross-process lock so a restore can never race a
+        // metadata write of the same clip (Restore swaps via File.Replace but does NOT go through
+        // Mp4Writer, so this gate is its only serialization).
         try
         {
+            using IDisposable gate = WriteGate.Acquire(clipPath);
             ClipBackup.Restore(backupPath, clipPath, NullLogger.Instance);
         }
         catch (InvalidDataException ex)
@@ -493,10 +496,6 @@ public static class WriteTools
         catch (IOException ex)
         {
             throw new ToolException($"Could not restore '{clipPath}': {ex.Message}");
-        }
-        finally
-        {
-            WriteGate.Exit();
         }
 
         // Read the restored clip back so the model reports its actual post-restore state.
@@ -528,8 +527,9 @@ public static class WriteTools
         IReadOnlyList<BackupInfo> all = ClipBackup.ListBackups(root, clipPath);
         var deleted = new JsonArray();
         var kept = new JsonArray();
-        WriteGate.Enter();
-        try
+        // Keyed on the clip so pruning serializes against a write/restore of the same clip
+        // (whose backup File.Replace may be creating at that very moment).
+        using (WriteGate.Acquire(clipPath))
         {
             for (int i = 0; i < all.Count; i++)
             {
@@ -546,10 +546,6 @@ public static class WriteTools
                         $"'{all[i].BackupPath}': {ex.Message}");
                 }
             }
-        }
-        finally
-        {
-            WriteGate.Exit();
         }
 
         return new JsonObject
@@ -598,9 +594,11 @@ public static class WriteTools
         // the backup-management tools recognize exactly what the writer produces.
         mutation.BackupPath = backup ? ClipBackup.MakeBackupPath(fullPath) : null;
 
-        WriteGate.Enter();
         try
         {
+            // The gate (per-clip cross-process lock) also serializes against restore/prune of the
+            // same clip; Mp4Writer takes the same lock internally, a same-thread reentrant no-op.
+            using IDisposable gate = WriteGate.Acquire(fullPath);
             new Mp4Writer().WriteMetadata(fullPath, mutation, NullLogger.Instance);
         }
         // Bad user values (rating out of range, malformed timecode, Core's Normalizer)...
@@ -624,13 +622,11 @@ public static class WriteTools
             throw new ToolException(
                 $"Write verification failed and the original file was left unchanged: {ex.Message}");
         }
+        // ...and a lock timeout or other IO failure (CrossProcessLockTimeoutException is an
+        // IOException: another clipmeta process held the clip past the bounded wait).
         catch (IOException ex)
         {
             throw new ToolException($"Could not write '{fullPath}': {ex.Message}");
-        }
-        finally
-        {
-            WriteGate.Exit();
         }
 
         // Mark the path written so library_watching's gaming-mode signal can exclude it.

@@ -18,7 +18,10 @@ internal static class FindCommand
         output.WriteLine($"Searching {directory} for {field} = \"{value}\"");
 
         int count = 0;
-        foreach (string match in ClipMetaFinder.Find(directory, field, value))
+        // A locked or unparseable clip must not abort the search; name it so the user knows to
+        // re-run once it frees up, rather than the scan silently going quiet about it.
+        foreach (string match in ClipMetaFinder.Find(directory, field, value,
+            onFileSkipped: (path, ex) => output.WriteLine($"SKIPPED {path}: {ex.Message}")))
         {
             string relative = Path.GetRelativePath(directory, match);
             output.WriteLine($"  {relative}");

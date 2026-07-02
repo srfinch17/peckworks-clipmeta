@@ -40,14 +40,21 @@ public static class ClipMetaIndex
     public const string IndexFileName = ".clipmeta-index";
 
     /// <summary>
-    /// Escapes backslashes and newlines in field values for safe serialization.
+    /// Escapes backslashes, newlines, and spaces in field values for safe serialization.
+    /// Space is escaped so a field <b>name</b> may contain spaces without being mis-split by
+    /// the space-delimited "field {name} {value}" line format on read (the value itself is
+    /// never re-split, so escaping its spaces is not load-bearing, but doing it uniformly keeps
+    /// the format symmetric and the escaped text readable either way).
     /// </summary>
     private static string Escape(string s)
-        => s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");
+        => s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace(" ", "\\s");
 
     /// <summary>
-    /// Unescapes backslashes and newlines in field values after deserialization.
-    /// Processes in order: \\n → \n, \\r → \r, \\\\ → \\ to handle all escape sequences correctly.
+    /// Unescapes backslashes, newlines, and spaces in field values after deserialization.
+    /// Recognizes \n, \r, \s, and \\; any other backslash is copied through unchanged so
+    /// index files written before space-escaping existed (which never emit a lone backslash
+    /// followed by one of these letters unless it came from an already-doubled backslash)
+    /// continue to parse identically.
     /// </summary>
     private static string Unescape(string s)
     {
@@ -60,6 +67,7 @@ public static class ClipMetaIndex
                 char next = s[i + 1];
                 if (next == 'n') { sb.Append('\n'); i += 2; }
                 else if (next == 'r') { sb.Append('\r'); i += 2; }
+                else if (next == 's') { sb.Append(' '); i += 2; }
                 else if (next == '\\') { sb.Append('\\'); i += 2; }
                 else { sb.Append(s[i]); i++; }
             }
@@ -70,13 +78,19 @@ public static class ClipMetaIndex
 
     /// <summary>
     /// Scans all .mp4 files in <paramref name="directory"/> and returns an
-    /// <see cref="IndexData"/> snapshot. Malformed or unreadable files are silently skipped.
-    /// The internal schema field is excluded.
+    /// <see cref="IndexData"/> snapshot. Malformed or unreadable files are skipped, not thrown,
+    /// so one bad clip never aborts the scan. The internal schema field is excluded.
     /// </summary>
     /// <param name="directory">Directory to scan.</param>
     /// <param name="recursive">When true, scans subdirectories recursively.</param>
+    /// <param name="onFileSkipped">
+    /// Optional callback invoked with the file's path and the exception that caused it to be
+    /// skipped (locked, unreadable, or unparseable). Lets a caller report which file was
+    /// skipped instead of the scan going silent about it. Defaults to no-op.
+    /// </param>
     /// <returns>An <see cref="IndexData"/> snapshot of the directory.</returns>
-    public static IndexData Build(string directory, bool recursive = true)
+    public static IndexData Build(
+        string directory, bool recursive = true, Action<string, Exception>? onFileSkipped = null)
     {
         var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var entries = new List<IndexEntry>();
@@ -85,9 +99,11 @@ public static class ClipMetaIndex
         {
             BoxNode root;
             try { root = Mp4Parser.ParseFile(path); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (InvalidDataException) { continue; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                onFileSkipped?.Invoke(path, ex);
+                continue;
+            }
 
             var fields = ClipMetaReader.GetUserFields(root);
 

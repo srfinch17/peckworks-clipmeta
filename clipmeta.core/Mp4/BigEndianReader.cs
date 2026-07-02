@@ -11,7 +11,7 @@ public static class BigEndianReader
     /// <summary>Reads a 2-byte unsigned integer from the stream in big-endian order.</summary>
     public static ushort ReadUInt16(BinaryReader reader)
     {
-        var bytes = reader.ReadBytes(2);
+        var bytes = ReadExactly(reader, 2);
         if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
         return BitConverter.ToUInt16(bytes, 0);
     }
@@ -19,7 +19,7 @@ public static class BigEndianReader
     /// <summary>Reads a 4-byte unsigned integer from the stream in big-endian order.</summary>
     public static uint ReadUInt32(BinaryReader reader)
     {
-        var bytes = reader.ReadBytes(4);
+        var bytes = ReadExactly(reader, 4);
         if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
         return BitConverter.ToUInt32(bytes, 0);
     }
@@ -27,7 +27,7 @@ public static class BigEndianReader
     /// <summary>Reads an 8-byte unsigned integer from the stream in big-endian order.</summary>
     public static ulong ReadUInt64(BinaryReader reader)
     {
-        var bytes = reader.ReadBytes(8);
+        var bytes = ReadExactly(reader, 8);
         if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
         return BitConverter.ToUInt64(bytes, 0);
     }
@@ -39,8 +39,36 @@ public static class BigEndianReader
     /// </summary>
     public static string ReadFourCC(BinaryReader reader)
     {
-        var bytes = reader.ReadBytes(4);
+        var bytes = ReadExactly(reader, 4);
         return Encoding.Latin1.GetString(bytes);
+    }
+
+    /// <summary>
+    /// Reads exactly <paramref name="count"/> bytes from <paramref name="reader"/>, throwing
+    /// <see cref="EndOfStreamException"/> if fewer bytes remain.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BinaryReader.ReadBytes(int)"/> does <b>not</b> throw at end-of-stream, it
+    /// silently returns a shorter array. Every fixed-width read in this class must go through
+    /// this helper instead of calling <c>ReadBytes</c> directly, otherwise a truncated file
+    /// hands a short array to <see cref="BitConverter"/>, which throws <see cref="ArgumentException"/>,
+    /// an undocumented exception type outside every caller's <see cref="InvalidDataException"/>
+    /// contract (see docs/PITFALLS.md, truncated-file handling).
+    /// </remarks>
+    /// <param name="reader">The reader to read from.</param>
+    /// <param name="count">The exact number of bytes required.</param>
+    /// <returns>An array of exactly <paramref name="count"/> bytes.</returns>
+    /// <exception cref="EndOfStreamException">Fewer than <paramref name="count"/> bytes remained.</exception>
+    private static byte[] ReadExactly(BinaryReader reader, int count)
+    {
+        var bytes = reader.ReadBytes(count);
+        if (bytes.Length < count)
+        {
+            throw new EndOfStreamException(
+                $"Expected to read {count} byte(s) but only {bytes.Length} were available " +
+                "(the file is truncated).");
+        }
+        return bytes;
     }
 
     /// <summary>

@@ -55,10 +55,15 @@ public static class TagQueue
     /// Enqueues a confirmed tag for <paramref name="clipPath"/>. If a tag for that path is already
     /// pending, the new mutation MERGES onto it (set last-wins, append accumulates and pipe-dedups,
     /// delete unions, ClearAll ORs) so a clip never has two competing queue entries. Persists.
+    /// The whole load-merge-save span runs under the queue's <see cref="CrossProcessLock"/>: an
+    /// enqueue from one process (an MCP server) and a drain from another (a second server, a CLI
+    /// <c>--flush-queue</c>) would otherwise interleave, and the drain's final save would silently
+    /// overwrite this entry, a spoken tag vanishing.
     /// </summary>
     public static void Enqueue(string libraryDir, string clipPath, MetadataMutation mutation, string confidence)
     {
         ArgumentNullException.ThrowIfNull(mutation);
+        using CrossProcessLock queueLock = CrossProcessLock.Acquire(QueuePath(libraryDir));
         TagQueueData data = Load(libraryDir);
         var entries = data.Entries.ToList();
 
@@ -115,11 +120,14 @@ public static class TagQueue
     /// <summary>
     /// Writes the queue atomically: serialize to a sibling temp file, then swap it into place with
     /// a retry on a transient AV/indexer lock. Mirrors <c>ClipMetaIndex.WriteToFile</c>, a crash
-    /// mid-write leaves the previous queue intact, never a half-written file.
+    /// mid-write leaves the previous queue intact, never a half-written file. Runs under the
+    /// queue's <see cref="CrossProcessLock"/>; when called from <see cref="Enqueue"/> or
+    /// <see cref="Drain"/> (which already hold it) the acquire is a same-thread reentrant no-op.
     /// </summary>
     public static void Save(TagQueueData data, string libraryDir)
     {
         ArgumentNullException.ThrowIfNull(data);
+        using CrossProcessLock queueLock = CrossProcessLock.Acquire(QueuePath(libraryDir));
         string path = QueuePath(libraryDir);
         string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
         try
@@ -138,9 +146,15 @@ public static class TagQueue
 
     /// <summary>
     /// Attempts to write every queued tag whose clip is not currently locked, through the supplied
-    /// write engine. Single-pass and single-threaded (the caller serializes drains with the write
-    /// tools' single-flight gate). Vanished clips are dropped; locked clips and write failures stay
-    /// queued for the next pass. The surviving queue is persisted once at the end.
+    /// write engine. Single-pass; the whole load-write-save span holds the queue's
+    /// <see cref="CrossProcessLock"/> so a concurrent enqueue or a second drain (another MCP
+    /// server, a CLI <c>--flush-queue</c>) can neither be overwritten by this drain's final save
+    /// nor double-write the same entries. Lock ordering: the queue lock is taken FIRST, then each
+    /// write takes its per-file lock nested inside (in <c>Mp4Writer.WriteMetadata</c>); nothing in
+    /// the codebase acquires the queue lock while holding a file lock, so this cannot deadlock
+    /// (see <see cref="CrossProcessLock"/>). Vanished clips are dropped; locked clips and write
+    /// failures (including a per-file lock timeout, an <see cref="IOException"/>) stay queued for
+    /// the next pass. The surviving queue is persisted once at the end.
     /// </summary>
     /// <param name="libraryDir">Library root holding the queue file.</param>
     /// <param name="writer">Write engine (production: <c>new Mp4Writer()</c>).</param>
@@ -150,7 +164,9 @@ public static class TagQueue
     /// Optional callback invoked for each clip successfully written. Only the background
     /// <see cref="QueueDrainPump"/> supplies this (to feed a <see cref="DrainJournal"/>);
     /// synchronous callers pass <see langword="null"/>, they surface results directly in
-    /// their own response and must not double-report. Never throws out of the drain.
+    /// their own response and must not double-report. Exceptions from the callback never
+    /// propagate out of the drain (the drain itself can still throw, e.g. a cross-process
+    /// lock timeout).
     /// </param>
     public static DrainReport Drain(
         string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string, bool> isInUse,
@@ -159,6 +175,7 @@ public static class TagQueue
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(isInUse);
 
+        using CrossProcessLock queueLock = CrossProcessLock.Acquire(QueuePath(libraryDir));
         TagQueueData data = Load(libraryDir);
         var written = new List<string>();
         var stillQueued = new List<string>();

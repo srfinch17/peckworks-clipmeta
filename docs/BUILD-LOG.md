@@ -43,7 +43,7 @@ inline `<style>`, inline SVG, Google Fonts via CDN with `system-ui` fallback. Pr
 + FAQ (defend-it Q&A), Get started, footer.
 
 ## Placeholders the owner must fill before publishing
-- `[YOUR NAME]` / tagline in hero + footer.
+- Tagline in hero. (Name and footer attribution resolved 2026-07-01 as "A Peckworks Lab project".)
 - Logo slot in the topbar (optional).
 - Screenshot slots (clearly marked `.shot-placeholder`): real terminal capture, a real
   `library_watching` voice exchange, a real search-results view, a montage/gameplay still.
@@ -69,3 +69,7 @@ coordinate issues by eye. Screenshots cleaned up after.
   repo root. Cleaned up after verification; don't commit them.
 
 ## Status: first draft complete + visually verified 2026-06-22.
+
+## Attribution update 2026-07-01
+
+The decision on branding/attribution made in the Decisions section (line 16-17, placeholder approach) has been finalized. The owner attribution has been removed from the footer, replaced with "A Peckworks Lab project" only. The historical note about the placeholder in the Decisions section (line 16-17) remains as is, accepted as a historical record of the page's development. Production attribution is "Peckworks Lab".

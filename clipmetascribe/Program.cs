@@ -236,7 +236,11 @@ internal static class Program
                     fileWriter = new StreamWriter(outputPath, append: false, System.Text.Encoding.UTF8);
                     exportOutput = fileWriter;
                 }
-                var records = ClipMetaExporter.GetRecords(exportPaths);
+                // A locked or unparseable clip must not abort the export; name it on stderr
+                // (never into exportOutput, that stream is structured JSON/CSV).
+                var records = ClipMetaExporter.GetRecords(exportPaths,
+                    onFileSkipped: (path, ex) =>
+                        Console.Error.WriteLine($"SKIPPED {path}: {ex.Message}"));
                 return ExportCommand.Run(records, exportFormat, exportOutput);
             }
             catch (IOException ex)
@@ -304,7 +308,7 @@ internal static class Program
 
             if (ContainsFlag(args, "--clear-all"))
             {
-                return WriteCommand.RunClearAll(filePath, dryRun, yes, backup ? filePath + ".bak" : null, logger);
+                return WriteCommand.RunClearAll(filePath, dryRun, yes, backup ? ClipBackup.MakeBackupPath(filePath) : null, logger);
             }
 
             if (ContainsFlag(args, "--copy-from"))
@@ -426,7 +430,10 @@ internal static class Program
         var mutation = new MetadataMutation
         {
             DryRun = dryRun,
-            BackupPath = backup ? filePath + ".bak" : null,
+            // Timestamped sibling (clip.mp4.bak-20260612-153000): never silently overwrites a
+            // previous backup the user might still want. The naming lives in Core (ClipBackup) so
+            // the backup-management tools recognize exactly what the writer produces.
+            BackupPath = backup ? ClipBackup.MakeBackupPath(filePath) : null,
             // Provenance is stamped by default; --no-provenance opts out (see MetadataMutation).
             StampProvenance = !ContainsFlag(args, "--no-provenance"),
         };
@@ -501,7 +508,7 @@ internal static class Program
                 {
                     ClearAll = true,
                     DryRun = dryRun,
-                    BackupPath = backup ? file + ".bak" : null,
+                    BackupPath = backup ? ClipBackup.MakeBackupPath(file) : null,
                 },
                 logger, dryRun: dryRun);
         }
@@ -629,7 +636,7 @@ internal static class Program
 
             Options:
               --dry-run         Preview changes without writing
-              --backup          Keep .bak copy of original before write
+              --backup          Keep timestamped .bak-<timestamp> copy of original before write
               --verbose         Verbose logging (requires --log)
               --log <path>      Write structured log to file
               --yes             Skip confirmation prompts

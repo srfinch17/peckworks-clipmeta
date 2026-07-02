@@ -6,6 +6,10 @@ name: Release
 # A manual "Run workflow" (workflow_dispatch) builds the SAME assets and uploads them to the run for
 # inspection, WITHOUT publishing a release: a safe way to test the build before cutting a real tag.
 #
+# The release job needs the test job, so nothing publishes (or even builds a dispatch inspection
+# artifact) unless the tagged commit's full test suite is green. Mirrors ci.yml's build/test
+# invocation so a clip-less runner graceful-skips the real-clip integration tests the same way.
+#
 # Windows runner is load-bearing: the assets are self-contained win-x64 single-file binaries and
 # tools/pack-mcpb.ps1 is PowerShell; the product is Windows-only (see CLAUDE.md "Versioning").
 
@@ -18,7 +22,36 @@ permissions:
   contents: write   # create the Release and upload assets
 
 jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      # Definition of Done requires 0 warnings; -warnaserror enforces it so a warning can't creep in.
+      - name: Build (Release, warnings = errors)
+        run: dotnet build --configuration Release --no-restore -warnaserror
+
+      # Real-clip tests report Inconclusive (skipped) here on a clip-less runner, that does NOT fail
+      # the run (testclips/pristine is git-ignored, see ci.yml for the full explanation).
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      # Proves the MCP server actually spawns and completes the stdio handshake, no clips needed.
+      - name: MCP server self-test
+        run: dotnet run --project clipmetamcp --configuration Release --no-build -- --selftest
+
   release:
+    needs: test
     runs-on: windows-latest
 
     steps:

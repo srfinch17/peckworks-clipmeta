@@ -81,6 +81,41 @@ public class IndexCommandTests
         Assert.AreEqual(0, data.Entries.Count);
     }
 
+    // ── Locked file mixed in (v1.0.1 hardening, task B1) ────────────────────
+    //
+    // "One truncated clip must not brick the library": a locked/unreadable clip must not abort
+    // the scan, the good clip must still be indexed, and the output must name the skipped file.
+
+    [TestMethod]
+    public void Run_LockedFileMixedIn_IndexesGoodFileAndReturnsZero()
+    {
+        PrepareClip("good.mp4", "game", "TF2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using var writer = new StringWriter();
+
+        int exitCode = IndexCommand.Run(_tempDir, writer);
+
+        Assert.AreEqual(0, exitCode);
+        var data = ClipMetaIndex.ReadFromFile(Path.Combine(_tempDir, ClipMetaIndex.IndexFileName));
+        Assert.AreEqual(1, data.Entries.Count);
+    }
+
+    [TestMethod]
+    public void Run_LockedFileMixedIn_ReportsSkippedPathInOutput()
+    {
+        PrepareClip("good.mp4", "game", "TF2");
+        string locked = Path.Combine(_tempDir, "locked.mp4");
+        File.WriteAllBytes(locked, new byte[] { 0, 0, 0, 0 });
+        using var handle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using var writer = new StringWriter();
+
+        IndexCommand.Run(_tempDir, writer);
+
+        StringAssert.Contains(writer.ToString(), locked);
+    }
+
     [TestMethod]
     public void Run_DefaultOutput_UsesConsoleOut()
     {

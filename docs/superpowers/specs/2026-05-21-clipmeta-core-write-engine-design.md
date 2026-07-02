@@ -304,7 +304,7 @@ On the **first** write to a file that had no existing clipmeta atoms, append a `
 
 - Every `trak` box has its own `stbl → stco` or `stbl → co64`. **All of them must be adjusted**, not just the first. A stereo video with separate video and audio tracks has two stco tables; missing one desynchronises that track.
 - Adjustment applies only when `mdat` begins at a byte offset **after** the end of `moov`. If `mdat` precedes `moov`, chunk offsets are unaffected.
-- For `stco` (32-bit offsets): if `offset + delta > UInt32.MaxValue`, the write must fail with a clear error. In practice this means the file is approaching 4 GB and should use `co64` already; log a warning if the headroom is under 10%.
+- For `stco` (32-bit offsets): if `offset + delta > UInt32.MaxValue`, the write must fail with a clear error. In practice this means the file is approaching 4 GB and should use `co64` already; log a warning if the headroom is under 10%. (Designed, not implemented: the shipping writer, `WriteAdjustedStco`, only does the hard refusal at the boundary, there is no 10%-headroom warning. See `docs/PITFALLS.md` risk item 7.)
 - Log every adjusted entry at Verbose level: `stco[trak=1]: 3842 entries += 87 bytes`.
 
 ### Fragmented MP4 Detection
@@ -638,7 +638,7 @@ These are the things that will corrupt files silently if missed. Each should hav
 | 4 | `hdlr` missing when creating meta from scratch | Scenario 3 test uses a file with no existing udta/meta/ilst |
 | 5 | Foreign ilst atoms corrupted | Integration test verifies `©nam` value unchanged after write |
 | 6 | stco adjusted when mdat precedes moov | Integration test with mdat-first file; offsets must not change |
-| 7 | `co64` values exceed 32-bit boundary undetected | Log warning if post-adjustment value approaches UInt32.MaxValue |
+| 7 | `co64` values exceed 32-bit boundary undetected | Hard refusal at `UInt32.MaxValue` (`WriteAdjustedStco`). (Designed, not implemented: a "log warning if post-adjustment value approaches UInt32.MaxValue" advisory was spec'd here but never built, the shipping behavior is only the hard refusal.) |
 | 8 | Temp file not deleted on exception | Verify in test: temp file absent after forced exception |
 
 ---

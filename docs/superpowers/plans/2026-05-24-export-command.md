@@ -6,7 +6,7 @@
 
 **Architecture:** `ClipMetaExporter.GetRecords(IEnumerable<string> filePaths)` (in `clipmeta.core/Read/`) reads fields from each file and returns `IReadOnlyList<ExportRecord>`, excluding the internal `schema` field. `ExportCommand.Run(IReadOnlyList<ExportRecord>, string format, TextWriter?)` formats the records as JSON or CSV with hand-written serialization (no NuGet). Program.cs constructs the file list (single file or directory scan), opens an optional `StreamWriter` for `--output`, and calls `ClipMetaExporter.GetRecords` → `ExportCommand.Run`. Tests for `ExportCommand` use constructed `ExportRecord` values, no MP4 file I/O needed, making them fast unit tests.
 
-**Tech Stack:** C# / .NET 10, MSTest 4, no external packages. Solution root: `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`.
+**Tech Stack:** C# / .NET 10, MSTest 4, no external packages. Solution root: `C:\path\to\peckworks-clipmeta`.
 
 ---
 
@@ -168,7 +168,7 @@ public class ClipMetaExporterTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```
-cd C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta
+cd C:\path\to\peckworks-clipmeta
 dotnet test clipmetascribe.Tests --filter "ClipMetaExporterTests" --verbosity minimal
 ```
 

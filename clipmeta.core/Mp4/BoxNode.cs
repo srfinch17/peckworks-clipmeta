@@ -47,10 +47,10 @@ public class BoxNode
     /// <summary>Human-readable value extracted from metadata leaf nodes, or null when not applicable.</summary>
     public string? DisplayValue { get; set; }
 
-    /// <summary>True for metadata items inside the ilst box that clipmetaedit can add, update, or delete.</summary>
+    /// <summary>True for metadata items inside the ilst box that clipmetascribe can add, update, or delete.</summary>
     public bool IsEditable { get; set; }
 
-    /// <summary>The raw FourCC key for editable items; used by clipmetaedit to locate the target field.</summary>
+    /// <summary>The raw FourCC key for editable items; used by clipmetascribe to locate the target field.</summary>
     public string? EditableKey { get; set; }
 
     /// <summary>Raw media timescale (ticks/second) from mdhd; used internally for frame-rate enrichment after parsing.</summary>

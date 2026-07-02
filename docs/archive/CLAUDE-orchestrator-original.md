@@ -1,14 +1,18 @@
 # CLAUDE.md, clipmetaview Orchestration Instructions
 
+> **HISTORICAL, superseded.** This describes an early design (.NET 8, orchestrator roles,
+> "clipmetaedit") that does not match the shipped project. Kept for provenance only. For
+> current facts, see the repo-root `CLAUDE.md`, the code, and `docs/superpowers/`.
+
 ## Project Overview
 
 You are building **clipmetaview**, a C# command-line application that reads an `.mp4` file and displays its internal box/atom structure as a human-readable tree. This is the first deliverable in the **peckworks-clipmeta** suite.
 
-**Solution root:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta`
+**Solution root:** `C:\path\to\peckworks-clipmeta`
 **CLI project name:** `clipmetaview`
 **Target framework:** .NET 8 (or whatever is present in the stub .csproj, do not downgrade)
 **External packages:** NONE. Zero. Only types from the Microsoft base SDK and BCL. No NuGet packages beyond what ships with the SDK.
-**Test clips:** `C:\Users\srfin\Dropbox\Dev\repos\peckworks-clipmeta\testclips\`, real `.mp4` files are available here for integration testing and manual validation. Always use files from this folder when you need a real MP4. Do not hardcode any specific filename; enumerate the folder at test time so new clips added later are picked up automatically.
+**Test clips:** `C:\path\to\peckworks-clipmeta\testclips\`, real `.mp4` files are available here for integration testing and manual validation. Always use files from this folder when you need a real MP4. Do not hardcode any specific filename; enumerate the folder at test time so new clips added later are picked up automatically.
 
 ---
 
@@ -200,7 +204,7 @@ myvideo.mp4  (14.2 MB)
 │           ├── hdlr  Handler  [45 bytes]
 │           └── ilst  Metadata Items  [900 bytes]
 │               ├── ©nam  Title  "My Vacation 2024"  ← [EDITABLE]
-│               ├── ©ART  Artist  "Scott Finley"  ← [EDITABLE]
+│               ├── ©ART  Artist  "Alex Rivers"  ← [EDITABLE]
 │               └── desc  Description  ""  ← [EDITABLE]
 └── mdat  Media Data  [12398012 bytes @ 0xB4AF]  (raw media, not expanded)
 

@@ -209,6 +209,42 @@ public class ListCommandTests
         Assert.AreEqual(0, exitCode);
     }
 
+    // ── Truncated file (v1.0.1 hardening, task B1) ─────────────────────────
+    //
+    // Before the fix, a truncated extended-size box header made BigEndianReader hand a short
+    // byte array to BitConverter, which threw a raw, uncaught ArgumentException, the CLI's
+    // single-file read path (--list) had no catch for it and crashed with a bare stack trace
+    // instead of a clean error line. This is the "single-file read path" scenario from the
+    // nemesis review: the file must never surface that raw exception type.
+
+    [TestMethod]
+    public void Run_TruncatedExtendedSizeHeaderFile_NeverThrowsArgumentException()
+    {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4");
+        byte[] bytes =
+        {
+            0x00, 0x00, 0x00, 0x01,                   // size = 1 (extended)
+            0x6D, 0x64, 0x61, 0x74,                   // 'mdat'
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // extended-size field, 7 of 8 bytes
+        };
+        File.WriteAllBytes(path, bytes);
+        _scratchFiles.Add(path);
+        using var writer = new StringWriter();
+
+        try
+        {
+            int exitCode = ListCommand.Run(path, writer);
+            // Mp4Parser is deliberately lenient for a header that cannot be fully read (the
+            // file "should still be viewable up to the damage"); with no bytes before the
+            // damage that means a clean, zero-metadata success, not a crash.
+            Assert.AreEqual(0, exitCode);
+        }
+        catch (ArgumentException ex)
+        {
+            Assert.Fail($"--list must never surface a raw ArgumentException; got: {ex}");
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static string PrepareScratch(string pristine)

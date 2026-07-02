@@ -4,7 +4,7 @@
 **Status:** Draft, pending owner review (authored autonomously from the v1.5.0 dogfood; owner asleep, cleared design decisions)
 **Version target:** clipmetamcp **v1.6.0** (behavior change to existing tools; no new tools), see §10 for the v1.0.0-reset interaction
 **Predecessor:** `2026-06-27-resolver-advisory-hardening-design.md` (pass-6, v1.5.0)
-**Dogfood source:** v1.5.0 live run, `C:\Users\srfin\Videos\ClipmetaTesting` (41→51 clips), review mode
+**Dogfood source:** v1.5.0 live run, `C:\path\to\ClipmetaTesting` (41→51 clips), review mode
 
 ---
 

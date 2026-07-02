@@ -151,7 +151,7 @@ public static class TreeRenderer
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Green,     "  Header / info box     ", "parseable technical value shown inline");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkGray,  "  Technical / codec     ", "internal sample-table or codec structure");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkCyan,  "  Media data (mdat)     ", "raw encoded audio/video bytes, not expanded");
-        WriteLegendColorSwatch(writer, useColor, ConsoleColor.Yellow,    "  iTunes metadata       ", "iTunes tag field (©nam, ©ART, covr…), editable with clipmetaedit");
+        WriteLegendColorSwatch(writer, useColor, ConsoleColor.Yellow,    "  iTunes metadata       ", "iTunes tag field (©nam, ©ART, covr…), editable with clipmetascribe");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.DarkYellow,"  Windows Media (WM/)   ", "attribute written by Windows File Explorer (Tags, Director…)");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Magenta,   "  ← [EDITABLE] marker  ", "appears on every field that can be modified");
         WriteLegendColorSwatch(writer, useColor, ConsoleColor.Gray,      "  Unknown / vendor      ", "unrecognized or vendor-specific extension box");
@@ -213,7 +213,7 @@ public static class TreeRenderer
         SetColor(ConsoleColor.DarkGray, useColor);
         writer.WriteLine(Rule);
         SetColor(ConsoleColor.White, useColor);
-        writer.WriteLine(" EDITABLE METADATA FIELDS  (add/update/delete with clipmetaedit, coming soon)");
+        writer.WriteLine(" EDITABLE METADATA FIELDS  (add/update/delete with clipmetascribe)");
         SetColor(ConsoleColor.DarkGray, useColor);
         writer.WriteLine(Rule);
         ResetColor(useColor);
