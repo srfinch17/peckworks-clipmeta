@@ -1,21 +1,22 @@
-<!--
-  TEMPLATE NOTE: this file is the source/template for the NEXT release body
-  (v1.0.1), not a record of what was published for v1.0.0. The v1.0.0 body
-  was hand-published (this workflow didn't exist yet, see CLAUDE.md's CI
-  section) and had already drifted from this file by the time it shipped.
-  A later task fills in the "What's new in v1.0.1" section below with the
-  actual changelog before the v1.0.1 tag is cut; the rest of the body is
-  meant to stay accurate release over release and should only need
-  touch-ups, not a rewrite, each time. When cutting the release, delete
-  this comment block, it is editorial, not part of the published body.
--->
-
 Tag your game clips by voice, the moment they happen. clipmeta writes searchable metadata **inside** your MP4 files, so the tags travel with the clip.
 
 ## What's new in v1.0.1
 
-<!-- TODO (D4): fill in with the actual v1.0.1 changelog before tagging. -->
-- TODO: summarize this hardening/fix pass (docs truth fixes, PITFALLS repairs, CLI readme fix, and whatever code fixes Part D lands).
+This is a hardening and correctness release. No new features, safety and reliability fixes for edge cases found while dogfooding v1.0.0.
+
+- **Safer with truncated or damaged files.** A cut-off or corrupted MP4 is now cleanly refused instead of causing confusing errors. When scanning a folder, bad files are skipped and named in the output so you know what was left out.
+- **Won't create duplicate, conflicting tags.** If a file already carries clipmeta metadata in an unexpected location, writes are now refused rather than silently adding a second, divergent copy of your tags.
+- **Stronger write verification.** After every write, clipmeta now reads back and checks the actual tag values (not just that something is present), and confirms fields you deleted are really gone.
+- **Safe to use from multiple tools at once.** Writes are now serialized across the CLI, the Claude Desktop extension, and the tag queue, so running more than one at the same time can no longer corrupt a file.
+- **Clear message for unfinished recordings.** MP4s with no finalized structure (for example a recording that was still writing when a player crashed) now get a plain "can't be tagged yet" message instead of an internal error.
+- **Fixed a CLI backup bug.** `--backup` now uses the same timestamped naming as the rest of the tool, so making a second backup no longer overwrites the first, and CLI backups now show up correctly in backup management tools.
+- **Fixed search for multi-word field names.** Field names containing spaces now round-trip correctly through the search index, so a cached search agrees with a live lookup again.
+- **Documentation cleanup.** Removed leftover references to a CLI tool that never shipped, and corrected several other inaccuracies in the docs.
+- **Now credited to Peckworks Lab.**
+
+**Changelog note:** a few small documentation and wording commits landed on `main` right after v1.0.0 shipped, before this version-bump process existed, so they went out without a version bump. v1.0.1 also formally covers those.
+
+This is also the first release built and published automatically by CI from a tagged commit, rather than assembled by hand.
 
 **Project site:** https://srfinch17.github.io/peckworks-clipmeta/
 
