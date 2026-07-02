@@ -1,6 +1,6 @@
 using ClipMetaCore.Mp4;
+using ClipMetaCore.Rendering;
 using ClipMetaView;
-using ClipMetaView.Rendering;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ClipMetaView.Tests;

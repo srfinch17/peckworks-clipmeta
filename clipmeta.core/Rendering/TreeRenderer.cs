@@ -1,6 +1,7 @@
+using System.Globalization;
 using ClipMetaCore.Mp4;
 
-namespace ClipMetaView.Rendering;
+namespace ClipMetaCore.Rendering;
 
 /// <summary>
 /// Renders a <see cref="BoxNode"/> tree using Unicode box-drawing characters with color coding.
@@ -46,7 +47,7 @@ public static class TreeRenderer
         }
         finally
         {
-            Console.ResetColor();
+            if (useColor) Console.ResetColor();
         }
     }
 
@@ -92,7 +93,8 @@ public static class TreeRenderer
             ? $"{node.Type}  {friendlyName}"
             : node.Type;
 
-        string sizeAndOffset = $"[{node.Size:N0} bytes @ 0x{node.FileOffset:X}]";
+        string sizeAndOffset =
+            $"[{node.Size.ToString("N0", CultureInfo.InvariantCulture)} bytes @ 0x{node.FileOffset:X}]";
 
         string extra = node.Type == "mdat" ? "  (raw media, not expanded)" : string.Empty;
 
@@ -438,8 +440,8 @@ public static class TreeRenderer
     {
         const ulong MB = 1024 * 1024;
         const ulong KB = 1024;
-        if (bytes >= MB) return $"{(double)bytes / MB:F1} MB";
-        if (bytes >= KB) return $"{(double)bytes / KB:F1} KB";
+        if (bytes >= MB) return $"{((double)bytes / MB).ToString("F1", CultureInfo.InvariantCulture)} MB";
+        if (bytes >= KB) return $"{((double)bytes / KB).ToString("F1", CultureInfo.InvariantCulture)} KB";
         return $"{bytes} bytes";
     }
 }

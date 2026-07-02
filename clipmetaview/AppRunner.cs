@@ -1,5 +1,5 @@
 using ClipMetaCore.Mp4;
-using ClipMetaView.Rendering;
+using ClipMetaCore.Rendering;
 
 namespace ClipMetaView;
 
