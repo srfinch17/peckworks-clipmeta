@@ -164,7 +164,9 @@ public static class TagQueue
     /// Optional callback invoked for each clip successfully written. Only the background
     /// <see cref="QueueDrainPump"/> supplies this (to feed a <see cref="DrainJournal"/>);
     /// synchronous callers pass <see langword="null"/>, they surface results directly in
-    /// their own response and must not double-report. Never throws out of the drain.
+    /// their own response and must not double-report. Exceptions from the callback never
+    /// propagate out of the drain (the drain itself can still throw, e.g. a cross-process
+    /// lock timeout).
     /// </param>
     public static DrainReport Drain(
         string libraryDir, IMediaWriter writer, IClipMetaLogger logger, Func<string, bool> isInUse,

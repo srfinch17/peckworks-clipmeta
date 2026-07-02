@@ -85,6 +85,7 @@ public static class ReadTools
             "given text (case-insensitive substring) and returns the matching file paths. " +
             "This parses each MP4, so it can take a while on large libraries, prefer " +
             "library_search_index for repeated queries. Requires a configured clips library. " +
+            "The response may include a 'skipped' array naming files that could not be read. " +
             PipeFieldsSentence,
             FieldValueSchema(
                 "Metadata field to search (e.g. game, tags, players, or a custom name).",
@@ -97,7 +98,8 @@ public static class ReadTools
             "Lists every distinct value used for one metadata field across the whole library, " +
             "with the number of clips using each value, e.g. all tags ever used, or all game " +
             "names. Multi-value fields are split into individual items first. Requires a " +
-            "configured clips library.",
+            "configured clips library. The response may include a 'skipped' array naming " +
+            "files that could not be read.",
             FieldOnlySchema(),
             args => VocabForLibrary(args, sandbox),
             _ => new JsonObject { ["field"] = "tags" }));
@@ -108,7 +110,8 @@ public static class ReadTools
             "structured records ('json', the default) or CSV text ('csv', same columns as " +
             "the clipmetascribe --export command; custom fields become extra columns after the " +
             "known ones). Ordered alphabetically by path (note: library_list orders newest " +
-            "first). Requires a configured clips library.",
+            "first). Requires a configured clips library. The response may include a " +
+            "'skipped' array naming files that could not be read.",
             ExportSchema(),
             args => ExportLibrary(args, sandbox, ledger),
             _ => new JsonObject()));
@@ -119,7 +122,8 @@ public static class ReadTools
             "Results reflect the index as of 'indexBuilt'; the response's 'staleClipCount' " +
             "says how many files changed since, pass rebuild:true when it is above zero. " +
             "With 'field' (and optional 'value' substring) returns matching clips; without, " +
-            "returns an index summary. Requires a configured clips library.",
+            "returns an index summary. Requires a configured clips library. When a rebuild " +
+            "runs, the response may include a 'skipped' array naming files that could not be read.",
             SearchIndexSchema(),
             args => SearchIndex(args, sandbox),
             _ => new JsonObject { ["rebuild"] = true, ["field"] = "game", ["value"] = "TF2" }));
