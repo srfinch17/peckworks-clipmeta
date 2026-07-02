@@ -56,7 +56,7 @@ public static class ClipMetaReader
             CollectFromNode(child, result);
     }
 
-    private static string UnquoteDisplayValue(string displayValue)
+    internal static string UnquoteDisplayValue(string displayValue)
     {
         // The parser wraps UTF-8 string values in quotes: "My String"
         // Strip them if present, but leave other display values untouched (e.g. "[JPEG image, ...]").

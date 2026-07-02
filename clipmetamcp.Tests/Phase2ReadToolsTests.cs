@@ -119,7 +119,7 @@ public class Phase2ReadToolsTests
             {
                 "clip_get_metadata", "library_list", "library_find",
                 "library_vocab", "library_export", "library_search_index",
-                "library_watching",
+                "library_watching", "clip_get_boxtree",
                 "clip_set_fields", "clip_append_field", "clip_clear_fields", "clip_clear_all",
                 "library_list_backups", "clip_restore_backup", "clip_prune_backups",
                 "library_queue_tag", "library_flush_queue", "library_queue_status",
@@ -147,6 +147,54 @@ public class Phase2ReadToolsTests
 
         var custom = s["customFields"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         CollectionAssert.AreEqual(new[] { "map" }, custom);
+    }
+
+    // ── clip_get_boxtree ─────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void GetBoxTree_Json_ReturnsTopLevelBoxes()
+    {
+        JsonObject result = Call("clip_get_boxtree", new JsonObject { ["path"] = _taggedPath });
+        AssertOk(result);
+        JsonObject s = Structured(result);
+        Assert.IsTrue(s["boxes"]!.AsArray().Count > 0, "expected top-level boxes");
+        var types = s["boxes"]!.AsArray().Select(b => b!["type"]!.GetValue<string>()).ToList();
+        CollectionAssert.Contains(types, "ftyp");
+    }
+
+    [TestMethod]
+    public void GetBoxTree_Ascii_MatchesCliNonColorOutput()
+    {
+        JsonObject result = Call("clip_get_boxtree",
+            new JsonObject { ["path"] = _taggedPath, ["render"] = "ascii" });
+        AssertOk(result);
+        string toolAscii = Structured(result)["ascii"]!.GetValue<string>();
+
+        var root = ClipMetaCore.Mp4.Mp4Parser.ParseFile(_taggedPath);
+        var sw = new StringWriter();
+        ClipMetaCore.Rendering.TreeRenderer.Render(root, _taggedPath, sw);
+        ClipMetaCore.Rendering.TreeRenderer.RenderSummary(root, sw);
+        Assert.AreEqual(sw.ToString(), toolAscii);
+    }
+
+    [TestMethod]
+    public void GetBoxTree_Json_ByteIdenticalToSharedSerializer()
+    {
+        JsonObject result = Call("clip_get_boxtree", new JsonObject { ["path"] = _taggedPath });
+        string toolText = result["content"]!.AsArray()[0]!["text"]!.GetValue<string>();
+
+        var root = ClipMetaCore.Mp4.Mp4Parser.ParseFile(_taggedPath);
+        long size = new FileInfo(_taggedPath).Length;
+        string canonical = ClipMetaCore.Read.BoxTreeJson.ToJson(
+            ClipMetaCore.Read.BoxTreeMapper.Map(root, _taggedPath, size));
+        Assert.AreEqual(canonical, toolText, "MCP json text must equal the shared serializer output");
+    }
+
+    [TestMethod]
+    public void GetBoxTree_BadPath_Refuses()
+    {
+        JsonObject result = Call("clip_get_boxtree", new JsonObject { ["path"] = "does-not-exist.mp4" });
+        AssertRefused(result, "does-not-exist");
     }
 
     // ── library_list ─────────────────────────────────────────────────────────────────────

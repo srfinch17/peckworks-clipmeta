@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using ClipMetaCore.Logging;
 using ClipMetaCore.Mp4;
 using ClipMetaCore.Read;
+using ClipMetaCore.Rendering;
 using ClipMetaCore.Schema;
 using ClipMetaCore.Watching;
 using ClipMetaCore.Write;
@@ -161,6 +162,18 @@ public static class ReadTools
             WatchingSchema(),
             args => Watching(args, sandbox, watcher, ledger, journal),
             _ => new JsonObject { ["limit"] = DefaultWatchingLimit }));
+
+        registry.Register(new ToolDefinition(
+            "clip_get_boxtree",
+            "Returns the internal MP4 box/atom structure of one clip. 'path' must be an existing " +
+            ".mp4 file inside the configured clips library; relative paths resolve against the " +
+            "library root. 'render' is 'json' (default): a structured tree of boxes with type, " +
+            "offset, size, header size, friendly name, category, decoded value, and a flag marking " +
+            "clipmeta's own metadata atoms; or 'ascii': the same human-readable tree the " +
+            "clipmetaview CLI prints, returned as the 'ascii' field. Read-only; never writes.",
+            BoxTreeSchema(),
+            args => GetBoxTree(args, sandbox),
+            clipPath => new JsonObject { ["path"] = clipPath }));
     }
 
     /// <summary>
@@ -186,6 +199,27 @@ public static class ReadTools
                 ["type"] = "string",
                 ["description"] = "Path to an .mp4 file inside the clips library. " +
                                   "Absolute, or relative to the library root.",
+            },
+        },
+        ["required"] = new JsonArray("path"),
+    };
+
+    /// <summary>JSON Schema for clip_get_boxtree: a clip path plus the optional render mode.</summary>
+    private static JsonObject BoxTreeSchema() => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["description"] = "Path to an .mp4 file inside the clips library. Absolute, or relative to the library root.",
+            },
+            ["render"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray("json", "ascii"),
+                ["description"] = "Output format: 'json' (default, structured tree) or 'ascii' (the clipmetaview text tree).",
             },
         },
         ["required"] = new JsonArray("path"),
@@ -369,6 +403,28 @@ public static class ReadTools
         if (duplicated.Count > 0)
             result["duplicatedFields"] = duplicated; // names that appeared more than once; first value kept
         return result;
+    }
+
+    /// <summary>Handler for clip_get_boxtree: structured box tree ('json') or the CLI ASCII tree ('ascii').</summary>
+    internal static JsonObject GetBoxTree(JsonObject? args, LibrarySandbox sandbox)
+    {
+        string fullPath = sandbox.ResolveClipPath(GetRequiredString(args, "path"));
+        string render = args?["render"]?.GetValue<string>() ?? "json";
+        BoxNode root = ParseClip(fullPath);
+
+        if (render == "ascii")
+        {
+            var sw = new StringWriter();
+            TreeRenderer.Render(root, fullPath, sw);
+            TreeRenderer.RenderSummary(root, sw);
+            return new JsonObject { ["ascii"] = sw.ToString() };
+        }
+
+        if (render != "json")
+            throw new ToolException($"'render' must be 'json' or 'ascii'; got '{render}'.");
+
+        long fileSize = new FileInfo(fullPath).Length;
+        return BoxTreeJson.ToJsonObject(BoxTreeMapper.Map(root, fullPath, fileSize));
     }
 
     private static JsonObject ListLibrary(JsonObject? args, LibrarySandbox sandbox)

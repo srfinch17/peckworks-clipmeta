@@ -1,5 +1,6 @@
+using System.Globalization;
 using ClipMetaCore.Mp4;
-using ClipMetaView.Rendering;
+using ClipMetaCore.Rendering;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ClipMetaView.Tests;
@@ -214,5 +215,26 @@ public class TreeRendererTests
         string output = sw.ToString();
 
         Assert.IsTrue(output.Contains("[EDITABLE]"), $"Expected [EDITABLE] marker in summary:\n{output}");
+    }
+
+    [TestMethod]
+    public void Render_NumberFormatting_IsInvariantAcrossCultures()
+    {
+        var big = new BoxNode { Type = "mdat", Size = 1234567, FileOffset = 4096, HeaderSize = 8 };
+        var root = new BoxNode { Type = "ROOT", Children = { big } };
+
+        var original = System.Threading.Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
+            var sw = new StringWriter();
+            TreeRenderer.Render(root, "test.mp4", sw);
+            // Invariant grouping uses a comma; a de-DE default would have used a period.
+            StringAssert.Contains(sw.ToString(), "1,234,567 bytes");
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = original;
+        }
     }
 }
