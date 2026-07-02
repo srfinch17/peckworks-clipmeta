@@ -77,6 +77,21 @@ jobs:
           }
           Write-Host "OK: tag $tag matches VERSION $version"
 
+      # The published release body is .github/release-notes.md, which bump-version.ps1 does NOT
+      # stamp, so it silently keeps the PREVIOUS version's notes until hand-edited (v1.1.0 first
+      # shipped carrying v1.0.1's notes). Fail before building rather than publish a release whose
+      # body describes the wrong version. Not tag-gated, so a workflow_dispatch test build also
+      # surfaces stale notes against the current VERSION file.
+      - name: Verify release notes mention this version
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $notes = Get-Content .github/release-notes.md -Raw
+          if ($notes -notmatch [regex]::Escape("v$version")) {
+            throw ".github/release-notes.md does not mention 'v$version'. Rewrite its 'What's new' section for this release before tagging (it becomes the published GitHub Release body)."
+          }
+          Write-Host "OK: release notes mention v$version"
+
       - name: Build release assets
         shell: pwsh
         run: ./tools/build-release-artifacts.ps1

@@ -242,7 +242,7 @@
 
     <div class="statband">
       <div class="s o"><div class="v">.mp4 → .mp4</div><div class="k">metadata lives in the file</div></div>
-      <div class="s"><div class="v">17</div><div class="k">MCP tools for Claude</div></div>
+      <div class="s"><div class="v">18</div><div class="k">MCP tools for Claude</div></div>
       <div class="s a"><div class="v">0</div><div class="k">NuGet deps in production</div></div>
       <div class="s b"><div class="v">~600</div><div class="k">tests, incl. media-integrity</div></div>
     </div>
@@ -344,6 +344,8 @@
 
     <p>An MP4 is a tree of nested <em>boxes</em> (the format calls them "atoms"). clipmeta adds its fields as <span class="m">----</span> "freeform" atoms under a private namespace, <span class="m">com.peckworkslab.clipmeta</span>, so they sit alongside, and never collide with, the file's existing metadata, the iTunes-style tags, or another tool's data.</p>
 
+    <p>Because clipmeta already walks that entire tree to read and write safely, it can also hand the whole structure to you: <span class="m">clip_get_boxtree</span> (in Claude Desktop) and <span class="m">clipmetaview --json</span> (in the terminal) return every box's type, friendly name, size, and position as JSON, with clipmeta's own fields flagged, so you can inspect exactly how a file is laid out. Read-only, it never touches a byte.</p>
+
     <div class="fig">
       <svg viewBox="0 0 720 340" role="img" aria-label="An MP4 box tree. Top-level boxes ftyp, moov, mdat. Inside moov is a udta box, inside that meta, inside that ilst, and inside ilst a highlighted box named with the clipmeta freeform atom holding game, players, tags, rating fields. The mdat box, the actual video, is marked untouched.">
         <text x="360" y="22" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">one .mp4 file, a tree of nested boxes</text>
@@ -414,7 +416,7 @@
           <rect x="20" y="36" width="150" height="40" rx="8" fill="#17120a" stroke="#FF8A3D"/><text x="95" y="60" text-anchor="middle" fill="#FF8A3D">YOU (voice)</text>
           <rect x="20" y="36" width="150" height="40" rx="8" fill="none"/>
           <rect x="210" y="36" width="160" height="40" rx="8" fill="#151A21" stroke="#2BE0CE"/><text x="290" y="60" text-anchor="middle" fill="#2BE0CE">CLAUDE</text>
-          <rect x="410" y="36" width="180" height="40" rx="8" fill="#151A21" stroke="#B98CFF"/><text x="500" y="55" text-anchor="middle" fill="#B98CFF">clipmeta MCP</text><text x="500" y="69" text-anchor="middle" fill="#94A0B2" font-weight="400" font-size="9">17 tools, sandboxed</text>
+          <rect x="410" y="36" width="180" height="40" rx="8" fill="#151A21" stroke="#B98CFF"/><text x="500" y="55" text-anchor="middle" fill="#B98CFF">clipmeta MCP</text><text x="500" y="69" text-anchor="middle" fill="#94A0B2" font-weight="400" font-size="9">18 tools, sandboxed</text>
           <rect x="630" y="36" width="130" height="40" rx="8" fill="#1C2330" stroke="#2C3442"/><text x="695" y="60" text-anchor="middle" fill="#94A0B2">your .mp4</text>
         </g>
         <!-- lifelines -->
