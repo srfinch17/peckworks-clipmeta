@@ -433,6 +433,77 @@ internal static class MinimalMp4Builder
     }
 
     /// <summary>
+    /// Builds a minimal ftyp box: major_brand (4 bytes) + minor_version (4 bytes) + one
+    /// compatible brand (4 bytes). The writer's moov-less guard only cares about box
+    /// boundaries at the top level, not ftyp's actual content, so this is deliberately bare.
+    /// </summary>
+    public static byte[] FtypBox()
+    {
+        byte[] payload = new byte[12];
+        Encoding.Latin1.GetBytes("isom").CopyTo(payload, 0);
+        // bytes 4..7 (minor_version) left zero
+        Encoding.Latin1.GetBytes("isom").CopyTo(payload, 8);
+        return Box("ftyp", payload);
+    }
+
+    /// <summary>
+    /// Assembles a well-formed but moov-less MP4: <c>ftyp</c> + <c>mdat</c>, no <c>moov</c>
+    /// anywhere. Models a recording interrupted before the muxer finalized the file (moov is
+    /// conventionally written last). Task B5 scenario (a), the correctness reviewer's finding:
+    /// before the fix this fell through <c>DetermineScenario</c> as <c>Create</c> and died at
+    /// the internal temp-length check instead of refusing cleanly.
+    /// </summary>
+    public static MemoryStream BuildFtypMdatNoMoov()
+    {
+        byte[] ftyp = FtypBox();
+        byte[] mdat = MdatBox();
+
+        var ms = new MemoryStream();
+        ms.Write(ftyp);
+        ms.Write(mdat);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>
+    /// Builds a top-level box with a 32-bit size field of <c>0</c> ("to end of file", see
+    /// <see cref="ClipMetaCore.Mp4.BigEndianReader.ReadBoxHeader"/>). ISO 14496-12 only permits
+    /// this for the LAST box in the file; here the box is deliberately followed by more bytes,
+    /// modeling a malformed muxer output.
+    /// </summary>
+    private static byte[] Size0Box(string type, byte[] payload)
+    {
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+        WriteBE32(bw, 0); // size field == 0 -> BigEndianReader resolves this to end-of-stream
+        bw.Write(Encoding.Latin1.GetBytes(type.PadRight(4)[..4]));
+        bw.Write(payload);
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Assembles an MP4 whose <c>mdat</c> uses a to-EOF (<c>size=0</c>) header and is followed
+    /// by a real, well-formed <c>moov</c> (carrying one seed clipmeta field). Because size=0
+    /// resolves unconditionally to end-of-stream, the parser treats the moov's bytes as part of
+    /// mdat's opaque payload rather than a sibling box, the resulting tree has NO moov box at
+    /// all, even though moov's bytes are physically present in the file. Task B5 scenario (b),
+    /// the nemesis's "swallowed moov" finding: a size=0 box that is not actually last silently
+    /// eats everything after it, including moov, so reads report "(no clipmeta metadata)" with
+    /// false confidence and writes must refuse rather than die at the internal temp-length check.
+    /// </summary>
+    public static MemoryStream BuildMdatSizeZeroSwallowingMoov(string domain, string fieldName, string value)
+    {
+        byte[] moov = MoovBox(UdtaBox(MetaBox(IlstBox(FreeformAtom(domain, fieldName, value)))));
+        byte[] mdat = Size0Box("mdat", new byte[64]);
+
+        var ms = new MemoryStream();
+        ms.Write(mdat);
+        ms.Write(moov); // physically present, but swallowed into mdat's to-EOF payload on parse
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>
     /// Saves a byte stream to a temp file, returns the file path.
     /// Caller is responsible for deleting the file.
     /// </summary>

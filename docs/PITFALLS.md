@@ -8,6 +8,36 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Moov-less files fell through to a baffling internal error instead of a clean refusal (task B5)
+**Symptom (two convergent findings):** (a) correctness reviewer: a well-formed `ftyp`+`mdat` file
+with no `moov` (not fragmented) fell through `Mp4Writer.DetermineScenario` as `Create`, never
+emitted a moov, and died at the internal temp-length check with "temp file is X bytes but Y were
+expected", a message that names neither the real problem nor a plausible cause. (b) nemesis: a
+to-EOF (`size=0`) box that is NOT actually the last box in the file dies the exact same way, for a
+non-obvious reason: `BigEndianReader.ReadBoxHeader` resolves `size=0` **unconditionally** to
+"rest of the file" (`reader.BaseStream.Length - boxStart`), so `ParseBoxes` seeks straight to EOF
+after that box and never even looks at the bytes physically sitting after it. A real, well-formed
+`moov` placed after such a box is silently swallowed into the box's own opaque payload, it is
+never visited as a sibling box. Reads report "(no clipmeta metadata)" with false confidence
+(no error, just nothing found); writes die with the same internal message as scenario (a).
+**Fix:** `Mp4Writer.DetectMissingMoov`, a guard next to `DetectFragmented` in the pre-write
+pipeline: `if (!root.Children.Any(c => c.Type == "moov")) throw UnsupportedFormatException(...)`,
+with a message that names both real-world causes (truncated/unfinalized recording, and a
+non-last size=0 box). Covers both scenarios with one check since they produce the identical
+symptom, a moov-less parse tree.
+**Why no parser-side fix:** the size=0 resolution eats the offending bytes as part of the box's
+OWN payload, by the time parsing finishes there is nothing left unparsed to inspect, the "missing"
+moov bytes are indistinguishable from ordinary opaque media data at that point. Detecting them
+would require heuristically scanning binary mdat payload for byte sequences that merely resemble a
+box header, real media data can coincidentally contain such sequences, so this is a false-positive
+minefield, not a cheap add. Deliberately left as a known limitation: read behavior for this
+malformed shape stays lenient (false-confidence "no metadata" rather than an error), only the
+write path was hardened.
+**Lesson:** "the parser is lenient, the writer is strict" (see the 2026-06-10 entry below) is not
+one gate, it is a family of gates, every distinct way the parse tree can be silently incomplete
+needs its own explicit writer-side check. A missing moov and a truncated/clamped box are different
+failure shapes that both violate "the writer must never emit less than a complete file."
+
 ## 2026-07-01, In-process "single-flight" was an overclaim; the product is multi-process (task B4)
 **Symptom (found by nemesis review):** every write-serialization primitive was per-process (the MCP
 `WriteGate` was a `SemaphoreSlim`, its comment claiming the `File.Replace` race was "retired

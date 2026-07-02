@@ -165,6 +165,7 @@ public sealed class Mp4Writer : IMediaWriter
             {
                 var root = Mp4Parser.Parse(src);
                 DetectFragmented(root, filePath);
+                DetectMissingMoov(root, filePath);
 
                 // SAFETY GATE: the parser is deliberately lenient (the tree viewer should open
                 // damaged files), but the WRITER must be strict. It rebuilds the output from the
@@ -1045,6 +1046,38 @@ public sealed class Mp4Writer : IMediaWriter
             throw new UnsupportedFormatException(
                 $"'{Path.GetFileName(filePath)}' uses fragmented MP4 format (contains moof boxes). " +
                 $"Write is not supported for fragmented files.");
+    }
+
+    // ── Missing moov detection ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Refuses to write when the parse tree has no top-level <c>moov</c> box. Without this gate
+    /// such a file falls through <see cref="DetermineScenario"/> as <c>Create</c>, never emits a
+    /// moov, and dies later at the internal temp-length check with a message that names neither
+    /// the file's real problem nor a plausible cause.
+    /// </summary>
+    /// <remarks>
+    /// Two real-world causes converge on the same empty check here: (1) a well-formed but
+    /// unfinalized recording, a capture tool that writes <c>ftyp</c> and <c>mdat</c> as it
+    /// records but only appends <c>moov</c> once recording stops normally, so a file saved from a
+    /// crash or forced stop is legitimately moov-less; (2) a malformed file where an earlier
+    /// to-EOF (<c>size=0</c>) box is not actually the last box in the file, see
+    /// <see cref="BigEndianReader.ReadBoxHeader"/>, which resolves size=0 unconditionally to
+    /// end-of-stream. Such a box silently swallows every byte after it, including a real moov
+    /// that is physically present, so the parse tree ends up moov-less even though the file is
+    /// larger than that one box. Both land here with the same refusal rather than the writer's
+    /// internal "temp file is X bytes but Y were expected" message, which names neither cause.
+    /// </remarks>
+    /// <exception cref="UnsupportedFormatException">When no top-level moov box is present.</exception>
+    private static void DetectMissingMoov(BoxNode root, string filePath)
+    {
+        if (!root.Children.Any(c => c.Type == "moov"))
+            throw new UnsupportedFormatException(
+                $"'{Path.GetFileName(filePath)}' has no moov box, this is not a complete/finalized " +
+                $"MP4. This can happen if the recording was truncated or interrupted before the " +
+                $"muxer finished (moov is typically written last), or if an earlier to-EOF " +
+                $"(size=0) box in the file is not actually last and has swallowed everything " +
+                $"after it, including moov. Write is not supported for a file with no moov box.");
     }
 
     // ── Non-canonical metadata detection ───────────────────────────────────────
