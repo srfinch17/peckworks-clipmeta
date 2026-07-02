@@ -106,7 +106,7 @@ public static class AppRunner
             if (wantJson)
             {
                 long fileSize = new FileInfo(path).Length;
-                writer.WriteLine(BoxTreeJson.ToJson(BoxTreeMapper.Map(root, path, fileSize)));
+                writer.WriteLine(BoxTreeJson.ToJson(BoxTreeMapper.Map(root, Path.GetFullPath(path), fileSize)));
             }
             else
             {
