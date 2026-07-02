@@ -40,14 +40,21 @@ public static class ClipMetaIndex
     public const string IndexFileName = ".clipmeta-index";
 
     /// <summary>
-    /// Escapes backslashes and newlines in field values for safe serialization.
+    /// Escapes backslashes, newlines, and spaces in field values for safe serialization.
+    /// Space is escaped so a field <b>name</b> may contain spaces without being mis-split by
+    /// the space-delimited "field {name} {value}" line format on read (the value itself is
+    /// never re-split, so escaping its spaces is not load-bearing, but doing it uniformly keeps
+    /// the format symmetric and the escaped text readable either way).
     /// </summary>
     private static string Escape(string s)
-        => s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");
+        => s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace(" ", "\\s");
 
     /// <summary>
-    /// Unescapes backslashes and newlines in field values after deserialization.
-    /// Processes in order: \\n → \n, \\r → \r, \\\\ → \\ to handle all escape sequences correctly.
+    /// Unescapes backslashes, newlines, and spaces in field values after deserialization.
+    /// Recognizes \n, \r, \s, and \\; any other backslash is copied through unchanged so
+    /// index files written before space-escaping existed (which never emit a lone backslash
+    /// followed by one of these letters unless it came from an already-doubled backslash)
+    /// continue to parse identically.
     /// </summary>
     private static string Unescape(string s)
     {
@@ -60,6 +67,7 @@ public static class ClipMetaIndex
                 char next = s[i + 1];
                 if (next == 'n') { sb.Append('\n'); i += 2; }
                 else if (next == 'r') { sb.Append('\r'); i += 2; }
+                else if (next == 's') { sb.Append(' '); i += 2; }
                 else if (next == '\\') { sb.Append('\\'); i += 2; }
                 else { sb.Append(s[i]); i++; }
             }

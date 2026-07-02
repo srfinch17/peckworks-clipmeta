@@ -152,6 +152,38 @@ public class IndexSearchCommandTests
         Assert.IsFalse(output.Contains("Run --index to refresh"), "fresh result must not warn");
     }
 
+    // ── Field names containing spaces (v1.0.1 hardening, task B7) ─────────────
+    //
+    // The demonstrated failure: `--set "kill count" 5` stores fine in the MP4, but
+    // `--index-search "kill count" 5` found nothing while `--index-search kill "count 5"`
+    // found it, the cached index silently answered a different question than the live write.
+
+    [TestMethod]
+    public void Run_FieldNameWithSpace_FindsMatch()
+    {
+        PrepareClipAndBuildIndex("clip.mp4", "kill count", "5");
+        using var writer = new StringWriter();
+
+        int exitCode = IndexSearchCommand.Run(_tempDir, "kill count", "5", writer);
+
+        Assert.AreEqual(0, exitCode);
+        StringAssert.Contains(writer.ToString(), "clip.mp4");
+        StringAssert.Contains(writer.ToString(), "1 match(es) found.");
+    }
+
+    [TestMethod]
+    public void Run_FieldNameWithSpace_MisSplitQueryDoesNotMatch()
+    {
+        // The old bug's mirror image: once the field name round-trips correctly, splitting
+        // the query itself the wrong way ("kill" / "count 5") must no longer accidentally match.
+        PrepareClipAndBuildIndex("clip.mp4", "kill count", "5");
+        using var writer = new StringWriter();
+
+        IndexSearchCommand.Run(_tempDir, "kill", "count 5", writer);
+
+        StringAssert.Contains(writer.ToString(), "No matches found.");
+    }
+
     [TestMethod]
     public void Run_DefaultOutput_UsesConsoleOut()
     {

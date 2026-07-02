@@ -217,6 +217,136 @@ public class ClipMetaIndexTests
         Assert.AreEqual(@"C:\path\to\file", result.Entries[0].Fields[0].Value);
     }
 
+    // ── Field names containing spaces (v1.0.1 hardening, task B7) ─────────────
+    //
+    // The bug: "field {Escape(field)} {Escape(value)}" is space-delimited and Escape() did not
+    // escape spaces, so the reader (which splits the "field" line at the first space to recover
+    // the field name) silently mis-parses a field name like "kill count" as field "kill", value
+    // "count 5". `--set "kill count" 5` writes fine to the MP4, but the cached index and a live
+    // `--find` then silently disagree.
+
+    [TestMethod]
+    public void WriteRead_RoundTrips_FieldNameWithSpace()
+    {
+        var fields = new List<(string, string)> { ("kill count", "5") };
+        var entry = new IndexEntry("clip.mp4", 0, DateTimeOffset.UtcNow, fields);
+        var data = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new[] { entry }.ToList());
+        using var sw = new StringWriter();
+        ClipMetaIndex.Write(data, sw);
+        using var sr = new StringReader(sw.ToString());
+
+        var result = ClipMetaIndex.Read(sr);
+
+        Assert.AreEqual("kill count", result.Entries[0].Fields[0].Field);
+        Assert.AreEqual("5", result.Entries[0].Fields[0].Value);
+    }
+
+    [TestMethod]
+    public void WriteRead_RoundTrips_FieldNameWithMultipleSpaces()
+    {
+        var fields = new List<(string, string)> { ("total kill count today", "5") };
+        var entry = new IndexEntry("clip.mp4", 0, DateTimeOffset.UtcNow, fields);
+        var data = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new[] { entry }.ToList());
+        using var sw = new StringWriter();
+        ClipMetaIndex.Write(data, sw);
+        using var sr = new StringReader(sw.ToString());
+
+        var result = ClipMetaIndex.Read(sr);
+
+        Assert.AreEqual("total kill count today", result.Entries[0].Fields[0].Field);
+        Assert.AreEqual("5", result.Entries[0].Fields[0].Value);
+    }
+
+    // Pin the adversarial escape cases the space-escaping fix's correctness depends on, so a
+    // future edit to the escape table cannot silently reintroduce a collision. These are pins,
+    // not fixes: they passed immediately against the fixed code.
+
+    [TestMethod]
+    public void WriteRead_RoundTrips_FieldNameContainingLiteralBackslashS()
+    {
+        // A field name literally containing the 2-char sequence backslash+s must survive:
+        // Escape doubles the backslash first, so on disk it is backslash-backslash-s, which
+        // Unescape must decode back to backslash+s, NOT collapse into a space.
+        var fields = new List<(string, string)> { (@"kill\scount", "5") };
+        var entry = new IndexEntry("clip.mp4", 0, DateTimeOffset.UtcNow, fields);
+        var data = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new[] { entry }.ToList());
+        using var sw = new StringWriter();
+        ClipMetaIndex.Write(data, sw);
+        using var sr = new StringReader(sw.ToString());
+
+        var result = ClipMetaIndex.Read(sr);
+
+        Assert.AreEqual(@"kill\scount", result.Entries[0].Fields[0].Field);
+        Assert.AreEqual("5", result.Entries[0].Fields[0].Value);
+    }
+
+    [TestMethod]
+    public void WriteRead_RoundTrips_FieldNameWithBackslashesIncludingOneBeforeDelimiter()
+    {
+        // Raw backslashes in the name, including a trailing one that sits immediately before
+        // the name/value delimiter space on the serialized line.
+        var fields = new List<(string, string)> { (@"dir\sub\", "x") };
+        var entry = new IndexEntry("clip.mp4", 0, DateTimeOffset.UtcNow, fields);
+        var data = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new[] { entry }.ToList());
+        using var sw = new StringWriter();
+        ClipMetaIndex.Write(data, sw);
+        using var sr = new StringReader(sw.ToString());
+
+        var result = ClipMetaIndex.Read(sr);
+
+        Assert.AreEqual(@"dir\sub\", result.Entries[0].Fields[0].Field);
+        Assert.AreEqual("x", result.Entries[0].Fields[0].Value);
+    }
+
+    [TestMethod]
+    public void WriteRead_RoundTrips_ValueWithLeadingSpaces()
+    {
+        var fields = new List<(string, string)> { ("notes", "  two leading spaces") };
+        var entry = new IndexEntry("clip.mp4", 0, DateTimeOffset.UtcNow, fields);
+        var data = new IndexData("C:\\clips", DateTimeOffset.UtcNow, new[] { entry }.ToList());
+        using var sw = new StringWriter();
+        ClipMetaIndex.Write(data, sw);
+        using var sr = new StringReader(sw.ToString());
+
+        var result = ClipMetaIndex.Read(sr);
+
+        Assert.AreEqual("notes", result.Entries[0].Fields[0].Field);
+        Assert.AreEqual("  two leading spaces", result.Entries[0].Fields[0].Value);
+    }
+
+    [TestMethod]
+    public void Read_PreFixFormat_FieldsWithoutSpaces_ParseIdentically()
+    {
+        // Pins today's on-disk format (no space-escaping) so the space-escaping fix cannot
+        // change how index files already on disk before this change are read. Hand-crafted
+        // rather than round-tripped through Write(), so this test fails independently of
+        // whatever the writer does. All backslashes are doubled, exactly as the pre-fix
+        // Escape wrote them (it always doubled a real backslash).
+        string raw = string.Join("\n", new[]
+        {
+            "version 1",
+            "built 2026-01-01T00:00:00.0000000+00:00",
+            @"directory C:\\clips",
+            "---",
+            @"path C:\\clips\\clip.mp4",
+            "size 1234",
+            "modified 2026-01-01T00:00:00.0000000+00:00",
+            "field game Team Fortress 2",
+            @"field notes C:\\path\\to\\file",
+            "",
+        });
+
+        var result = ClipMetaIndex.Read(new StringReader(raw));
+
+        Assert.AreEqual(@"C:\clips", result.Directory);
+        Assert.AreEqual(1, result.Entries.Count);
+        var entry = result.Entries[0];
+        Assert.AreEqual(@"C:\clips\clip.mp4", entry.FilePath);
+        Assert.AreEqual(1234, entry.FileSizeBytes);
+        Assert.IsTrue(entry.Fields.Any(f => f.Field == "game" && f.Value == "Team Fortress 2"));
+        Assert.IsTrue(entry.Fields.Any(f => f.Field == "notes" && f.Value == @"C:\path\to\file"));
+    }
+
     // ── Atomic WriteToFile: a failed write must never corrupt the existing index ──
 
     private string IndexPath() => Path.Combine(_tempDir, ClipMetaIndex.IndexFileName);

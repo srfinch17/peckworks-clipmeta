@@ -8,6 +8,36 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-07-01, Index format silently mis-split a field name containing a space (task B7)
+**Symptom (nemesis-demonstrated):** `--set "kill count" 5` stores fine in the MP4, but
+`--index-search "kill count" 5` found nothing, while `--index-search kill "count 5"` found it.
+The cached index and a live `--find` silently answered the same question differently.
+**Cause:** `ClipMetaIndex.Write` emits each field as `field {Escape(field)} {Escape(value)}`,
+space-delimited, and `Escape` did not escape spaces. The reader recovers the field name by
+splitting the line's remainder at its **first** space, so a field name that itself contains a
+space donates that space to the split and the name silently shears in two (`"kill count"` read
+back as field `"kill"`, value `"count 5"`).
+**Fix:** extended `Escape`/`Unescape` to also encode literal spaces as `\s` (alongside the
+existing `\\`, `\r`, `\n`), so the only raw space left on a `field` line after escaping is the
+one intentional delimiter between the encoded name and the encoded value. Values were escaped
+too (not load-bearing for the split, since a value is read as "everything after the delimiter"
+and never re-split, but keeping the encoding symmetric). No format version bump: the on-disk
+`version 1` stamp is written but never read back or validated by `ClipMetaIndex.Read`, and
+staleness is judged per-entry against the live file (`CheckEntry`, size/mtime), not against the
+index's own format version, so there is no version-gated rebuild path to wire up. Back-compat is
+structural rather than version-gated: `Unescape` only transforms explicit two-character escape
+sequences, a literal (unescaped) space in a file written before this fix passes through
+unchanged, and a real backslash in old data was already doubled by `Escape` (`\` to `\\`) before
+this change, so a decoded lone backslash followed by `s`/`n`/`r` can only originate from a
+genuine new escape sequence, never from old data. Pinned with a hand-crafted (not
+round-tripped) raw index string in the pre-fix format to prove the reader alone, independent of
+the writer, still parses it identically.
+**Lesson:** a delimiter reused for two purposes (line-level `field name value` AND the
+name/value boundary within it) needs every payload that can contain that delimiter character
+escaped, not just the ones that broke first. Newlines and backslashes got escaped when the
+format was designed; the plain space, used as the delimiter itself, was the one character
+nobody thought to also treat as user-controlled payload.
+
 ## 2026-07-01, Moov-less files fell through to a baffling internal error instead of a clean refusal (task B5)
 **Symptom (two convergent findings):** (a) correctness reviewer: a well-formed `ftyp`+`mdat` file
 with no `moov` (not fragmented) fell through `Mp4Writer.DetermineScenario` as `Create`, never
