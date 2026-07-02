@@ -14,7 +14,7 @@ Solution: `peckworks-clipmeta.slnx`, **.NET 10**, seven projects:
 |---------|-----------|---------|
 | `clipmeta.core` | `ClipMetaCore` | All business logic: MP4 parse/read/write, schema, search/index, logging. Zero NuGet deps. |
 | `clipmetaview` | `ClipMetaView` | Thin CLI: renders the box/atom tree. References Core. |
-| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (10 commands, incl. `--copy-from` and `--flush-queue`; write ops also batch over a directory). References Core. |
+| `clipmetascribe` | `ClipMetaScribe` | Thin CLI: read/write/search/copy metadata (12 commands, incl. `--copy-from` and `--flush-queue`; write ops also batch over a directory). References Core. |
 | `clipmetamcp` | `ClipMetaMcp` | Thin MCP server shell: stdio JSON-RPC 2.0, exposes 17 clipmeta tools to MCP hosts (Claude Desktop). References Core. Packs to a `.mcpb` bundle via `tools/pack-mcpb.ps1`. Product version **1.0.0** (first public release; latest feature work is pass-7, see Versioning). |
 | `clipmetaview.Tests` | | MSTest, 101 tests. |
 | `clipmetascribe.Tests` | | MSTest, 494 tests (incl. real-clip integration and byte-level media-integrity tests). |
@@ -43,8 +43,8 @@ When we hit and fix a real bug or a non-obvious gotcha, append it to **`docs/PIT
 ### Memory
 Persistent project memory lives in the Claude memory store (indexed in `MEMORY.md` there). Capture durable, non-obvious facts; don't duplicate what the code or these docs already say.
 
-### Public landing page (`docs/index.html`), built, NOT yet published
-A self-contained GitHub Pages info/landing page lives at `docs/index.html` (build record + decisions in `docs/BUILD-LOG.md`). It is **deliberately not live**: do **not** enable GitHub Pages, publish, or announce it until the tool has been dogfooded on a real clip library and the owner clears it. It still has fill-in placeholders (owner name, logo, real screenshots). Treat it as a curated artifact, don't clobber or regenerate it casually.
+### Public landing page (`docs/index.html`), LIVE
+A self-contained GitHub Pages info/landing page lives at `docs/index.html` (build record + decisions in `docs/BUILD-LOG.md`) and is published at https://srfinch17.github.io/peckworks-clipmeta/ (GitHub Pages serving `main` /docs, with `docs/.nojekyll` so it's served verbatim instead of through Jekyll/README). Attribution is "Peckworks Lab" (no personal-name placeholder). Treat it as a curated artifact, don't clobber or regenerate it casually.
 
 ---
 
@@ -93,7 +93,7 @@ Tools (`tools/`):
 - `check-version.ps1`, drift check: probes each artifact's real self-report and prints OK/DRIFT per artifact. `-NoBuild` to skip the build.
 - `build-release-artifacts.ps1`, builds the three downloadable assets (`clipmeta.mcpb`, `clipmeta-unpacked.zip`, `clipmeta-cli-win-x64.zip`) into `dist/`. Used locally and by CI.
 
-**Cutting a release:** `bump-version.ps1` → commit → `git tag vX.Y.Z` (the tag must match `VERSION`) → `git push origin vX.Y.Z`. The **`Release` workflow** (`.github/workflows/release.yml`) then builds the assets on a Windows runner and publishes the GitHub Release automatically, it fails the run if the tag and `VERSION` disagree. Use the Actions tab "Run workflow" (workflow_dispatch) to build + upload the assets to the run for inspection **without** publishing, to test the build before tagging. (Releases are Windows-only, self-contained, unsigned.)
+**Cutting a release:** `bump-version.ps1` → commit → `git tag vX.Y.Z` (the tag must match `VERSION`) → `git push origin vX.Y.Z`. The **`Release` workflow** (`.github/workflows/release.yml`) then builds the assets on a Windows runner and publishes the GitHub Release automatically, it fails the run if the tag and `VERSION` disagree. Use the Actions tab "Run workflow" (workflow_dispatch) to build + upload the assets to the run for inspection **without** publishing, to test the build before tagging. (Releases are Windows-only, self-contained, unsigned.) Note: v1.0.0 predates this workflow and was hand-published; v1.0.1 is the first release actually cut by CI.
 
 **The rule that trips people up:** a bump is **not live in a built/installed artifact until that artifact is rebuilt, repacked, and reinstalled.** Editing `VERSION` makes the repo say the new number instantly, but a running binary / the `.mcpb` installed in Claude Desktop still reports the old one until its own deploy step runs. `check-version.ps1` sees the *repo-built* exe, not what Desktop is running, the installed bundle is verified by reinstalling. (Reset to **1.0.0** for the first public release; pass-N remains the stable feature id, and 1.0.0 supersedes the internal 1.0–1.6 bundle versions.)
 
