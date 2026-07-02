@@ -9,10 +9,10 @@ dist/
 *.suo
 .vs/
 
-# Test clips (local only — too large for git)
+# Test clips (local only, too large for git)
 testclips/pristine/
-# Everything in scratch is regenerated — copies plus write-engine temp artifacts
-# (clip.mp4.<guid>.tmp, File.Replace's clip.mp4~RFxxxx.TMP) — but keep the dir itself
+# Everything in scratch is regenerated, copies plus write-engine temp artifacts
+# (clip.mp4.<guid>.tmp, File.Replace's clip.mp4~RFxxxx.TMP), but keep the dir itself
 # (via .gitkeep) so a fresh clone has the path the tests expect.
 testclips/scratch/*
 !testclips/scratch/.gitkeep
@@ -27,7 +27,7 @@ TestResults/
 
 # Claude Code and superpowers tooling state
 .claude/
-.superpowers/brainstorm/
+.superpowers/
 
 # OS
 .DS_Store
