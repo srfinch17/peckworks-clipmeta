@@ -1,22 +1,14 @@
 Tag your game clips by voice, the moment they happen. clipmeta writes searchable metadata **inside** your MP4 files, so the tags travel with the clip.
 
-## What's new in v1.0.1
+## What's new in v1.1.0
 
-This is a hardening and correctness release. No new features, safety and reliability fixes for edge cases found during real-world use of v1.0.0.
+This release adds a way to see the internal structure of your clips as structured data. It builds on v1.0.1's write-safety work; tagging behavior is unchanged, and nothing here writes to your files.
 
-- **Safer with truncated or damaged files.** A cut-off or damaged MP4 no longer causes confusing errors or a crashed library scan: writes are cleanly refused, and scanning a folder skips the bad file and names it in the output so you know what was left out. Reading a single file stays deliberately lenient.
-- **Won't create duplicate, conflicting tags.** If a file already carries clipmeta metadata in an unexpected location, writes are now refused rather than silently adding a second, divergent copy of your tags.
-- **Stronger write verification.** After every write, clipmeta now reads back and checks the actual tag values (not just that something is present), and confirms fields you deleted are really gone.
-- **Won't silently lose a tag when multiple tools write at once.** Writes are now serialized across the CLI, the Claude Desktop MCP server, a Claude Code-hosted MCP server, and the tag queue, so a tag written by one process can no longer be silently lost when another rewrites the same clip.
-- **Clear message for unfinished recordings.** MP4s with no finalized structure (for example a recording that was still writing when a player crashed) now get a plain "can't be tagged yet" message instead of an internal error.
-- **Fixed a CLI backup bug.** `--backup` now uses the same timestamped naming as the rest of the tool, so making a second backup no longer overwrites the first, and CLI backups now show up correctly in backup management tools.
-- **Fixed search for multi-word field names.** Field names containing spaces now round-trip correctly through the search index, so a cached search agrees with a live lookup again.
-- **Documentation cleanup.** Removed leftover references to a CLI tool that never shipped, and corrected several other inaccuracies in the docs.
-- **Now credited to Peckworks Lab.**
-
-**Changelog note:** a few small documentation and wording commits landed on `main` right after v1.0.0 shipped, before this version-bump process existed, so they went out without a version bump. v1.0.1 also formally covers those.
-
-This is also the first release built and published automatically by CI from a tagged commit, rather than assembled by hand.
+- **Inspect a clip's internal structure as JSON.** A new read-only view exposes the full MP4 box/atom tree of a clip as machine-readable JSON: every box's type, friendly name, size, position, and (for metadata boxes) its value, with clipmeta's own tags flagged. Useful for scripts, a structure view on a web page, or just understanding how a file is laid out.
+  - In **Claude Desktop**, a new `clip_get_boxtree` tool lets Claude examine a clip's structure on request, as JSON or as a readable tree.
+  - From the **terminal**, `clipmetaview <clip>.mp4 --json` prints the structure as JSON, and `clipmetaview --definitions` prints a dictionary of what each box type means.
+- **One consistent structure view everywhere.** The tree renderer now lives in the shared core, so the readable tree from the command line and from the new Claude Desktop tool is identical, byte for byte.
+- **All of v1.0.1's safety carries forward.** Verified, all-or-nothing writes; the hard clips-folder sandbox; refusal on damaged or non-standard files. Reading and inspection stay lenient.
 
 **Project site:** https://srfinch17.github.io/peckworks-clipmeta/
 
