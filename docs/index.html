@@ -8,7 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D1015'/%3E%3Crect x='0.5' y='0.5' width='31' height='31' rx='6.5' fill='none' stroke='%232C3442'/%3E%3Crect x='6' y='9' width='20' height='14' rx='2.5' fill='none' stroke='%232BE0CE' stroke-width='1.6'/%3E%3Cpath d='M14 13.5 L19 16 L14 18.5 Z' fill='%232BE0CE'/%3E%3Ccircle cx='23.5' cy='8.5' r='3.4' fill='%23FF8A3D'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#0D1015; --ink-2:#151A21; --ink-3:#1C2330;
@@ -210,6 +210,259 @@
   @media (max-width:760px){ .navcodes a:not(.gh){display:none;} }
   @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto;} }
 </style>
+<style>
+  /* ============================================================
+     ClipMeta rendered shots (box tree / --list / voice / search / vocab).
+     Each panel is namespaced (.cm-*) with its own scoped variables so it
+     cannot restyle another panel or the page, and vice-versa. Palette and
+     JetBrains Mono are the shots' own; only the card frame is docked to
+     the page tokens (border #2C3442, radius 14).
+     ============================================================ */
+  .cm-tree,.cm-list,.cm-voice,.cm-search,.cm-vocab{margin:30px 0;}
+
+  /* ---- BOX TREE (before / after) ---- */
+  .cm-tree{
+    --panel:#0F121B;--panel-top:#141826;--hair:#222739;--hair-soft:#191E2D;
+    --tree:#3C445C;--type:#8892AC;--name:#7E889F;--val:#E1E7F4;--off:#525C78;
+    --struct:#FF6E97;--info:#3FD3E3;--codec:#B892FF;--media:#EDA64A;--wm:#4FD98C;--itunes:#8FA0C4;
+    --gold:#FFB43C;--gold-soft:#FFCB6E;--gold-dim:#9A7A3A;--gold-glow:rgba(255,180,60,.13);--gold-bar:#FFB43C;--signal:#FF8A3D;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+    font-family:var(--sans);color:var(--val);
+  }
+  .cm-tree .stack{display:flex;flex-direction:column;gap:24px;}
+  .cm-tree .panel{width:100%;max-width:1040px;margin:0 auto;
+    background:linear-gradient(180deg,var(--panel-top) 0%,var(--panel) 22%);
+    border:1px solid #2C3442;border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);overflow:hidden;}
+  .cm-tree .head{padding:22px 26px 20px;border-bottom:1px solid var(--hair-soft);display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+  .cm-tree .after .head{background:radial-gradient(140% 120% at 88% -40%, var(--gold-glow), transparent 55%);}
+  .cm-tree .eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--name);font-weight:600;margin-bottom:9px;}
+  .cm-tree .fname{font-family:var(--mono);font-size:16px;font-weight:500;color:#EEF1FA;line-height:1.3;word-break:break-all;}
+  .cm-tree .subline{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--name);letter-spacing:.01em;}
+  .cm-tree .subline b{color:var(--info);font-weight:500;}
+  .cm-tree .flatchip{flex:none;display:inline-flex;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;background:rgba(255,255,255,.02);border:1px dashed var(--hair);color:var(--name);font-size:13px;font-weight:600;white-space:nowrap;}
+  .cm-tree .flatchip .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--name);}
+  .cm-tree .herochip{flex:none;display:inline-flex;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;background:linear-gradient(180deg,rgba(255,180,60,.16),rgba(255,180,60,.06));border:1px solid rgba(255,180,60,.38);box-shadow:0 0 30px -6px rgba(255,180,60,.35);color:var(--gold-soft);font-size:13px;font-weight:600;white-space:nowrap;}
+  .cm-tree .herochip .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px 1px var(--gold);}
+  .cm-tree .tree{padding:20px 8px 20px 22px;font-family:var(--mono);font-size:13px;line-height:1.72;overflow-x:auto;}
+  .cm-tree .row{display:flex;align-items:baseline;white-space:pre;border-radius:7px;padding:0 12px 0 4px;}
+  .cm-tree .pre{color:var(--tree);}
+  .cm-tree .type{font-weight:700;letter-spacing:.02em;}
+  .cm-tree .nm{color:var(--name);}
+  .cm-tree .val{color:var(--val);}
+  .cm-tree .note{color:#5A637E;}
+  .cm-tree .cnt{color:var(--tree);}
+  .cm-tree .off{margin-left:auto;padding-left:26px;color:var(--off);white-space:pre;font-size:12px;}
+  .cm-tree .c-struct .type{color:var(--struct);}
+  .cm-tree .c-info .type{color:var(--info);}
+  .cm-tree .c-codec .type{color:var(--codec);}
+  .cm-tree .c-media .type{color:var(--media);}
+  .cm-tree .c-wm .type{color:var(--wm);}
+  .cm-tree .c-itunes .type{color:var(--itunes);}
+  .cm-tree .c-info .pval{color:var(--info);}
+  .cm-tree .c-media .pval{color:var(--media);}
+  .cm-tree .c-wm .pval{color:var(--wm);}
+  .cm-tree .c-itunes .pval{color:#C9D2E6;}
+  .cm-tree .empty{opacity:.72;}
+  .cm-tree .empty .type{color:var(--gold-dim);}
+  .cm-tree .empty .ghost{color:var(--gold-dim);border:1px dashed rgba(255,180,60,.35);border-radius:5px;padding:0 8px;font-size:11.5px;letter-spacing:.02em;}
+  .cm-tree .cm{position:relative;background:linear-gradient(90deg,var(--gold-glow),rgba(255,180,60,.02) 60%,transparent);box-shadow:inset 0 0 0 1px rgba(255,180,60,.06);}
+  .cm-tree .cm::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:2px;background:var(--gold-bar);box-shadow:0 0 12px 0 rgba(255,180,60,.6);}
+  .cm-tree .cm .type{color:var(--gold-dim);}
+  .cm-tree .cm .field{color:#0C0E15;background:var(--gold);font-weight:700;padding:1px 8px;border-radius:5px;box-shadow:0 0 14px -3px rgba(255,180,60,.7);}
+  .cm-tree .cm .val{color:var(--gold-soft);font-weight:500;}
+  .cm-tree .cm .mean{color:var(--gold-dim);font-size:11px;letter-spacing:.01em;}
+  .cm-tree .cm .off{color:var(--gold-dim);}
+  .cm-tree .cm .notesval{color:var(--gold-soft);font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cm-tree .legend{border-top:1px solid var(--hair-soft);padding:16px 26px 20px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;}
+  .cm-tree .key{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--name);font-family:var(--sans);}
+  .cm-tree .sw{width:11px;height:11px;border-radius:3px;flex:none;}
+  .cm-tree .sw.struct{background:var(--struct);}
+  .cm-tree .sw.info{background:var(--info);}
+  .cm-tree .sw.codec{background:var(--codec);}
+  .cm-tree .sw.media{background:var(--media);}
+  .cm-tree .sw.wm{background:var(--wm);}
+  .cm-tree .sw.gold{background:var(--gold);box-shadow:0 0 10px 0 rgba(255,180,60,.6);}
+  .cm-tree .sw.goldghost{background:transparent;border:1px dashed rgba(255,180,60,.5);}
+  .cm-tree .key.hero{color:var(--gold-soft);font-weight:600;}
+  .cm-tree .key.hero.ghost{color:var(--gold-dim);}
+  .cm-tree .foot{padding:0 26px 22px;font-family:var(--mono);font-size:11.5px;color:var(--tree);letter-spacing:.02em;}
+  .cm-tree .foot b{color:var(--gold-dim);font-weight:500;}
+  .cm-tree .cx{display:flex;justify-content:center;align-items:center;gap:12px;padding:2px 0;}
+  .cm-tree .cx .cxln{height:1px;width:64px;background:linear-gradient(90deg,transparent,var(--signal));}
+  .cm-tree .cx .cxln.r{background:linear-gradient(90deg,var(--signal),transparent);}
+  .cm-tree .cx .pill{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--signal);border:1px solid color-mix(in srgb,var(--signal) 40%,transparent);border-radius:999px;padding:6px 14px;white-space:nowrap;}
+
+  /* ---- RAW --list ---- */
+  .cm-list{
+    --panel:#0C0E15;--panel-top:#101320;--hair:#222739;--hair-soft:#191E2D;
+    --tree:#3C445C;--name:#7E889F;--val:#DDE4F2;--off:#525C78;--info:#3FD3E3;--wm:#4FD98C;
+    --gold:#FFB43C;--gold-soft:#FFCB6E;--gold-dim:#9A7A3A;--gold-glow:rgba(255,180,60,.13);
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+    font-family:var(--sans);color:var(--val);
+  }
+  .cm-list .panel{width:100%;max-width:720px;margin:0 auto;background:var(--panel);border:1px solid #2C3442;border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);overflow:hidden;}
+  .cm-list .bar{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--hair-soft);background:var(--panel-top);}
+  .cm-list .dotrow{display:flex;gap:7px;}
+  .cm-list .dotrow i{width:11px;height:11px;border-radius:50%;display:block;}
+  .cm-list .dotrow i:nth-child(1){background:#3a2530;}
+  .cm-list .dotrow i:nth-child(2){background:#3a3325;}
+  .cm-list .dotrow i:nth-child(3){background:#25352b;}
+  .cm-list .bartitle{font-family:var(--mono);font-size:12px;color:var(--tree);margin-left:6px;}
+  .cm-list .term{padding:18px 20px 22px;font-family:var(--mono);font-size:13.5px;line-height:1.7;}
+  .cm-list .cmd{color:var(--name);margin-bottom:16px;white-space:pre-wrap;word-break:break-all;}
+  .cm-list .cmd .prompt{color:var(--wm);font-weight:700;}
+  .cm-list .cmd .bin{color:#C9D2E6;}
+  .cm-list .cmd .flag{color:var(--info);}
+  .cm-list .cmd .arg{color:var(--gold-soft);}
+  .cm-list .fileline{color:#EEF1FA;font-weight:500;word-break:break-all;}
+  .cm-list .subline{color:var(--tree);margin-bottom:14px;}
+  .cm-list .subline b{color:var(--gold-dim);font-weight:500;}
+  .cm-list .kv{display:grid;grid-template-columns:112px 1fr;row-gap:3px;column-gap:8px;}
+  .cm-list .k{color:var(--name);}
+  .cm-list .v{color:var(--val);white-space:pre-wrap;}
+  .cm-list .v.multi{color:var(--gold-soft);}
+  .cm-list .v.unset{color:var(--tree);}
+  .cm-list .cont{grid-column:2;color:var(--val);}
+  .cm-list .rule{border:none;border-top:1px dashed var(--hair);margin:15px 0 12px;}
+  .cm-list .stamp{color:var(--tree);}
+  .cm-list .stamp b{color:var(--gold-dim);font-weight:500;}
+
+  /* ---- VOICE TAGGING ---- */
+  .cm-voice{
+    --panel:#0F121B;--panel-top:#141826;--hair:#222739;--hair-soft:#191E2D;
+    --tree:#3C445C;--name:#7E889F;--val:#E1E7F4;--off:#525C78;
+    --struct:#FF6E97;--info:#3FD3E3;--codec:#B892FF;--media:#EDA64A;--wm:#4FD98C;
+    --gold:#FFB43C;--gold-soft:#FFCB6E;--gold-dim:#9A7A3A;--gold-glow:rgba(255,180,60,.13);
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+    font-family:var(--sans);color:var(--val);
+  }
+  .cm-voice .panel{width:100%;max-width:760px;margin:0 auto;background:linear-gradient(180deg,var(--panel-top) 0%,var(--panel) 22%);border:1px solid #2C3442;border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);overflow:hidden;}
+  .cm-voice .head{padding:22px 26px 18px;border-bottom:1px solid var(--hair-soft);background:radial-gradient(140% 130% at 88% -40%, var(--gold-glow), transparent 55%);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .cm-voice .eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--name);font-weight:600;margin-bottom:7px;}
+  .cm-voice .title{font-size:19px;font-weight:600;color:#EEF1FA;letter-spacing:-.01em;}
+  .cm-voice .modechip{flex:none;display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;background:rgba(79,217,140,.08);border:1px solid rgba(79,217,140,.3);color:var(--wm);font-size:12px;font-weight:600;white-space:nowrap;}
+  .cm-voice .modechip .dot{width:7px;height:7px;border-radius:50%;background:var(--wm);box-shadow:0 0 9px 1px var(--wm);}
+  .cm-voice .body{padding:24px 26px 8px;}
+  .cm-voice .step{position:relative;padding-left:30px;padding-bottom:22px;}
+  .cm-voice .step::before{content:"";position:absolute;left:9px;top:6px;width:2px;bottom:-4px;background:var(--hair);}
+  .cm-voice .step:last-of-type::before{display:none;}
+  .cm-voice .dotnum{position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;background:var(--panel-top);border:1px solid var(--hair);color:var(--name);font-size:11px;font-weight:700;font-family:var(--mono);display:flex;align-items:center;justify-content:center;}
+  .cm-voice .steplabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--name);font-weight:600;margin-bottom:9px;}
+  .cm-voice .spoken{background:linear-gradient(180deg,rgba(255,180,60,.07),rgba(255,180,60,.02));border:1px solid rgba(255,180,60,.22);border-radius:12px;padding:14px 16px;display:flex;gap:13px;align-items:flex-start;}
+  .cm-voice .wave{flex:none;display:flex;align-items:center;gap:2px;height:26px;margin-top:2px;}
+  .cm-voice .wave span{width:2.5px;border-radius:2px;background:var(--gold);opacity:.85;}
+  .cm-voice .wave span:nth-child(1){height:8px;}.cm-voice .wave span:nth-child(2){height:16px;}.cm-voice .wave span:nth-child(3){height:24px;}
+  .cm-voice .wave span:nth-child(4){height:13px;}.cm-voice .wave span:nth-child(5){height:20px;}.cm-voice .wave span:nth-child(6){height:9px;}
+  .cm-voice .said{font-size:15px;line-height:1.5;color:#F3EEDE;}
+  .cm-voice .said .q{color:var(--gold-soft);}
+  .cm-voice .resolve{font-family:var(--mono);font-size:13px;line-height:1.65;color:var(--name);}
+  .cm-voice .resolve .tool{color:var(--info);}
+  .cm-voice .resolve .arrow{color:var(--tree);}
+  .cm-voice .resolve .clip{color:var(--gold-soft);}
+  .cm-voice .conf{display:inline-flex;align-items:center;gap:6px;margin-left:2px;padding:1px 8px;border-radius:5px;background:rgba(79,217,140,.1);border:1px solid rgba(79,217,140,.3);color:var(--wm);font-size:11px;font-weight:700;letter-spacing:.03em;}
+  .cm-voice .resolve .why{color:var(--tree);font-size:12px;}
+  .cm-voice .atoms{display:flex;flex-direction:column;gap:8px;}
+  .cm-voice .atom{position:relative;display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;background:linear-gradient(90deg,var(--gold-glow),rgba(255,180,60,.02) 65%,transparent);border-radius:9px;padding:8px 12px 8px 15px;}
+  .cm-voice .atom::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:3px;border-radius:2px;background:var(--gold);box-shadow:0 0 12px 0 rgba(255,180,60,.6);}
+  .cm-voice .fname{flex:none;min-width:74px;color:#0C0E15;background:var(--gold);font-weight:700;font-family:var(--mono);font-size:12px;padding:2px 9px;border-radius:5px;text-align:center;box-shadow:0 0 14px -3px rgba(255,180,60,.7);}
+  .cm-voice .fval{color:var(--gold-soft);font-family:var(--mono);font-size:13.5px;font-weight:500;}
+  .cm-voice .multi{display:inline-flex;gap:6px;flex-wrap:wrap;}
+  .cm-voice .pill{color:var(--gold-soft);font-family:var(--mono);font-size:12.5px;padding:1px 8px;border-radius:999px;border:1px solid rgba(255,180,60,.28);background:rgba(255,180,60,.05);}
+  .cm-voice .fnote{color:#D8CBAF;font-family:var(--sans);font-size:13.5px;line-height:1.45;font-style:italic;}
+  .cm-voice .foot{padding:14px 26px 20px;border-top:1px solid var(--hair-soft);font-family:var(--mono);font-size:11.5px;color:var(--tree);letter-spacing:.02em;}
+  .cm-voice .foot b{color:var(--gold-dim);font-weight:500;}
+  .cm-voice .confirm{margin-top:2px;font-family:var(--mono);font-size:12.5px;color:var(--wm);display:flex;align-items:center;gap:9px;}
+  .cm-voice .confirm .check{width:16px;height:16px;flex:none;}
+  .cm-voice .confirm .meta{color:var(--tree);}
+
+  /* ---- SEARCH ---- */
+  .cm-search{
+    --panel:#0F121B;--panel-top:#141826;--hair:#222739;--hair-soft:#191E2D;
+    --tree:#3C445C;--name:#7E889F;--val:#E1E7F4;--off:#525C78;
+    --struct:#FF6E97;--info:#3FD3E3;--codec:#B892FF;--media:#EDA64A;--wm:#4FD98C;
+    --gold:#FFB43C;--gold-soft:#FFCB6E;--gold-dim:#9A7A3A;--gold-glow:rgba(255,180,60,.13);
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+    font-family:var(--sans);color:var(--val);
+  }
+  .cm-search .panel{width:100%;max-width:840px;margin:0 auto;background:linear-gradient(180deg,var(--panel-top) 0%,var(--panel) 22%);border:1px solid #2C3442;border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);overflow:hidden;}
+  .cm-search .head{padding:20px 24px 0;}
+  .cm-search .eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--name);font-weight:600;margin-bottom:12px;}
+  .cm-search .cmd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:6px;font-family:var(--mono);font-size:14px;background:#0A0C13;border:1px solid var(--hair);border-radius:10px;padding:12px 15px;}
+  .cm-search .cmd .prompt{color:var(--wm);font-weight:700;}
+  .cm-search .cmd .bin{color:#C9D2E6;}
+  .cm-search .cmd .path{color:#9AA6BC;}
+  .cm-search .cmd .flag{color:var(--info);}
+  .cm-search .cmd .arg{color:var(--gold-soft);}
+  .cm-search .cmd .cur{width:8px;height:16px;background:var(--gold);opacity:.8;margin-left:2px;border-radius:1px;}
+  .cm-search .resultline{padding:14px 24px 4px;font-family:var(--mono);font-size:12.5px;color:var(--name);}
+  .cm-search .resultline b{color:var(--gold-soft);font-weight:700;}
+  .cm-search .rows{padding:6px 16px 12px;}
+  .cm-search .rrow{display:flex;align-items:flex-start;gap:14px;padding:14px 12px;border-radius:11px;border:1px solid transparent;}
+  .cm-search .rrow + .rrow{border-top:1px solid var(--hair-soft);}
+  .cm-search .idx{flex:none;width:22px;font-family:var(--mono);font-size:12px;color:var(--tree);font-weight:700;padding-top:2px;}
+  .cm-search .rmain{flex:1;min-width:0;}
+  .cm-search .clip{font-family:var(--mono);font-size:13.5px;color:#EEF1FA;font-weight:500;margin-bottom:9px;word-break:break-all;}
+  .cm-search .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .cm-search .chip{display:inline-flex;align-items:baseline;gap:6px;font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.02);border:1px solid var(--hair);}
+  .cm-search .chip .k{color:var(--name);}
+  .cm-search .chip .v{color:var(--val);}
+  .cm-search .chip.game .v{color:var(--info);}
+  .cm-search .chip.map .v{color:var(--codec);}
+  .cm-search .chip.tags .v{color:var(--struct);}
+  .cm-search .chip.match{border-color:rgba(255,180,60,.45);background:rgba(255,180,60,.07);box-shadow:0 0 16px -6px rgba(255,180,60,.5);}
+  .cm-search .chip.match .k{color:var(--gold-dim);}
+  .cm-search .chip.match .v{color:var(--gold-soft);font-weight:700;}
+  .cm-search .chip.rating{border-color:rgba(255,180,60,.4);background:rgba(255,180,60,.05);}
+  .cm-search .chip.rating .k{color:var(--gold-dim);}
+  .cm-search .chip.rating .v{color:var(--gold);letter-spacing:1px;}
+  .cm-search .hit{color:var(--gold);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1.5px;}
+  .cm-search .foot{padding:12px 24px 20px;border-top:1px solid var(--hair-soft);font-family:var(--mono);font-size:11.5px;color:var(--tree);letter-spacing:.02em;}
+  .cm-search .foot b{color:var(--gold-dim);font-weight:500;}
+
+  /* ---- VOCAB ---- */
+  .cm-vocab{
+    --panel:#0F121B;--panel-top:#141826;--hair:#222739;--hair-soft:#191E2D;
+    --tree:#3C445C;--name:#7E889F;--val:#E1E7F4;--off:#525C78;
+    --struct:#FF6E97;--info:#3FD3E3;--codec:#B892FF;--media:#EDA64A;--wm:#4FD98C;
+    --gold:#FFB43C;--gold-soft:#FFCB6E;--gold-dim:#9A7A3A;--gold-glow:rgba(255,180,60,.13);
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+    font-family:var(--sans);color:var(--val);
+  }
+  .cm-vocab .panel{width:100%;max-width:760px;margin:0 auto;background:linear-gradient(180deg,var(--panel-top) 0%,var(--panel) 22%);border:1px solid #2C3442;border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);overflow:hidden;}
+  .cm-vocab .head{padding:20px 24px 0;}
+  .cm-vocab .eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--name);font-weight:600;margin-bottom:12px;}
+  .cm-vocab .cmd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:6px;font-family:var(--mono);font-size:14px;background:#0A0C13;border:1px solid var(--hair);border-radius:10px;padding:12px 15px;}
+  .cm-vocab .cmd .prompt{color:var(--wm);font-weight:700;}
+  .cm-vocab .cmd .bin{color:#C9D2E6;}
+  .cm-vocab .cmd .path{color:#9AA6BC;}
+  .cm-vocab .cmd .flag{color:var(--info);}
+  .cm-vocab .cmd .arg{color:var(--gold-soft);}
+  .cm-vocab .summ{padding:14px 24px 6px;font-family:var(--mono);font-size:12.5px;color:var(--name);}
+  .cm-vocab .summ b{color:var(--gold-soft);font-weight:700;}
+  .cm-vocab .rows{padding:6px 24px 8px;display:flex;flex-direction:column;gap:2px;}
+  .cm-vocab .vrow{display:flex;align-items:center;gap:14px;padding:7px 0;}
+  .cm-vocab .vval{flex:none;width:130px;font-family:var(--mono);font-size:13.5px;color:var(--val);text-align:right;}
+  .cm-vocab .bar{flex:1;height:14px;border-radius:4px;background:rgba(255,255,255,.03);position:relative;overflow:hidden;}
+  .cm-vocab .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,var(--gold-dim),var(--gold));box-shadow:0 0 14px -2px rgba(255,180,60,.5);}
+  .cm-vocab .vcount{flex:none;width:70px;font-family:var(--mono);font-size:12.5px;color:var(--gold-soft);}
+  .cm-vocab .vcount span{color:var(--tree);}
+  .cm-vocab .drift .vval{color:var(--media);font-weight:700;}
+  .cm-vocab .drift .bar i{background:linear-gradient(90deg,#8a5a2a,var(--media));}
+  .cm-vocab .flag-note{margin:8px 24px 4px;padding:11px 14px;border-radius:10px;background:rgba(237,166,74,.06);border:1px solid rgba(237,166,74,.28);display:flex;gap:11px;align-items:flex-start;}
+  .cm-vocab .flag-note svg{flex:none;margin-top:1px;}
+  .cm-vocab .flag-note .txt{font-size:13px;line-height:1.5;color:#E7D9BE;}
+  .cm-vocab .flag-note .txt b{color:var(--media);}
+  .cm-vocab .mono{font-family:var(--mono);}
+  .cm-vocab .foot{padding:12px 24px 20px;margin-top:6px;border-top:1px solid var(--hair-soft);font-family:var(--mono);font-size:11.5px;color:var(--tree);letter-spacing:.02em;}
+  .cm-vocab .foot b{color:var(--gold-dim);font-weight:500;}
+
+  @media (max-width:640px){.cm-tree .off{display:none;}.cm-tree .tree{font-size:12px;}}
+</style>
 </head>
 <body>
 
@@ -346,33 +599,156 @@
 
     <p>Because clipmeta already walks that entire tree to read and write safely, it can also hand the whole structure to you: <span class="m">clip_get_boxtree</span> (in Claude Desktop) and <span class="m">clipmetaview --json</span> (in the terminal) return every box's type, friendly name, size, and position as JSON, with clipmeta's own fields flagged, so you can inspect exactly how a file is laid out. Read-only, it never touches a byte.</p>
 
-    <div class="fig">
-      <svg viewBox="0 0 720 340" role="img" aria-label="An MP4 box tree. Top-level boxes ftyp, moov, mdat. Inside moov is a udta box, inside that meta, inside that ilst, and inside ilst a highlighted box named with the clipmeta freeform atom holding game, players, tags, rating fields. The mdat box, the actual video, is marked untouched.">
-        <text x="360" y="22" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">one .mp4 file, a tree of nested boxes</text>
-        <!-- top level -->
-        <rect x="40" y="40" width="120" height="34" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="100" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#94A0B2">ftyp</text>
-        <rect x="172" y="40" width="180" height="34" rx="6" fill="#151A21" stroke="#6E9BFF"/><text x="262" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#6E9BFF">moov (metadata)</text>
-        <rect x="364" y="40" width="316" height="34" rx="6" fill="#102a28" stroke="#2BE0CE"/><text x="522" y="62" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#2BE0CE">mdat, your video (never touched)</text>
-        <!-- nesting from moov -->
-        <line x1="200" y1="74" x2="200" y2="92" stroke="#2C3442"/>
-        <rect x="172" y="92" width="300" height="30" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="186" y="112" font-family="'IBM Plex Mono',monospace" font-size="11.5" fill="#94A0B2">udta · user data</text>
-        <line x1="200" y1="122" x2="200" y2="138" stroke="#2C3442"/>
-        <rect x="190" y="138" width="282" height="30" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="204" y="158" font-family="'IBM Plex Mono',monospace" font-size="11.5" fill="#94A0B2">meta · hdlr=mdir</text>
-        <line x1="218" y1="168" x2="218" y2="184" stroke="#2C3442"/>
-        <rect x="208" y="184" width="264" height="30" rx="6" fill="#1C2330" stroke="#2C3442"/><text x="222" y="204" font-family="'IBM Plex Mono',monospace" font-size="11.5" fill="#94A0B2">ilst · item list</text>
-        <line x1="236" y1="214" x2="236" y2="230" stroke="#FF8A3D"/>
-        <!-- the clipmeta atom -->
-        <rect x="226" y="230" width="454" height="92" rx="8" fill="#17120a" stroke="#FF8A3D" stroke-width="1.6"/>
-        <text x="242" y="250" font-family="'IBM Plex Mono',monospace" font-size="11.5" fill="#FF8A3D">▸ ---- · com.peckworkslab.clipmeta</text>
-        <g font-family="'IBM Plex Mono',monospace" font-size="11" fill="#EAEDF3">
-          <text x="252" y="272">game    = "Team Fortress 2"</text>
-          <text x="252" y="290">players = "scout|spy"</text>
-          <text x="252" y="308">tags    = "market garden|airshot"   rating = "4"</text>
-        </g>
-        <text x="588" y="208" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#FF8A3D">clipmeta writes</text>
-        <text x="588" y="222" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9.5" fill="#FF8A3D">only here ↓</text>
-      </svg>
-      <p class="figcap"><b>Where the tags go.</b> A private <b>----</b> atom inside the movie header. The <b>mdat</b> (your actual footage) is copied byte-for-byte and never modified.</p>
+    <div class="cm-tree">
+      <div class="stack">
+
+        <div class="panel">
+          <div class="head">
+            <div>
+              <div class="eyebrow">MP4 Box Structure &nbsp;·&nbsp; Before ClipMeta</div>
+              <div class="fname">Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4</div>
+              <div class="subline">64.9 MB &nbsp;·&nbsp; <b>2560&times;1440</b> H.264 &nbsp;·&nbsp; <b>60 fps</b> &nbsp;·&nbsp; 0:19.63 &nbsp;·&nbsp; 2 audio tracks &nbsp;·&nbsp; brand <b>mp42</b></div>
+            </div>
+            <div class="flatchip"><span class="dot"></span>0 ClipMeta atoms · raw NVIDIA capture</div>
+          </div>
+          <div class="tree">
+<div class="row c-info"><span class="pre">├─ </span><span class="type">ftyp</span><span class="nm">  File Type  </span><span class="pval">brand: mp42</span><span class="off">24 B @ 0x0</span></div>
+<div class="row c-media"><span class="pre">├─ </span><span class="type">mdat</span><span class="nm">  Media Data  </span><span class="note">raw media, not expanded</span><span class="off">68,020,551 B @ 0x18</span></div>
+<div class="row c-struct"><span class="pre">└─ </span><span class="type">moov</span><span class="nm">  Movie</span><span class="off">37,253 B @ 0x40DE95F</span></div>
+<div class="row c-info"><span class="pre">   ├─ </span><span class="type">mvhd</span><span class="nm">  Movie Header  </span><span class="pval">0:19.63 · created 2026-07-04 14:58 UTC</span><span class="off">108 B @ 0x40DE967</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">video</span><span class="off">14,312 B @ 0x40DE9D3</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header  </span><span class="pval">2560×1440 px</span><span class="off">92 B @ 0x40DE9DB</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">mdia</span><span class="nm">  Media</span><span class="off">14,212 B @ 0x40DEA37</span></div>
+<div class="row c-info"><span class="pre">   │     ├─ </span><span class="type">mdhd</span><span class="nm">  Media Header  </span><span class="pval">0:19.63</span><span class="off">32 B @ 0x40DEA3F</span></div>
+<div class="row c-info"><span class="pre">   │     ├─ </span><span class="type">hdlr</span><span class="nm">  Handler  </span><span class="pval">Video, VideoHandle</span><span class="off">44 B @ 0x40DEA5F</span></div>
+<div class="row c-struct"><span class="pre">   │     └─ </span><span class="type">minf</span><span class="nm">  Media Info</span><span class="off">14,128 B @ 0x40DEA8B</span></div>
+<div class="row c-info"><span class="pre">   │        ├─ </span><span class="type">vmhd</span><span class="nm">  Video Media Header</span><span class="off">20 B @ 0x40DEA93</span></div>
+<div class="row c-struct"><span class="pre">   │        ├─ </span><span class="type">dinf</span><span class="nm">  Data Info</span><span class="off">36 B @ 0x40DEAA7</span></div>
+<div class="row c-info"><span class="pre">   │        │  └─ </span><span class="type">dref</span><span class="nm">  Data Reference</span><span class="off">28 B @ 0x40DEAAF</span></div>
+<div class="row c-codec"><span class="pre">   │        └─ </span><span class="type">stbl</span><span class="nm">  Sample Table  </span><span class="cnt">· 6 boxes (stsd avc1 · stts · stss · stsz · stsc · co64)</span><span class="off">14,064 B @ 0x40DEACB</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">audio · System sounds</span><span class="off">10,757 B @ 0x40E21BB</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header</span><span class="off">92 B @ 0x40E21C3</span></div>
+<div class="row c-codec"><span class="pre">   │  ├─ </span><span class="type">mdia</span><span class="nm">  Media  </span><span class="cnt">· Sound · AAC 2ch 48.0 kHz · 8 boxes</span><span class="off">10,627 B @ 0x40E221F</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">30 B @ 0x40E4BA2</span></div>
+<div class="row c-info"><span class="pre">   │     └─ </span><span class="type">name</span><span class="nm">  Name  </span><span class="val">"System sounds"</span><span class="off">22 B @ 0x40E4BAA</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">audio · Microphone</span><span class="off">11,310 B @ 0x40E4BC0</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header</span><span class="off">92 B @ 0x40E4BC8</span></div>
+<div class="row c-codec"><span class="pre">   │  ├─ </span><span class="type">mdia</span><span class="nm">  Media  </span><span class="cnt">· Sound · AAC 2ch 48.0 kHz · 8 boxes</span><span class="off">11,183 B @ 0x40E4C24</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">27 B @ 0x40E77D3</span></div>
+<div class="row c-info"><span class="pre">   │     └─ </span><span class="type">name</span><span class="nm">  Name  </span><span class="val">"Microphone"</span><span class="off">19 B @ 0x40E77DB</span></div>
+<div class="row c-struct"><span class="pre">   └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">758 B @ 0x40E77EE</span></div>
+<div class="row c-struct"><span class="pre">      ├─ </span><span class="type">meta</span><span class="nm">  Metadata</span><span class="off">81 B @ 0x40E77F6</span></div>
+<div class="row c-info"><span class="pre">      │  ├─ </span><span class="type">hdlr</span><span class="nm">  Handler  </span><span class="pval">Metadata (iTunes)</span><span class="off">33 B @ 0x40E7802</span></div>
+<div class="row c-struct"><span class="pre">      │  └─ </span><span class="type">ilst</span><span class="nm">  Metadata Items</span><span class="off">36 B @ 0x40E7823</span></div>
+<div class="row c-itunes"><span class="pre">      │     └─ </span><span class="type">©day</span><span class="nm">  Year  </span><span class="pval">"2026"</span><span class="off">28 B @ 0x40E782B</span></div>
+<div class="row empty"><span class="pre">      │        </span><span class="ghost">no com.peckworkslab.clipmeta atoms yet</span></div>
+<div class="row c-wm"><span class="pre">      └─ </span><span class="type">Xtra</span><span class="nm">  Windows Media Attributes</span><span class="off">669 B @ 0x40E7847</span></div>
+<div class="row c-wm"><span class="pre">         ├─ </span><span class="type">WM/UniqueFileIdentifier</span><span class="nm">  </span><span class="pval">"{ Source: NVIDIA APP, Codec: H264, B64: eyJEUlNBcHBOYW1lIi…"</span><span class="off">601 B @ 0x40E7857</span></div>
+<div class="row c-wm"><span class="pre">         └─ </span><span class="type">WM/EncodedBy</span><span class="nm">  </span><span class="pval">"NVIDIA APP"</span><span class="off">44 B @ 0x40E7AB8</span></div>
+          </div>
+          <div class="legend">
+            <span class="key"><span class="sw struct"></span>Container</span>
+            <span class="key"><span class="sw info"></span>Header / value</span>
+            <span class="key"><span class="sw codec"></span>Codec / sample table</span>
+            <span class="key"><span class="sw media"></span>Media data</span>
+            <span class="key"><span class="sw wm"></span>Windows Media (NVIDIA)</span>
+            <span class="key hero ghost"><span class="sw goldghost"></span>ClipMeta atom (none yet)</span>
+          </div>
+          <div class="foot">Straight off NVIDIA's capture: the <b>ilst</b> holds only the <b>©day</b> year atom. No <b>com.peckworkslab.clipmeta</b> metadata has been written.</div>
+        </div>
+
+        <div class="cx"><span class="cxln"></span><span class="pill">tag by voice → one verified write</span><span class="cxln r"></span></div>
+
+        <div class="panel after">
+          <div class="head">
+            <div>
+              <div class="eyebrow">MP4 Box Structure &nbsp;·&nbsp; After ClipMeta</div>
+              <div class="fname">Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4</div>
+              <div class="subline">64.9 MB &nbsp;·&nbsp; <b>2560&times;1440</b> H.264 &nbsp;·&nbsp; <b>60 fps</b> &nbsp;·&nbsp; 0:19.63 &nbsp;·&nbsp; 2 audio tracks &nbsp;·&nbsp; brand <b>mp42</b></div>
+            </div>
+            <div class="herochip"><span class="dot"></span>7 ClipMeta atoms</div>
+          </div>
+          <div class="tree">
+<div class="row c-info"><span class="pre">├─ </span><span class="type">ftyp</span><span class="nm">  File Type  </span><span class="pval">brand: mp42</span><span class="off">24 B @ 0x0</span></div>
+<div class="row c-media"><span class="pre">├─ </span><span class="type">mdat</span><span class="nm">  Media Data  </span><span class="note">raw media, not expanded</span><span class="off">68,020,551 B @ 0x18</span></div>
+<div class="row c-struct"><span class="pre">└─ </span><span class="type">moov</span><span class="nm">  Movie</span><span class="off">37,962 B @ 0x40DE95F</span></div>
+<div class="row c-info"><span class="pre">   ├─ </span><span class="type">mvhd</span><span class="nm">  Movie Header  </span><span class="pval">0:19.63 · created 2026-07-04 14:58 UTC</span><span class="off">108 B @ 0x40DE967</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">video</span><span class="off">14,312 B @ 0x40DE9D3</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header  </span><span class="pval">2560×1440 px</span><span class="off">92 B @ 0x40DE9DB</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">mdia</span><span class="nm">  Media</span><span class="off">14,212 B @ 0x40DEA37</span></div>
+<div class="row c-info"><span class="pre">   │     ├─ </span><span class="type">mdhd</span><span class="nm">  Media Header  </span><span class="pval">0:19.63</span><span class="off">32 B @ 0x40DEA3F</span></div>
+<div class="row c-info"><span class="pre">   │     ├─ </span><span class="type">hdlr</span><span class="nm">  Handler  </span><span class="pval">Video, VideoHandle</span><span class="off">44 B @ 0x40DEA5F</span></div>
+<div class="row c-struct"><span class="pre">   │     └─ </span><span class="type">minf</span><span class="nm">  Media Info</span><span class="off">14,128 B @ 0x40DEA8B</span></div>
+<div class="row c-info"><span class="pre">   │        ├─ </span><span class="type">vmhd</span><span class="nm">  Video Media Header</span><span class="off">20 B @ 0x40DEA93</span></div>
+<div class="row c-struct"><span class="pre">   │        ├─ </span><span class="type">dinf</span><span class="nm">  Data Info</span><span class="off">36 B @ 0x40DEAA7</span></div>
+<div class="row c-info"><span class="pre">   │        │  └─ </span><span class="type">dref</span><span class="nm">  Data Reference</span><span class="off">28 B @ 0x40DEAAF</span></div>
+<div class="row c-codec"><span class="pre">   │        └─ </span><span class="type">stbl</span><span class="nm">  Sample Table  </span><span class="cnt">· 6 boxes (stsd avc1 · stts · stss · stsz · stsc · co64)</span><span class="off">14,064 B @ 0x40DEACB</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">audio · System sounds</span><span class="off">10,757 B @ 0x40E21BB</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header</span><span class="off">92 B @ 0x40E21C3</span></div>
+<div class="row c-codec"><span class="pre">   │  ├─ </span><span class="type">mdia</span><span class="nm">  Media  </span><span class="cnt">· Sound · AAC 2ch 48.0 kHz · 8 boxes</span><span class="off">10,627 B @ 0x40E221F</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">30 B @ 0x40E4BA2</span></div>
+<div class="row c-info"><span class="pre">   │     └─ </span><span class="type">name</span><span class="nm">  Name  </span><span class="val">"System sounds"</span><span class="off">22 B @ 0x40E4BAA</span></div>
+<div class="row c-struct"><span class="pre">   ├─ </span><span class="type">trak</span><span class="nm">  Track  </span><span class="note">audio · Microphone</span><span class="off">11,310 B @ 0x40E4BC0</span></div>
+<div class="row c-info"><span class="pre">   │  ├─ </span><span class="type">tkhd</span><span class="nm">  Track Header</span><span class="off">92 B @ 0x40E4BC8</span></div>
+<div class="row c-codec"><span class="pre">   │  ├─ </span><span class="type">mdia</span><span class="nm">  Media  </span><span class="cnt">· Sound · AAC 2ch 48.0 kHz · 8 boxes</span><span class="off">11,183 B @ 0x40E4C24</span></div>
+<div class="row c-struct"><span class="pre">   │  └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">27 B @ 0x40E77D3</span></div>
+<div class="row c-info"><span class="pre">   │     └─ </span><span class="type">name</span><span class="nm">  Name  </span><span class="val">"Microphone"</span><span class="off">19 B @ 0x40E77DB</span></div>
+<div class="row c-struct"><span class="pre">   └─ </span><span class="type">udta</span><span class="nm">  User Data</span><span class="off">1,467 B @ 0x40E77EE</span></div>
+<div class="row c-struct"><span class="pre">      ├─ </span><span class="type">meta</span><span class="nm">  Metadata</span><span class="off">790 B @ 0x40E77F6</span></div>
+<div class="row c-info"><span class="pre">      │  ├─ </span><span class="type">hdlr</span><span class="nm">  Handler  </span><span class="pval">Metadata (iTunes)</span><span class="off">33 B @ 0x40E7802</span></div>
+<div class="row c-struct"><span class="pre">      │  └─ </span><span class="type">ilst</span><span class="nm">  Metadata Items</span><span class="off">745 B @ 0x40E7823</span></div>
+<div class="row c-itunes"><span class="pre">      │     ├─ </span><span class="type">©day</span><span class="nm">  Year  </span><span class="pval">"2026"</span><span class="off">28 B @ 0x40E782B</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">game</span><span class="nm">  </span><span class="val">"Team Fortress 2"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">92 B @ 0x40E7847</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">map</span><span class="nm">  </span><span class="val">"pl_badwater"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">87 B @ 0x40E78A3</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">players</span><span class="nm">  </span><span class="val">"chuck|chicken"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">93 B @ 0x40E78FA</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">tags</span><span class="nm">  </span><span class="val">"rocket jump|market garden"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">102 B @ 0x40E7957</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">notes</span><span class="nm">  </span><span class="notesval">"Chuck rocket jumping on 2nd point, landing a perfect Market Garden on chicken"</span><span class="off">155 B @ 0x40E79BD</span></div>
+<div class="row cm"><span class="pre">      │     ├─ </span><span class="type">----</span><span class="nm">  </span><span class="field">schema</span><span class="nm">  </span><span class="val">"1"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">80 B @ 0x40E7A58</span></div>
+<div class="row cm"><span class="pre">      │     └─ </span><span class="type">----</span><span class="nm">  </span><span class="field">tagged_by</span><span class="nm">  </span><span class="val">"Peckworks ClipMeta"</span><span class="nm">   </span><span class="mean">com.peckworkslab.clipmeta</span><span class="off">100 B @ 0x40E7AA8</span></div>
+<div class="row c-wm"><span class="pre">      └─ </span><span class="type">Xtra</span><span class="nm">  Windows Media Attributes</span><span class="off">669 B @ 0x40E7B0C</span></div>
+<div class="row c-wm"><span class="pre">         ├─ </span><span class="type">WM/UniqueFileIdentifier</span><span class="nm">  </span><span class="pval">"{ Source: NVIDIA APP, Codec: H264, B64: eyJEUlNBcHBOYW1lIi…"</span><span class="off">601 B @ 0x40E7B1C</span></div>
+<div class="row c-wm"><span class="pre">         └─ </span><span class="type">WM/EncodedBy</span><span class="nm">  </span><span class="pval">"NVIDIA APP"</span><span class="off">44 B @ 0x40E7D7D</span></div>
+          </div>
+          <div class="legend">
+            <span class="key"><span class="sw struct"></span>Container</span>
+            <span class="key"><span class="sw info"></span>Header / value</span>
+            <span class="key"><span class="sw codec"></span>Codec / sample table</span>
+            <span class="key"><span class="sw media"></span>Media data</span>
+            <span class="key"><span class="sw wm"></span>Windows Media (NVIDIA)</span>
+            <span class="key hero"><span class="sw gold"></span>ClipMeta atom</span>
+          </div>
+          <div class="foot">Seven <b>com.peckworkslab.clipmeta</b> atoms written into moov/udta/meta/ilst, coexisting with NVIDIA's capture metadata &nbsp;·&nbsp; game · map · players · tags · notes · schema 1 · tagged_by Peckworks ClipMeta</div>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="figcap"><b>Before and after one voice tag, the same clip.</b> The <b>mdat</b> (your footage) and NVIDIA's <b>Xtra</b> block are byte-for-byte identical; seven <b>----</b> atoms simply appear inside <b>ilst</b>, beside the camera's own <b>©day</b>.</p>
+
+    <div class="cm-list">
+      <div class="panel">
+        <div class="bar">
+          <div class="dotrow"><i></i><i></i><i></i></div>
+          <div class="bartitle">clipmetascribe</div>
+        </div>
+        <div class="term">
+          <div class="cmd"><span class="prompt">❯</span> <span class="bin">clipmetascribe</span> <span class="flag">--list</span> <span class="arg">"Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4"</span></div>
+          <div class="fileline">Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4</div>
+          <div class="subline">64.9 MB &nbsp;·&nbsp; 7 metadata atoms &nbsp;·&nbsp; <b>com.peckworkslab.clipmeta</b></div>
+          <div class="kv">
+            <div class="k">game</div><div class="v">Team Fortress 2</div>
+            <div class="k">map</div><div class="v">pl_badwater</div>
+            <div class="k">players</div><div class="v multi">chuck, chicken</div>
+            <div class="k">tags</div><div class="v multi">rocket jump, market garden</div>
+            <div class="k">notes</div><div class="v">Chuck rocket jumping on 2nd point, landing a</div>
+            <div class="cont">perfect Market Garden on chicken</div>
+            <div class="k">rating</div><div class="v unset">not set</div>
+            <div class="k">timecode</div><div class="v unset">not set</div>
+          </div>
+          <hr class="rule">
+          <div class="stamp">schema <b>1</b> &nbsp;·&nbsp; tagged_by <b>Peckworks ClipMeta</b> &nbsp;·&nbsp; stored in-file, travels with the clip</div>
+        </div>
+      </div>
     </div>
 
     <h4 class="sub">The fields you get out of the box</h4>
@@ -446,10 +822,51 @@
       <div class="tcard v"><div class="th">Drains automatically</div><div class="td">Next time you tag, list, or flush, queued tags whose clips are now free get written, so "tag it now" works even mid-playback.</div></div>
     </div>
 
-    <div class="shot">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-      <div class="lab">Voice-tagging session, screenshot coming soon</div>
-      <div class="hint">Drop a real screen capture here: Claude Desktop (or Claude Code) calling <span class="mono">library_watching</span> then a write tool, alongside the game. This is the money shot for LinkedIn, replace before publishing.</div>
+    <div class="cm-voice">
+      <div class="panel">
+        <div class="head">
+          <div>
+            <div class="eyebrow">ClipMeta · Voice Tagging</div>
+            <div class="title">Say it once. It lands in the file.</div>
+          </div>
+          <div class="modechip"><span class="dot"></span>gaming mode · just clipped</div>
+        </div>
+        <div class="body">
+          <div class="step">
+            <div class="dotnum">1</div>
+            <div class="steplabel">You said</div>
+            <div class="spoken">
+              <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="said"><span class="q">"Tag that last one...</span> Team Fortress 2, badwater. Chuck rocket-jumping up to second point and landing a perfect market garden on chicken.<span class="q">"</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="dotnum">2</div>
+            <div class="steplabel">ClipMeta resolved which clip</div>
+            <div class="resolve">
+              <span class="tool">library_watching</span> <span class="arrow">→</span> <span class="clip">Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4</span> <span class="conf">● HIGH</span><br>
+              <span class="why">recent_write · saved 3s ago while no player was open · directly writable</span>
+            </div>
+          </div>
+          <div class="step">
+            <div class="dotnum">3</div>
+            <div class="steplabel">Structured metadata written</div>
+            <div class="atoms">
+              <div class="atom"><span class="fname">game</span><span class="fval">Team Fortress 2</span></div>
+              <div class="atom"><span class="fname">map</span><span class="fval">pl_badwater</span></div>
+              <div class="atom"><span class="fname">players</span><span class="multi"><span class="pill">chuck</span><span class="pill">chicken</span></span></div>
+              <div class="atom"><span class="fname">tags</span><span class="multi"><span class="pill">rocket jump</span><span class="pill">market garden</span></span></div>
+              <div class="atom"><span class="fname">notes</span><span class="fnote">Chuck rocket jumping on 2nd point, landing a perfect Market Garden on chicken</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <span class="confirm">
+            <svg class="check" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#4FD98C" stroke-width="1.3"/><path d="M4.8 8.2l2 2 4-4.4" stroke="#4FD98C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            written to file &nbsp;<span class="meta">· backup kept · <b>com.peckworkslab.clipmeta</b> · schema 1 · tagged_by Peckworks ClipMeta</span>
+          </span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -726,10 +1143,127 @@
       <div class="tcard"><div class="th">export</div><div class="td">Dump the whole library to JSON or CSV, drop it into a spreadsheet, a video-editor script, or a montage tool.</div></div>
       <div class="tcard c"><div class="th">copy-from</div><div class="td">Tag one clip well, then stamp those tags across an entire folder of related clips in one command.</div></div>
     </div>
-    <div class="shot">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-      <div class="lab">Search results, screenshot coming soon</div>
-      <div class="hint">Drop a capture of a real <span class="mono">--find</span> / <span class="mono">library_search_index</span> result here, or a Claude conversation pulling up "every TF2 clip rated 4+."</div>
+    <div class="cm-search">
+      <div class="panel">
+        <div class="head">
+          <div class="eyebrow">ClipMeta · Search</div>
+          <div class="cmd">
+            <span class="prompt">❯</span>
+            <span class="bin">clipmetascribe</span>
+            <span class="path">"C:\Users\Peckworks\Videos\Team Fortress 2"</span>
+            <span class="flag">--find</span>
+            <span class="arg">players</span>
+            <span class="arg">chuck</span>
+            <span class="cur"></span>
+          </div>
+        </div>
+        <div class="resultline"><b>6</b> clips matched &nbsp;·&nbsp; searched 3,709 files by embedded metadata</div>
+        <div class="rows">
+          <div class="rrow">
+            <div class="idx">01</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.07.04 - 09.00.08.471.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip map"><span class="k">map</span><span class="v">pl_upward</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v"><span class="hit">chuck</span> · chicken · blanch</span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">rollout · mid</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="rrow">
+            <div class="idx">02</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.07.04 - 08.58.12.463.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip map"><span class="k">map</span><span class="v">pl_badwater</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v">johnnysodapop · <span class="hit">chuck</span></span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">kritz · last point</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="rrow">
+            <div class="idx">03</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.07.04 - 08.53.37.457.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip map"><span class="k">map</span><span class="v">barnblitz</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v"><span class="hit">chuck</span> · chicken</span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">victory taunt · headshot · final point</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="rrow">
+            <div class="idx">04</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.07.04 - 08.51.23.447.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip map"><span class="k">map</span><span class="v">Goldrush</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v"><span class="hit">chuck</span> · chicken</span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">uber · win</span></span>
+                <span class="chip rating"><span class="k">rating</span><span class="v">★★★★☆</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="rrow">
+            <div class="idx">05</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.07.04 - 07.58.38.444.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip map"><span class="k">map</span><span class="v">pl_badwater</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v"><span class="hit">chuck</span> · chicken</span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">rocket jump · market garden</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="rrow">
+            <div class="idx">06</div>
+            <div class="rmain">
+              <div class="clip">Team Fortress 2 2026.06.29 - 01.38.39.229.DVR.mp4</div>
+              <div class="chips">
+                <span class="chip game"><span class="k">game</span><span class="v">Team Fortress 2</span></span>
+                <span class="chip match"><span class="k">players</span><span class="v"><span class="hit">chuck</span></span></span>
+                <span class="chip tags"><span class="k">tags</span><span class="v">main menu</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="foot">Search reads the <b>com.peckworkslab.clipmeta</b> atoms written inside each MP4, no sidecar files, no database. Tag travels with the clip.</div>
+      </div>
+    </div>
+
+    <div class="cm-vocab">
+      <div class="panel">
+        <div class="head">
+          <div class="eyebrow">ClipMeta · Vocabulary</div>
+          <div class="cmd">
+            <span class="prompt">❯</span>
+            <span class="bin">clipmetascribe</span>
+            <span class="path">"C:\Users\Peckworks\Videos\Team Fortress 2"</span>
+            <span class="flag">--vocab</span>
+            <span class="arg">map</span>
+          </div>
+        </div>
+        <div class="summ"><b>7</b> distinct values across <b>8</b> clips</div>
+        <div class="rows">
+          <div class="vrow"><div class="vval">pl_badwater</div><div class="bar"><i style="width:100%"></i></div><div class="vcount">2 <span>clips</span></div></div>
+          <div class="vrow drift"><div class="vval">Barblitz</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+          <div class="vrow drift"><div class="vval">barnblitz</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+          <div class="vrow"><div class="vval">Goldrush</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+          <div class="vrow"><div class="vval">Pier</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+          <div class="vrow"><div class="vval">pl_upward</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+          <div class="vrow"><div class="vval">swiftwater</div><div class="bar"><i style="width:50%"></i></div><div class="vcount">1 <span>clip</span></div></div>
+        </div>
+        <div class="flag-note">
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M8.5 1.5l7 12.5h-14l7-12.5z" stroke="#EDA64A" stroke-width="1.3" stroke-linejoin="round"/><path d="M8.5 6.5v3.4" stroke="#EDA64A" stroke-width="1.4" stroke-linecap="round"/><circle cx="8.5" cy="11.9" r=".9" fill="#EDA64A"/></svg>
+          <div class="txt"><b>Barblitz</b> and <b>barnblitz</b> are almost certainly the same map, split across two clips. Vocab surfaces the drift so you can merge it, and shows that half your maps carry the <span class="mono">pl_</span> prefix while half don't.</div>
+        </div>
+        <div class="foot">One line answers "what have I actually called this field?" &nbsp;·&nbsp; read from the <b>com.peckworkslab.clipmeta</b> atoms in every clip</div>
+      </div>
     </div>
   </section>
 
