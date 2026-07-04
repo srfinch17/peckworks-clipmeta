@@ -47,6 +47,10 @@ inline `<style>`, inline SVG, Google Fonts via CDN with `system-ui` fallback. Pr
 - Logo slot in the topbar (optional).
 - Screenshot slots (clearly marked `.shot-placeholder`): real terminal capture, a real
   `library_watching` voice exchange, a real search-results view, a montage/gameplay still.
+  (Resolved 2026-07-04: the two `.shot` slots now hold rendered clip-metadata panels, voice-tagging
+  and search; PART 03's schematic box-tree SVG was replaced by a real before/after box tree plus a
+  `--list` companion, and a vocab figure was added. Panels are CSS-namespaced under `.cm-*`. An
+  actual gameplay/montage still remains optional.)
 - Confirm the GitHub URL + any demo video link.
 - Verify GitHub Pages is enabled (Settings → Pages → main / /docs).
 
