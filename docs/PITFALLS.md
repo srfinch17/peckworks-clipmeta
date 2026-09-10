@@ -8,6 +8,25 @@ Format: newest entries at the top of "Field-discovered." The "MP4 format hazards
 
 ## Field-discovered (append here as we go)
 
+## 2026-09-09, A license is a cross-artifact change, and "open source" was a stale claim waiting to contradict it
+**Symptom:** adding `LICENSE.md` (PolyForm Noncommercial 1.0.0) looked like a one-file change. It was five:
+the landing page called the project "open-source" in two places (a noncommercial license is
+source-available, not open source under the OSI definition, so the page would have contradicted the
+license the moment both were live), the `.mcpb` manifest had no `license` field, and neither release
+script shipped the license text, which the license's own Notices clause requires with every copy.
+**Fix:** README section, both landing-page phrases rewritten, SPDX id in the manifest, `LICENSE.md`
+copied into the bundle stage and the CLI zip stage. Verified by running `pack-mcpb.ps1` and listing the
+bundle's entries, not by reading the script.
+**Rule:** any change to what the project *claims about itself* (license, tool count, version, name)
+is a grep across README, `docs/index.html`, `tools/mcpb-manifest.json`, `.github/release-notes.md`,
+and CLAUDE.md, same pattern as the "17 tools" drift. "open source" joins the em-dash and the owner's
+username on the pre-publish grep list (CLAUDE.md, Code conventions).
+**Side gotcha, same day:** editing the release scripts with GNU sed mangled `'..\LICENSE.md'` into
+`'..icense.md'` and lowercased the rest of the line, because `\L` is sed's lowercase-conversion escape
+in a replacement. A second sed in the same call matched nothing and said nothing. Both were caught only
+because the diff was read before commit. Backslash-bearing edits go through a literal editor, and every
+mechanical edit gets a diff.
+
 ## 2026-07-01, Known limitation: a hard process kill mid-write can orphan a `<file>.<guid>.tmp` sibling
 **Symptom:** if the process is killed hard (power loss, `kill -9`, task-manager "End task") between
 the write engine creating its `<clip>.<guid>.tmp` temp file and the terminal `File.Replace` swap,
