@@ -93,6 +93,7 @@ dotnet test   --nologo --no-build -v q
 - **New machine?** If restore fails with `NU1100`, the machine likely has no NuGet source. Run:
   `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`
 - **Changed an MCP tool registration or a CLI command surface? Run the FULL relevant test project, not a `--filter`.** Surface-wide assertions live OUTSIDE your diff, e.g. `clipmetamcp.Tests` `ToolsList_ContainsTheFullToolSurface` asserts the exact tool set and registration order, so adding a tool without updating it passes a filtered run and fails only on the full suite. (It bit us registering `library_watching`.)
+- **PR merges are NOT CI-gated.** `main` has no branch protection and no rulesets (verified via the GitHub API 2026-09-10), so a pull request can be merged with red or still-pending checks, and `gh pr merge --auto` merges immediately rather than waiting. Only the Release workflow is test-gated. Until a ruleset requiring `build-and-test` exists on `main`, wait for the checks yourself before merging, and never describe a merge as "gated."
 
 ---
 
