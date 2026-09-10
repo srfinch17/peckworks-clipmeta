@@ -93,3 +93,7 @@ Requirements:
 - A registered NuGet source for the MSTest packages (fresh machines: `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org`)
 
 The `clipmetascribe.Tests` suite hashes real clips and takes a few minutes, that's normal.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Free to use, modify, and share for any noncommercial purpose. **Commercial use requires a separate license from Peckworks Lab**; open an issue to ask. This makes the project source-available rather than open source in the OSI sense.

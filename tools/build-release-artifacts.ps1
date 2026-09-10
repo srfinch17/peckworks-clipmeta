@@ -50,6 +50,7 @@ foreach ($proj in 'clipmetascribe', 'clipmetaview') {
 }
 $readme = (Get-Content (Join-Path $PSScriptRoot 'cli-readme.txt') -Raw) -replace '\{\{VERSION\}\}', $version
 Set-Content -Path (Join-Path $stage 'README.txt') -Value $readme -NoNewline
+Copy-Item (Join-Path $PSScriptRoot '..\LICENSE.md') (Join-Path $stage 'LICENSE.md')
 
 $cliZip = Join-Path $dist 'clipmeta-cli-win-x64.zip'
 Remove-Item $cliZip -ErrorAction SilentlyContinue

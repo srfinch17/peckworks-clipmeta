@@ -86,6 +86,8 @@ Remove-DirWithRetry $stageDir
 New-Item -ItemType Directory -Force (Join-Path $stageDir 'server') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'mcpb-manifest.json') (Join-Path $stageDir 'manifest.json')
 Copy-Item $exePath (Join-Path $stageDir 'server\clipmetamcp.exe')
+# The license's Notices clause requires the terms to travel with every distributed copy.
+Copy-Item (Join-Path $PSScriptRoot '..\LICENSE.md') (Join-Path $stageDir 'LICENSE.md')
 
 # ── 2b. Keep the unpacked layout as a first-class artifact ──────────────────────────
 # The Microsoft Store build of Claude Desktop fails to install packed .mcpb files (silent
